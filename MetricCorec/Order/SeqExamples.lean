@@ -24,9 +24,9 @@ partial_fixpoint
 --   sorry
 
 
-def filter (P : ℕ → Bool) (n : ℕ) : Seq ℕ :=
+def filterFrom (P : ℕ → Bool) (n : ℕ) : Seq ℕ :=
   if P n then
-    .cons n (filter P (n + 1))
+    .cons n (filterFrom P (n + 1))
   else
-    filter P (n + 1)
+    filterFrom P (n + 1)
 partial_fixpoint
