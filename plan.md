@@ -3,12 +3,15 @@
 ## Where we are
 
 `Subtypes/Codata.lean` proves the contract (`T`, `dtor`, `corec`, `dtor_corec`, `bisim`) once, for
-the container `σ.Obj X = { shape : σ.Shape, child : σ.B shape → X }` of any polynomial signature,
-plus the derived layer (`ctor`, `corec_eq`, `corec_unique`, `casesOn`, injectivity, disjointness).
-`Subtypes/CodataCmd.lean` turns a `codata` declaration into a signature, an isomorphism with
-`σ.Obj`, and instantiations of those theorems. Supported: parameters, explicit and implicit
-binders, plain recursive arguments, recursive arguments under `I → T` with `I` depending on the
-constructor's data. Not supported: indices, mutual and nested types, `data`.
+the container `σ.Obj X i = { shape : σ.Shape i, child : (b : σ.B i shape) → X (σ.idx b) }` of any
+indexed polynomial signature, plus the derived layer (`ctor`, `corec_eq`, `corec_unique`,
+`casesOn`, injectivity, disjointness). A plain type is a family over `Unit`; there is no separate
+plain theory. `Subtypes/CodataCmd.lean` turns a `codata` declaration into a signature, an
+isomorphism with `σ.Obj`, and instantiations of those theorems. `Subtypes.lean` imports everything
+in the folder and is the only import of the root module, so `lake build` checks it all. Supported:
+parameters, any number of indices (propositions included), explicit and implicit binders, plain
+recursive arguments, recursive arguments under `A → T` with `A` depending on the constructor's
+data. Not supported: mutual and nested types, `data`.
 
 Design rules, fixed by discussion:
 
@@ -17,39 +20,60 @@ Design rules, fixed by discussion:
 * `corec` is universe-polymorphic in the state, no `ULift` for users;
 * noncomputable is fine; do not complicate anything to keep computability.
 
-## 1. Indices
+## 1. Indices (done for `codata`)
 
-Target syntax, as for `inductive`:
+Syntax, as for `inductive`:
 
 ```
 codata Vec (α : Type u) : Nat → Type u
   | nil : Vec α 0
   | cons {n : Nat} (a : α) (v : Vec α n) : Vec α (n + 1)
+
+codata Bounded : (n : Nat) → n ≤ 10 → Type
+  | step {n : Nat} {h : n + 1 ≤ 10} (s : Bounded (n + 1) h) : Bounded n (Nat.le_of_succ_le h)
+  | stay {n : Nat} {h : n ≤ 10} (s : Bounded n h) : Bounded n h
 ```
 
-Generic layer. A signature becomes indexed: an index type `I`, shapes `Shape : I → Type u` (a
-constructor's data determines the result index, so shapes are a family), and positions with their
-own index, `B : (i : I) → Shape i → Type v` and `idx : ∀ i s, B i s → I`. The container is
-`σ.Obj (X : I → Type) (i : I) = { shape : Shape i, child : (b : B i shape) → X (idx b) }`. The
-encoding stays in one `Raw` with labels `Σ i, Shape i` and path indices `Σ i s, B i s`; `IsWf`
-becomes `I → Raw → Prop`, a greatest fixpoint over indexed predicates (`coinductive_fixpoint`
-supports this), and `Cotype σ i := {t // IsWf i t}`. `dtorC`, `corecC` (for `S : I → Type` and
-`c : ∀ i, S i → Obj S i`), `dtorC_corecC`, `bisimC` (for `R : ∀ i, T i → T i → Prop`) go through
-with the index threaded; the `∃ s c c'` form of `Obj.Rel` keeps working because both sides share
-the shape and hence the index.
+Generic layer (`Codata.lean`). An indexed signature is an index type `I`, shapes
+`Shape : I → Type u`, positions `B : (i : I) → Shape i → Type v`, and the index
+`idx : B i s → I` of the recursive argument at each position. The container is
+`σ.Obj (X : I → Type) i = { shape : Shape i, child : (b : B i shape) → X (idx b) }`; the encoding is
+one `Raw` with labels `Σ i, Shape i` and path indices `Σ l, B l.1 l.2`; `IsWf : I → Raw → Prop` is
+a greatest fixpoint over indexed predicates, `Cotype σ i := {t // IsWf i t}`. `dtorC`, `corecC`,
+`dtorC_corecC`, `bisimC`, the transport theorems, `Contract` and the `_of` theorems are the plain
+ones with the index threaded through; the index is implicit wherever an argument determines it.
+The index of a position is a *function* (computed once the position is a constructor) rather
+than a further index of `B`: with propositions as indices, unification cannot recover a proof
+argument from an index term, since any two proofs are definitionally equal.
 
-Command. Parse the result type `: I₁ → … → Type u` and each constructor's result type
-`T params idx`, and the index of each recursive argument `T params j` or `J → T params j`.
-The generated `F` is `F params (X : I → Type _) : I → Type _`, with `F.map`, `F.Rel` and the
-laws indexed; `T.Shape params : I → Type _` and `T.B params : (i : I) → T.Shape params i → Type _`
-with `idx`; `toC`, `ofC`, the three laws, and the contract, all indexed. The uniform proofs are
-unchanged in shape (`cases` on shapes, on the relation, on positions, `solve_by_elim`).
+Command. With a declared sort `: (i₁ : I₁) → I₂ → Type u`, every constructor gives its result
+type `T params idx₁ idx₂`, and recursive arguments carry their indices. The generic theory has one
+index type, so several indices are packed into `T.Ix := (i₁ : I₁) ×' I₂` (a `PSigma`, hence
+propositions are allowed) and none into `Unit`; all user-facing declarations stay curried, with the index binders
+named as the user named them. The internal isomorphism `T.toC`/`T.ofC` and its laws keep the
+index binders curried and take the family on the packed index; the instantiations of the generic
+theorems convert with lambdas (`fun j₁ j₂ => f ⟨j₁, j₂⟩`, `fun p => c p.1 p.2`), so every
+generated statement is the generic one up to definitional unfolding. Generated constructor
+applications are fully explicit (`@F.c params X …`), again so that no proof argument is ever
+inferred. Injectivity and disjointness lemmas are generated only when well-typed (indices
+independent of the constructor's arguments, and equal for disjointness). `casesOn` has motive
+`∀ j₁ j₂, T j₁ j₂ → Sort _`; `cases` refines the indices (`cases v` on `v : Vec α 0` leaves only
+`nil`, on `Bounded 10 h` only `stay`). `motive` and the state type `S` are plain binder names, so
+`(motive := …)` and `(S := …)` work.
 
-Tests: `Vec`, a coinductive family (e.g. streams indexed by a state machine or `CoVec : ℕ∞ → Type`),
-and the sketches in `Sketch/Vec.lean` as a reference.
+Tests: `Test/Vec.lean` (with `toList`/`ofList` inverse to each other, up to the equality of
+lengths), `Test/Alt.lean` (streams alternating between two sorts), `Test/Walk.lean` (walks on
+`Int` with the position as index, determined by their steps, by bisimulation), `Test/Cyc.lean`
+(two indices, the second depending on the first), `Test/Bounded.lean` (a proposition as index);
+`Sketch/IdxVec.lean` and `Sketch/IdxCyc.lean` are hand-written templates of the generated
+declarations for one and two indices.
 
-Open point: non-uniform parameters (`Nest α` with `Nest (α × α)` inside) are indices in disguise;
-decide whether to support them by promoting them to indices as Lean does.
+Known limitation: a constructor whose result index repeats one of its own binders (`T n n`)
+is not handled by the pattern-variable bookkeeping in the generated `match`es.
+
+Left for later: `data` families (section 2), and non-uniform parameters (`Nest α` with
+`Nest (α × α)` inside), which are indices in disguise; decide whether to support them by
+promoting them to indices as Lean does.
 
 ## 2. `data`: the inductive dual
 
@@ -105,7 +129,7 @@ for the types allowed in nested positions (`List`, `Option`, products, previousl
 
 ## Order
 
-1. Indices (generic layer first, then command, tests `Vec` and a coinductive family).
+1. Indices: done for `codata`.
 2. `data`, reusing the indexed layer.
 3. Mutual blocks via the index trick; then mixed blocks as nested fixpoints.
 4. Nested types through containers.

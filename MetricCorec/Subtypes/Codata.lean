@@ -4,19 +4,29 @@ import MetricCorec.Subtypes.Raw
 /-!
 # Generic theory behind `codata`
 
-A `codata` declaration is a *signature*, a polynomial functor: the non-recursive data of the
-constructors (the *shapes*) and, for each shape, its positions for recursive arguments. The
-command generates the positions as an inductive family indexed by shapes, one nullary constructor
-per plain recursive argument and one unary constructor per argument under a function type, whose
-domain may depend on the shape (`Vis {X} (e : E X) (k : X → T)` has positions `X`). Everything
-the contract asks for is built here once, generically over a signature `σ`, for the container
-functor `σ.Obj X = { shape : σ.Shape, child : σ.B shape → X }`:
+A `codata` declaration is a *signature*, an indexed polynomial functor: an index type `I`, the
+non-recursive data of the constructors producing each index (the *shapes*, `Shape : I → Type`),
+for each shape its positions for recursive arguments (`B : (i : I) → Shape i → Type`), and the
+index of the argument at each position (`idx : B i s → I`). A plain type is a family over `Unit`.
+The command generates the positions as an inductive family, one nullary constructor per plain
+recursive argument and one unary constructor per argument under a function type, whose domain
+may depend on the shape (`Vis {X} (e : E X) (k : X → T)` has positions `X`). Everything the
+contract asks for is built here once, generically over a signature `σ`, for the container
+functor `σ.Obj (X : I → Type) i = { shape : σ.Shape i, child : (b : σ.B i shape) → X (σ.idx b) }`:
 
-* `Signature.Cotype σ`: the subtype of `Raw σ.Idx σ.Shape` cut out by the greatest fixpoint
-  `IsWf`, where path indices are a shape with one of its positions. Placing `empty` at the
-  indices of the other shapes decides equality of shapes, classically: `corec` and the
-  constructors are noncomputable, which is accepted here;
-* `dtorC`, `corecC`, `dtorC_corecC`, `bisimC`: the contract for `σ.Obj`.
+* `Signature.Cotype σ : I → Type`: the subtype of `Raw σ.Idx σ.Lbl` cut out by the greatest
+  fixpoint `IsWf : I → Raw → Prop`, where labels are an index with a shape and path indices are
+  a label with one of its positions. Placing `empty` at the indices of the other labels decides
+  equality of labels, classically: `corec` and the constructors are noncomputable, which is
+  accepted here;
+* `dtorC`, `corecC`, `dtorC_corecC`, `bisimC`: the contract for `σ.Obj`. The index is implicit
+  wherever an argument determines it (`dtorC`, `corecC`, `map`, `Rel`, …) and explicit in
+  families of functions and relations (`∀ j, X j → Y j`).
+
+The index of a position is a function rather than a further index of `B` so that it is
+*computed* (`idx b` reduces once `b` is a constructor) and never has to be inferred by
+unification: with propositions as indices, unification cannot recover a proof argument from
+`idx`-shaped terms, since any two proofs are definitionally equal.
 
 The command generates, for its user-facing functor `F` (the constructor list as an inductive
 type), an isomorphism `toC`/`ofC` between `F` and `σ.Obj` with the three laws `ofC_toC`,
@@ -31,303 +41,334 @@ injectivity and disjointness of constructors, again from the contract, for the c
 instantiate.
 -/
 
-universe u v w u₁ u₂
+universe w u v u₁ u₂ u₃
 
-/-- A signature: the non-recursive data of the constructors (the *shapes*) and, for each shape,
-its positions for recursive arguments. This is a polynomial functor `A, B`. -/
+namespace Codata
+
+/-- An indexed signature: an index type, the data of the constructors producing each index,
+their positions for recursive arguments, and the index of the argument at each position. -/
 structure Signature where
-  Shape : Type u
-  B : Shape → Type v
+  I : Type w
+  Shape : I → Type u
+  B : (i : I) → Shape i → Type v
+  idx : ∀ {i : I} {s : Shape i}, B i s → I
 
 namespace Signature
 
-variable (σ : Signature.{u, v})
+variable (σ : Signature.{w, u, v})
 
-/-- The indices of children in the encoding: a shape and one of its positions. -/
-abbrev Idx : Type (max u v) := Σ s : σ.Shape, σ.B s
+/-- The labels of nodes: an index and a shape producing it. -/
+abbrev Lbl : Type (max w u) := Σ i : σ.I, σ.Shape i
 
-/-- The container functor of a signature: a constructor with its data, and its recursive
-arguments. -/
-structure Obj (X : Type u₁) : Type (max u v u₁) where
-  shape : σ.Shape
-  child : σ.B shape → X
+/-- The indices of children in the encoding: a label and one of its positions. -/
+abbrev Idx : Type (max w u v) := Σ l : σ.Lbl, σ.B l.1 l.2
 
-variable {σ} {X : Type u₁} {Y : Type u₂} {S : Type w}
+/-- The container functor of a signature, on indexed families. -/
+structure Obj (X : σ.I → Type u₁) (i : σ.I) : Type (max w u v u₁) where
+  shape : σ.Shape i
+  child : (b : σ.B i shape) → X (σ.idx b)
+
+variable {σ} {X : σ.I → Type u₁} {Y : σ.I → Type u₂} {S : σ.I → Type u₃}
 
 namespace Obj
 
 /-- The action on functions. -/
-def map (f : X → Y) (z : σ.Obj X) : σ.Obj Y := ⟨z.shape, fun b => f (z.child b)⟩
+def map (f : ∀ j, X j → Y j) {i : σ.I} (z : σ.Obj X i) : σ.Obj Y i :=
+  ⟨z.shape, fun b => f _ (z.child b)⟩
 
 /-- The lifting to relations: same constructor and data, related recursive arguments. -/
-abbrev Rel (R : X → Y → Prop) (z : σ.Obj X) (z' : σ.Obj Y) : Prop :=
-  ∃ (s : σ.Shape) (c : σ.B s → X) (c' : σ.B s → Y),
-    z = ⟨s, c⟩ ∧ z' = ⟨s, c'⟩ ∧ ∀ b, R (c b) (c' b)
+abbrev Rel (R : ∀ j, X j → Y j → Prop) {i : σ.I} (z : σ.Obj X i) (z' : σ.Obj Y i) : Prop :=
+  ∃ (s : σ.Shape i) (c : (b : σ.B i s) → X (σ.idx b)) (c' : (b : σ.B i s) → Y (σ.idx b)),
+    z = ⟨s, c⟩ ∧ z' = ⟨s, c'⟩ ∧ ∀ b, R _ (c b) (c' b)
 
 end Obj
 
-/-! ### Encoding one layer into `Raw`
+/-! ### Encoding one layer into `Raw` -/
 
-The children of a node sit at the indices `⟨s, b⟩` of its own shape `s`, and `empty` sits at the
-indices of the other shapes. Telling the two apart decides equality of shapes, classically: the
-encoding, hence `corec` and the constructors, is noncomputable. -/
+/-- Transport a position along an equality of labels. -/
+def castB {l l' : σ.Lbl} (h : l = l') (b : σ.B l.1 l.2) : σ.B l'.1 l'.2 := h ▸ b
 
 open Classical in
-/-- One layer of a tree. -/
-noncomputable def encode (z : σ.Obj (Raw σ.Idx σ.Shape)) : Raw σ.Idx σ.Shape :=
-  Raw.mk (some z.shape) fun i => if h : i.1 = z.shape then z.child (h ▸ i.2) else Raw.empty
+/-- One layer of a tree at index `i`. -/
+noncomputable def encode (i : σ.I) (z : σ.Obj (fun _ => Raw σ.Idx σ.Lbl) i) : Raw σ.Idx σ.Lbl :=
+  Raw.mk (some ⟨i, z.shape⟩) fun p =>
+    if h : p.1 = ⟨i, z.shape⟩ then z.child (castB h p.2) else Raw.empty
 
-@[simp] theorem root_encode (z : σ.Obj (Raw σ.Idx σ.Shape)) : (encode z).root = some z.shape :=
-  rfl
+@[simp] theorem root_encode (i : σ.I) (z : σ.Obj (fun _ => Raw σ.Idx σ.Lbl) i) :
+    (encode i z).root = some ⟨i, z.shape⟩ := rfl
 
-theorem child_encode_self (z : σ.Obj (Raw σ.Idx σ.Shape)) (b : σ.B z.shape) :
-    (encode z).child ⟨z.shape, b⟩ = z.child b :=
+theorem child_encode_self (i : σ.I) (z : σ.Obj (fun _ => Raw σ.Idx σ.Lbl) i)
+    (b : σ.B i z.shape) : (encode i z).child ⟨⟨i, z.shape⟩, b⟩ = z.child b :=
   dif_pos rfl
 
-theorem child_encode_of_ne (z : σ.Obj (Raw σ.Idx σ.Shape)) {s : σ.Shape} (h : s ≠ z.shape)
-    (b : σ.B s) : (encode z).child ⟨s, b⟩ = Raw.empty :=
+theorem child_encode_of_ne (i : σ.I) (z : σ.Obj (fun _ => Raw σ.Idx σ.Lbl) i) {l : σ.Lbl}
+    (h : l ≠ ⟨i, z.shape⟩) (b : σ.B l.1 l.2) : (encode i z).child ⟨l, b⟩ = Raw.empty :=
   dif_neg h
 
 /-! ### The predicate and the type -/
 
-/-- Well-formed trees: every node is a layer whose children are well-formed. The greatest
-fixpoint. -/
-def IsWf (t : Raw σ.Idx σ.Shape) : Prop :=
-  ∃ z : σ.Obj (Raw σ.Idx σ.Shape), t = encode z ∧ ∀ b, IsWf (z.child b)
+/-- Well-formed trees at index `i`: every node is a layer whose children are well-formed at
+their own indices. The greatest fixpoint over indexed predicates. -/
+def IsWf (i : σ.I) (t : Raw σ.Idx σ.Lbl) : Prop :=
+  ∃ z : σ.Obj (fun _ => Raw σ.Idx σ.Lbl) i, t = encode i z ∧ ∀ b, IsWf (σ.idx b) (z.child b)
 coinductive_fixpoint
 
-/-- The coinductive type of a signature. -/
-def Cotype (σ : Signature.{u, v}) : Type (max u v) := {t : Raw σ.Idx σ.Shape // IsWf t}
+/-- The coinductive family of a signature. -/
+def Cotype (σ : Signature.{w, u, v}) (i : σ.I) : Type (max w u v) :=
+  {t : Raw σ.Idx σ.Lbl // IsWf i t}
 
-theorem IsWf.root_ne_none {t : Raw σ.Idx σ.Shape} (h : IsWf t) : t.root ≠ none := by
+theorem IsWf.root_ne_none {i : σ.I} {t : Raw σ.Idx σ.Lbl} (h : IsWf i t) : t.root ≠ none := by
   rw [IsWf.eq_def] at h
   obtain ⟨z, rfl, -⟩ := h
   simp
 
-theorem IsWf.child {t : Raw σ.Idx σ.Shape} (h : IsWf t) {s : σ.Shape} (hs : t.root = some s)
-    (b : σ.B s) : IsWf (t.child ⟨s, b⟩) := by
+theorem IsWf.root_idx {i : σ.I} {t : Raw σ.Idx σ.Lbl} (h : IsWf i t) {l : σ.Lbl}
+    (hl : t.root = some l) : l.1 = i := by
+  rw [IsWf.eq_def] at h
+  obtain ⟨z, rfl, -⟩ := h
+  obtain rfl := Option.some.inj hl
+  rfl
+
+theorem IsWf.child {i : σ.I} {t : Raw σ.Idx σ.Lbl} (h : IsWf i t) {s : σ.Shape i}
+    (hs : t.root = some ⟨i, s⟩) (b : σ.B i s) : IsWf (σ.idx b) (t.child ⟨⟨i, s⟩, b⟩) := by
   rw [IsWf.eq_def] at h
   obtain ⟨z, rfl, hz⟩ := h
-  obtain rfl : s = z.shape := (Option.some.inj hs).symm
+  obtain rfl : s = z.shape := (eq_of_heq (Sigma.mk.inj (Option.some.inj hs)).2).symm
   rw [child_encode_self]
   exact hz b
 
-theorem IsWf.child_eq_empty {t : Raw σ.Idx σ.Shape} (h : IsWf t) {s : σ.Shape}
-    (hs : t.root = some s) {s' : σ.Shape} (hne : s' ≠ s) (b : σ.B s') :
-    t.child ⟨s', b⟩ = Raw.empty := by
+theorem IsWf.child_eq_empty {i : σ.I} {t : Raw σ.Idx σ.Lbl} (h : IsWf i t) {s : σ.Shape i}
+    (hs : t.root = some ⟨i, s⟩) {l' : σ.Lbl} (hne : l' ≠ ⟨i, s⟩) (b : σ.B l'.1 l'.2) :
+    t.child ⟨l', b⟩ = Raw.empty := by
   rw [IsWf.eq_def] at h
   obtain ⟨z, rfl, -⟩ := h
-  obtain rfl : s = z.shape := (Option.some.inj hs).symm
-  exact child_encode_of_ne z hne b
+  obtain rfl : s = z.shape := (eq_of_heq (Sigma.mk.inj (Option.some.inj hs)).2).symm
+  exact child_encode_of_ne i z hne b
 
 /-- A well-formed tree is the layer made of its root and its children. -/
-theorem IsWf.eq_encode {t : Raw σ.Idx σ.Shape} (h : IsWf t) {s : σ.Shape} (hs : t.root = some s) :
-    t = encode ⟨s, fun b => t.child ⟨s, b⟩⟩ := by
-  refine Raw.ext_root_child hs fun ⟨s', b⟩ => ?_
-  by_cases hs' : s' = s
-  · subst hs'
-    exact (child_encode_self ⟨s', fun b => t.child ⟨s', b⟩⟩ b).symm
-  · rw [child_encode_of_ne _ hs', h.child_eq_empty hs hs']
+theorem IsWf.eq_encode {i : σ.I} {t : Raw σ.Idx σ.Lbl} (h : IsWf i t) {s : σ.Shape i}
+    (hs : t.root = some ⟨i, s⟩) : t = encode i ⟨s, fun b => t.child ⟨⟨i, s⟩, b⟩⟩ := by
+  refine Raw.ext_root_child hs fun ⟨l', b⟩ => ?_
+  by_cases hl : l' = ⟨i, s⟩
+  · subst hl
+    exact (child_encode_self i ⟨s, fun b => t.child ⟨⟨i, s⟩, b⟩⟩ b).symm
+  · rw [child_encode_of_ne _ _ hl, h.child_eq_empty hs hl]
 
 /-! ### The destructor -/
 
-/-- The shape at the root, which `IsWf` guarantees to exist. -/
-def rootShape (t : σ.Cotype) : σ.Shape :=
+/-- The shape at the root, which `IsWf` guarantees to exist and to produce the index. -/
+def rootShape {i : σ.I} (t : σ.Cotype i) : σ.Shape i :=
   match h : t.1.root with
-  | some s => s
+  | some l => (t.2.root_idx h) ▸ l.2
   | none => absurd h t.2.root_ne_none
 
-theorem root_eq (t : σ.Cotype) : t.1.root = some (rootShape t) := by
+theorem root_eq {i : σ.I} (t : σ.Cotype i) : t.1.root = some ⟨i, rootShape t⟩ := by
   unfold rootShape
   split
-  · assumption
+  · rename_i l h
+    obtain ⟨i', s⟩ := l
+    have hi : i' = i := t.2.root_idx h
+    subst hi
+    exact h
   · exact absurd ‹_› t.2.root_ne_none
 
-/-- The destructor on the container: the root shape, and the children as elements of the
-type. -/
-def dtorC (t : σ.Cotype) : σ.Obj σ.Cotype :=
-  ⟨rootShape t, fun b => ⟨t.1.child ⟨rootShape t, b⟩, t.2.child (root_eq t) b⟩⟩
+/-- The destructor on the container. -/
+def dtorC {i : σ.I} (t : σ.Cotype i) : σ.Obj σ.Cotype i :=
+  ⟨rootShape t, fun b => ⟨t.1.child ⟨⟨i, rootShape t⟩, b⟩, t.2.child (root_eq t) b⟩⟩
 
 /-- The tree is the layer of its destructor. -/
-theorem val_eq_encode_dtorC (t : σ.Cotype) : t.1 = encode (Obj.map Subtype.val (dtorC t)) :=
+theorem val_eq_encode_dtorC {i : σ.I} (t : σ.Cotype i) :
+    t.1 = encode i (Obj.map (fun _ => Subtype.val) (dtorC t)) :=
   t.2.eq_encode (root_eq t)
 
 /-! ### The corecursor -/
 
 open Classical in
-/-- The coalgebra on `Option S` underlying `corecRaw`: `none` is the state of `empty`. -/
-noncomputable def coalg (c : S → σ.Obj S) : Option S → Option σ.Shape × (σ.Idx → Option S)
+/-- The coalgebra on `Option (Σ i, S i)` underlying `corecRaw`: `none` is the state of
+`empty`. -/
+noncomputable def coalg (c : ∀ i, S i → σ.Obj S i) :
+    Option (Σ i, S i) → Option σ.Lbl × (σ.Idx → Option (Σ i, S i))
   | none => (none, fun _ => none)
-  | some s =>
-    (some (c s).shape,
-      fun i => if h : i.1 = (c s).shape then some ((c s).child (h ▸ i.2)) else none)
+  | some ⟨i, s⟩ =>
+    (some ⟨i, (c i s).shape⟩, fun p =>
+      if h : p.1 = ⟨i, (c i s).shape⟩ then some ⟨_, (c i s).child (castB h p.2)⟩ else none)
 
 /-- Unfolding a coalgebra into `Raw`. -/
-noncomputable def corecRaw (c : S → σ.Obj S) (s : S) : Raw σ.Idx σ.Shape :=
-  Raw.corec (coalg c) (some s)
+noncomputable def corecRaw (c : ∀ i, S i → σ.Obj S i) (i : σ.I) (s : S i) : Raw σ.Idx σ.Lbl :=
+  Raw.corec (coalg c) (some ⟨i, s⟩)
 
-theorem corec_coalg_none (c : S → σ.Obj S) : Raw.corec (coalg c) none = Raw.empty :=
+theorem corec_coalg_none (c : ∀ i, S i → σ.Obj S i) : Raw.corec (coalg c) none = Raw.empty :=
   Raw.eq_of_bisim (R := fun t₁ t₂ => t₁ = Raw.corec (coalg c) none ∧ t₂ = Raw.empty)
     (by rintro _ _ ⟨rfl, rfl⟩; exact ⟨rfl, fun i => ⟨rfl, rfl⟩⟩) ⟨rfl, rfl⟩
 
-@[simp] theorem root_corecRaw (c : S → σ.Obj S) (s : S) :
-    (corecRaw c s).root = some (c s).shape := rfl
+@[simp] theorem root_corecRaw (c : ∀ i, S i → σ.Obj S i) (i : σ.I) (s : S i) :
+    (corecRaw c i s).root = some ⟨i, (c i s).shape⟩ := rfl
 
 open Classical in
-theorem corecRaw_eq (c : S → σ.Obj S) (s : S) :
-    corecRaw c s = encode ⟨(c s).shape, fun b => corecRaw c ((c s).child b)⟩ := by
-  refine Raw.ext_root_child rfl fun ⟨s', b⟩ => ?_
+theorem corecRaw_eq (c : ∀ i, S i → σ.Obj S i) (i : σ.I) (s : S i) :
+    corecRaw c i s = encode i ⟨(c i s).shape, fun b => corecRaw c _ ((c i s).child b)⟩ := by
+  refine Raw.ext_root_child rfl fun ⟨l, b⟩ => ?_
   show Raw.corec (coalg c)
-    (if h : s' = (c s).shape then some ((c s).child (h ▸ b)) else none) = _
-  by_cases h : s' = (c s).shape
+    (if h : l = ⟨i, (c i s).shape⟩ then some ⟨_, (c i s).child (castB h b)⟩ else none) = _
+  by_cases h : l = ⟨i, (c i s).shape⟩
   · subst h
-    rw [(child_encode_self ⟨(c s).shape, fun b => corecRaw c ((c s).child b)⟩ b :)]
+    rw [(child_encode_self i ⟨(c i s).shape, fun b => corecRaw c _ ((c i s).child b)⟩ b :)]
     exact congrArg (Raw.corec (coalg c)) (dif_pos rfl)
-  · rw [dif_neg h, child_encode_of_ne _ h]
+  · rw [dif_neg h, child_encode_of_ne _ _ h]
     exact corec_coalg_none c
 
-theorem isWf_corecRaw (c : S → σ.Obj S) (s : S) : IsWf (corecRaw c s) := by
-  refine IsWf.coinduct (fun t => ∃ s, t = corecRaw c s) ?_ _ ⟨s, rfl⟩
-  rintro _ ⟨s, rfl⟩
-  exact ⟨_, corecRaw_eq c s, fun b => ⟨_, rfl⟩⟩
+theorem isWf_corecRaw (c : ∀ i, S i → σ.Obj S i) (i : σ.I) (s : S i) : IsWf i (corecRaw c i s) := by
+  refine IsWf.coinduct (fun i t => ∃ s, t = corecRaw c i s) ?_ i _ ⟨s, rfl⟩
+  rintro i _ ⟨s, rfl⟩
+  exact ⟨_, corecRaw_eq c i s, fun b => ⟨_, rfl⟩⟩
 
 /-- The corecursor on the container. -/
-noncomputable def corecC (c : S → σ.Obj S) (s : S) : σ.Cotype :=
-  ⟨corecRaw c s, isWf_corecRaw c s⟩
+noncomputable def corecC (c : ∀ i, S i → σ.Obj S i) {i : σ.I} (s : S i) : σ.Cotype i :=
+  ⟨corecRaw c i s, isWf_corecRaw c i s⟩
 
-theorem dtorC_corecC (c : S → σ.Obj S) (s : S) :
-    dtorC (corecC c s) = Obj.map (corecC c) (c s) := by
-  refine congrArg (Obj.mk (c s).shape) (funext fun b => Subtype.ext ?_)
-  show (corecRaw c s).child ⟨(c s).shape, b⟩ = corecRaw c ((c s).child b)
-  rw [corecRaw_eq c s, child_encode_self]
+theorem dtorC_corecC (c : ∀ i, S i → σ.Obj S i) {i : σ.I} (s : S i) :
+    dtorC (corecC c s) = Obj.map (fun _ s => corecC c s) (c i s) := by
+  refine congrArg (Obj.mk (c i s).shape) (funext fun b => Subtype.ext ?_)
+  show (corecRaw c i s).child ⟨⟨i, (c i s).shape⟩, b⟩ = corecRaw c _ ((c i s).child b)
+  rw [corecRaw_eq c i s, child_encode_self]
 
 /-! ### Bisimulation -/
 
-theorem bisimC (R : σ.Cotype → σ.Cotype → Prop)
-    (H : ∀ x y, R x y → Obj.Rel R (dtorC x) (dtorC y)) {x y : σ.Cotype} (h : R x y) : x = y := by
+theorem bisimC (R : ∀ i, σ.Cotype i → σ.Cotype i → Prop)
+    (H : ∀ i x y, R i x y → Obj.Rel R (dtorC x) (dtorC y)) {i : σ.I} {x y : σ.Cotype i}
+    (h : R i x y) : x = y := by
   apply Subtype.ext
-  refine Raw.eq_of_bisim' (R := fun t₁ t₂ => ∃ x y : σ.Cotype, t₁ = x.1 ∧ t₂ = y.1 ∧ R x y) ?_
-    ⟨x, y, rfl, rfl, h⟩
-  rintro _ _ ⟨x, y, rfl, rfl, h⟩
-  obtain ⟨s, c, c', hz, hz', hR⟩ := H x y h
+  refine Raw.eq_of_bisim'
+    (R := fun t₁ t₂ => ∃ (i : σ.I) (x y : σ.Cotype i), t₁ = x.1 ∧ t₂ = y.1 ∧ R i x y) ?_
+    ⟨i, x, y, rfl, rfl, h⟩
+  rintro _ _ ⟨i, x, y, rfl, rfl, h⟩
+  obtain ⟨s, c, c', hz, hz', hR⟩ := H i x y h
   rw [val_eq_encode_dtorC x, val_eq_encode_dtorC y, hz, hz']
-  refine ⟨rfl, fun ⟨s', b⟩ => ?_⟩
-  by_cases hs : s = s'
-  · subst hs
-    exact Or.inr ⟨c b, c' b, child_encode_self (Obj.map Subtype.val ⟨s, c⟩) b,
-      child_encode_self (Obj.map Subtype.val ⟨s, c'⟩) b, hR b⟩
-  · exact Or.inl ((child_encode_of_ne (Obj.map Subtype.val ⟨s, c⟩) (Ne.symm hs) b).trans
-      (child_encode_of_ne (Obj.map Subtype.val ⟨s, c'⟩) (Ne.symm hs) b).symm)
+  refine ⟨rfl, fun ⟨l', b⟩ => ?_⟩
+  by_cases hl : (⟨i, s⟩ : σ.Lbl) = l'
+  · subst hl
+    exact Or.inr ⟨_, c b, c' b,
+      child_encode_self i (Obj.map (fun _ => Subtype.val) (⟨s, c⟩ : σ.Obj σ.Cotype i)) b,
+      child_encode_self i (Obj.map (fun _ => Subtype.val) (⟨s, c'⟩ : σ.Obj σ.Cotype i)) b,
+      hR b⟩
+  · exact Or.inl
+      ((child_encode_of_ne i (Obj.map (fun _ => Subtype.val) (⟨s, c⟩ : σ.Obj σ.Cotype i))
+          (Ne.symm hl) b).trans
+        (child_encode_of_ne i (Obj.map (fun _ => Subtype.val) (⟨s, c'⟩ : σ.Obj σ.Cotype i))
+          (Ne.symm hl) b).symm)
 
-/-! ### Transport along an isomorphism `F X ≃ σ.Obj X`
+/-! ### Transport along an isomorphism `F X i ≃ σ.Obj X i` -/
 
-For a user-facing functor `F`, `dtor := ofC ∘ dtorC` and `corec c := corecC (toC ∘ c)`. The two
-theorems take the components of the isomorphism at the types where they are used. -/
-
-theorem dtor_corec_of {FS : Type u₁} {FT : Type u₂}
-    (toC : FS → σ.Obj S) (ofCS : σ.Obj S → FS) (ofCT : σ.Obj σ.Cotype → FT)
-    (map : (S → σ.Cotype) → FS → FT)
-    (ofC_toC : ∀ a, ofCS (toC a) = a)
-    (ofC_map : ∀ (f : S → σ.Cotype) (z : σ.Obj S), ofCT (Obj.map f z) = map f (ofCS z))
-    (c : S → FS) (s : S) :
-    ofCT (dtorC (corecC (fun s => toC (c s)) s)) = map (corecC (fun s => toC (c s))) (c s) := by
+theorem dtor_corec_of {FS : σ.I → Type u₁} {FT : σ.I → Type u₂}
+    (toC : ∀ {i}, FS i → σ.Obj S i) (ofCS : ∀ {i}, σ.Obj S i → FS i)
+    (ofCT : ∀ {i}, σ.Obj σ.Cotype i → FT i)
+    (map : (∀ j, S j → σ.Cotype j) → ∀ {i}, FS i → FT i)
+    (ofC_toC : ∀ {i} (a : FS i), ofCS (toC a) = a)
+    (ofC_map : ∀ (f : ∀ j, S j → σ.Cotype j) {i} (z : σ.Obj S i),
+      ofCT (Obj.map f z) = map f (ofCS z))
+    (c : ∀ i, S i → FS i) {i : σ.I} (s : S i) :
+    ofCT (dtorC (corecC (fun j s => toC (c j s)) s)) =
+      map (fun _ s => corecC (fun j s => toC (c j s)) s) (c i s) := by
   rw [dtorC_corecC, ofC_map]
-  exact congrArg _ (ofC_toC (c s))
+  exact congrArg _ (ofC_toC (c i s))
 
-theorem bisim_of {FT : Type u₂} (ofCT : σ.Obj σ.Cotype → FT)
-    (Rel : (σ.Cotype → σ.Cotype → Prop) → FT → FT → Prop)
-    (rel_ofC : ∀ (R : σ.Cotype → σ.Cotype → Prop) z z',
+theorem bisim_of {FT : σ.I → Type u₂} (ofCT : ∀ {i}, σ.Obj σ.Cotype i → FT i)
+    (Rel : (∀ j, σ.Cotype j → σ.Cotype j → Prop) → ∀ {i}, FT i → FT i → Prop)
+    (rel_ofC : ∀ (R : ∀ j, σ.Cotype j → σ.Cotype j → Prop) {i} (z z' : σ.Obj σ.Cotype i),
       Rel R (ofCT z) (ofCT z') → Obj.Rel R z z')
-    (R : σ.Cotype → σ.Cotype → Prop)
-    (H : ∀ x y, R x y → Rel R (ofCT (dtorC x)) (ofCT (dtorC y))) {x y : σ.Cotype} (h : R x y) :
-    x = y :=
-  bisimC R (fun x y hxy => rel_ofC R _ _ (H x y hxy)) h
+    (R : ∀ i, σ.Cotype i → σ.Cotype i → Prop)
+    (H : ∀ i x y, R i x y → Rel R (ofCT (dtorC x)) (ofCT (dtorC y)))
+    {i : σ.I} {x y : σ.Cotype i} (h : R i x y) : x = y :=
+  bisimC R (fun i x y hxy => rel_ofC R _ _ (H i x y hxy)) h
 
 end Signature
 
-/-! ### Derived from the contract: constructors and `corec_eq`
+/-! ### Derived from the contract, for indexed families -/
 
-Everything below uses only the five items of `contract.md` and the laws of `F.map`/`F.Rel`: the
-functor laws, and the fact that `F.Rel` relates the images of one element under pointwise
-related maps. -/
-
-namespace Codata
-
-/-- The contract of `contract.md` for a type `T` and a functor `F`, together with the laws of
-`F.map` and `F.Rel`. Since `F` is a bound variable it lives in one universe, so `corec` is only
-recorded for states in the universe of `T`; that is all the derivations below need. `T` is a
-parameter rather than a field so that its universe is fixed before `F` is elaborated. -/
-structure Contract (T : Type u) (F : Type u → Type u) where
-  map {X Y : Type u} : (X → Y) → F X → F Y
-  Rel {X Y : Type u} : (X → Y → Prop) → F X → F Y → Prop
-  map_id {X : Type u} (a : F X) : map id a = a
-  map_comp {X Y Z : Type u} (g : Y → Z) (f : X → Y) (a : F X) :
-    map (g ∘ f) a = map g (map f a)
-  rel_map {X Y Z : Type u} (R : Y → Z → Prop) (f : X → Y) (g : X → Z) (a : F X)
-    (h : ∀ x, R (f x) (g x)) : Rel R (map f a) (map g a)
-  dtor : T → F T
-  corec {S : Type u} : (S → F S) → S → T
-  dtor_corec {S : Type u} (c : S → F S) (s : S) : dtor (corec c s) = map (corec c) (c s)
-  bisim (R : T → T → Prop) (H : ∀ x y, R x y → Rel R (dtor x) (dtor y)) {x y : T} (h : R x y) :
-    x = y
+/-- The contract for an indexed family `T : I → Type u` and a functor `F` on families, together
+with the laws of `F.map` and `F.Rel`. -/
+structure Contract {I : Type w} (T : I → Type u) (F : (I → Type u) → I → Type u) where
+  map {X Y : I → Type u} : (∀ j, X j → Y j) → ∀ {i}, F X i → F Y i
+  Rel {X Y : I → Type u} : (∀ j, X j → Y j → Prop) → ∀ {i}, F X i → F Y i → Prop
+  map_id {X : I → Type u} {i : I} (a : F X i) : map (fun _ x => x) a = a
+  map_comp {X Y Z : I → Type u} (g : ∀ j, Y j → Z j) (f : ∀ j, X j → Y j) {i : I} (a : F X i) :
+    map (fun j x => g j (f j x)) a = map g (map f a)
+  rel_map {X Y Z : I → Type u} (R : ∀ j, Y j → Z j → Prop) (f : ∀ j, X j → Y j)
+    (g : ∀ j, X j → Z j) {i : I} (a : F X i) (h : ∀ j x, R j (f j x) (g j x)) :
+    Rel R (map f a) (map g a)
+  dtor {i : I} : T i → F T i
+  corec {S : I → Type u} : (∀ i, S i → F S i) → ∀ {i}, S i → T i
+  dtor_corec {S : I → Type u} (c : ∀ i, S i → F S i) {i : I} (s : S i) :
+    dtor (corec c s) = map (fun _ s => corec c s) (c i s)
+  bisim (R : ∀ i, T i → T i → Prop) (H : ∀ i x y, R i x y → Rel R (dtor x) (dtor y)) {i : I}
+    {x y : T i} (h : R i x y) : x = y
 
 namespace Contract
 
-variable {T : Type u} {F : Type u → Type u} (K : Contract T F) {S : Type u}
+variable {I : Type w} {T : I → Type u} {F : (I → Type u) → I → Type u} (K : Contract T F)
 
-/-- The constructor, by Lambek's lemma: the coalgebra morphism out of `(F T, map dtor)`. -/
-def ctor (y : F T) : T := K.corec (K.map K.dtor) y
+/-- The constructor, by Lambek's lemma. -/
+def ctor {i : I} (y : F T i) : T i := K.corec (fun _ => K.map fun _ t => K.dtor t) y
 
-theorem ctor_dtor (t : T) : K.ctor (K.dtor t) = t := by
-  refine K.bisim (fun x y => x = K.ctor (K.dtor y)) ?_ rfl
-  rintro _ y rfl
-  have h := K.rel_map (fun x y => x = K.ctor (K.dtor y)) (K.corec (K.map K.dtor) ∘ K.dtor) id
-    (K.dtor y) fun _ => rfl
+theorem ctor_dtor {i : I} (t : T i) : K.ctor (K.dtor t) = t := by
+  refine K.bisim (fun _ x y => x = K.ctor (K.dtor y)) ?_ rfl
+  rintro i _ y rfl
+  have h := K.rel_map (fun _ x y => x = K.ctor (K.dtor y))
+    (fun _ t => K.corec (fun _ => K.map fun _ t => K.dtor t) (K.dtor t)) (fun _ t => t)
+    (K.dtor y) fun _ _ => rfl
   rw [K.map_id] at h
-  show K.Rel _ (K.dtor (K.corec (K.map K.dtor) (K.dtor y))) (K.dtor y)
+  show K.Rel _ (K.dtor (K.corec (fun _ => K.map fun _ t => K.dtor t) (K.dtor y))) (K.dtor y)
   rw [K.dtor_corec, ← K.map_comp]
   exact h
 
-theorem dtor_ctor (y : F T) : K.dtor (K.ctor y) = y := by
-  show K.dtor (K.corec (K.map K.dtor) y) = y
+theorem dtor_ctor {i : I} (y : F T i) : K.dtor (K.ctor y) = y := by
+  show K.dtor (K.corec (fun _ => K.map fun _ t => K.dtor t) y) = y
   rw [K.dtor_corec, ← K.map_comp]
-  have : K.corec (K.map K.dtor) ∘ K.dtor = id := funext K.ctor_dtor
+  have : (fun (_ : I) t => K.corec (fun _ => K.map fun _ t => K.dtor t) (K.dtor t)) =
+      (fun (j : I) (t : T j) => t) := funext fun _ => funext fun t => K.ctor_dtor t
   rw [this, K.map_id]
 
-theorem ctor_injective : Function.Injective K.ctor := fun a b h => by
+theorem ctor_injective {i : I} : Function.Injective (K.ctor (i := i)) := fun a b h => by
   rw [← K.dtor_ctor a, ← K.dtor_ctor b, h]
 
 end Contract
 
-/-! ### More derived facts, with the pieces as hypotheses
-
-These need `F` at two types (`F S` and `F T`), so they are stated on the concrete pieces rather
-than on a `Contract`. -/
-
 section
-variable {T : Type u} {S : Type w} {FS : Type u₁} {FT : Type u₂}
+variable {I : Type w} {T : I → Type u} {S : I → Type u₃} {FS : I → Type u₁} {FT : I → Type u₂}
 
 /-- `corec_eq`, from `dtor_corec` and `ctor_dtor`. -/
-theorem corec_eq_of (dtor : T → FT) (ctor : FT → T) (corec : (S → FS) → S → T)
-    (map : (S → T) → FS → FT)
-    (dtor_corec : ∀ (c : S → FS) (s : S), dtor (corec c s) = map (corec c) (c s))
-    (ctor_dtor : ∀ t, ctor (dtor t) = t) (c : S → FS) (s : S) :
-    corec c s = ctor (map (corec c) (c s)) := by
+theorem corec_eq_of (dtor : ∀ {i}, T i → FT i) (ctor : ∀ {i}, FT i → T i)
+    (corec : (∀ i, S i → FS i) → ∀ {i}, S i → T i)
+    (map : (∀ j, S j → T j) → ∀ {i}, FS i → FT i)
+    (dtor_corec : ∀ (c : ∀ i, S i → FS i) {i} (s : S i),
+      dtor (corec c s) = map (fun _ s => corec c s) (c i s))
+    (ctor_dtor : ∀ {i} (t : T i), ctor (dtor t) = t) (c : ∀ i, S i → FS i) {i : I} (s : S i) :
+    corec c s = ctor (map (fun _ s => corec c s) (c i s)) := by
   rw [← dtor_corec, ctor_dtor]
 
 /-- Uniqueness of `corec`, from `bisim`. -/
-theorem corec_unique_of (dtor : T → FT) (corec : (S → FS) → S → T) (map : (S → T) → FS → FT)
-    (Rel : (T → T → Prop) → FT → FT → Prop)
-    (bisim : ∀ (R : T → T → Prop), (∀ x y, R x y → Rel R (dtor x) (dtor y)) →
-      ∀ {x y : T}, R x y → x = y)
-    (dtor_corec : ∀ (c : S → FS) (s : S), dtor (corec c s) = map (corec c) (c s))
-    (rel_map : ∀ (R : T → T → Prop) (f g : S → T) (a : FS), (∀ x, R (f x) (g x)) →
-      Rel R (map f a) (map g a))
-    (c : S → FS) (h : S → T) (hh : ∀ s, dtor (h s) = map h (c s)) (s : S) : h s = corec c s := by
-  refine bisim (fun x y => ∃ s, x = h s ∧ y = corec c s) ?_ ⟨s, rfl, rfl⟩
-  rintro _ _ ⟨s, rfl, rfl⟩
+theorem corec_unique_of (dtor : ∀ {i}, T i → FT i) (corec : (∀ i, S i → FS i) → ∀ {i}, S i → T i)
+    (map : (∀ j, S j → T j) → ∀ {i}, FS i → FT i)
+    (Rel : (∀ j, T j → T j → Prop) → ∀ {i}, FT i → FT i → Prop)
+    (bisim : ∀ (R : ∀ i, T i → T i → Prop), (∀ i x y, R i x y → Rel R (dtor x) (dtor y)) →
+      ∀ {i} {x y : T i}, R i x y → x = y)
+    (dtor_corec : ∀ (c : ∀ i, S i → FS i) {i} (s : S i),
+      dtor (corec c s) = map (fun _ s => corec c s) (c i s))
+    (rel_map : ∀ (R : ∀ j, T j → T j → Prop) (f g : ∀ j, S j → T j) {i} (a : FS i),
+      (∀ j x, R j (f j x) (g j x)) → Rel R (map f a) (map g a))
+    (c : ∀ i, S i → FS i) (h : ∀ i, S i → T i) (hh : ∀ i (s : S i), dtor (h i s) = map h (c i s))
+    {i : I} (s : S i) : h i s = corec c s := by
+  refine bisim (fun i x y => ∃ s, x = h i s ∧ y = corec c s) ?_ ⟨s, rfl, rfl⟩
+  rintro i _ _ ⟨s, rfl, rfl⟩
   rw [hh, dtor_corec]
-  exact rel_map _ _ _ _ fun s => ⟨s, rfl, rfl⟩
+  exact rel_map _ _ _ _ fun j s => ⟨s, rfl, rfl⟩
+
+end
+
+/-! ### Lemmas that do not mention the index, used at a fixed index -/
+
+section
+variable {T : Type u} {FT : Type u₂}
 
 /-- The computation rule of a case analysis defined by casting along `ctor_dtor`: on a
 constructor the cast disappears. -/
