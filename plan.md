@@ -5,7 +5,8 @@
 `Subtypes/Codata.lean`: the generic theory, for indexed polynomial signatures (a plain type is
 a family over `Unit`), the contract (`contract.md`, plain and indexed sections), and the derived
 layer. `Subtypes/CodataCmd.lean`: the `codata` command. `Subtypes/Data.lean` and
-`Subtypes/DataCmd.lean`: the inductive dual. `Subtypes/Test/`: one test per type.
+`Subtypes/DataCmd.lean`: the inductive dual. `Subtypes/MutualCmd.lean`: mutual blocks of
+either. `Subtypes/Test/`: one test per type.
 `Subtypes.lean` imports everything and is the only import of the root module, so `lake build`
 checks it all. `todo.md` holds deferred items that are not features.
 
@@ -75,16 +76,30 @@ NOT DONE:
 * injectivity for constructors with dependent binders (`sup (a : α) (f : β a → W α β)`): the
   `HEq` form, together with the implicit-binder case in section 5.
 
-## 3. Mutual types — NOT DONE
+## 3. Mutual types — DONE
 
-Mutual `codata … with …` blocks: one signature with a sum of shapes and an index picking the
-type (which is 1. again, with the type name as the index). The generated `F` becomes a family
-over the block, and `mutual_induct`-style principles come out of the indexed `bisim`.
+`Subtypes/MutualCmd.lean`: Lean's own `mutual … end` syntax around `codata` or `data`
+declarations; the block is one family over the enumeration `Blk.Which` of its types, prepended
+to the index telescope, and elaborated by the single-type pipeline. Per type: the type, the
+constructors and their lemmas, `casesOn` as the `cases` eliminator, aliases `corec`, `bisim`,
+`fold`; block-level `corec`, `bisim`, `rec` with states, relations and motives over `Which`
+(`Test/MTree.lean`, `Test/MRose.lean`, `Test/EvenOdd.lean`).
 
-Mixed inductive/coinductive blocks are rejected by Lean's fixpoint machinery (the joint operator
-is not monotone in the mixed order); support them as nested fixpoints, as in `Sketch/Mutual.lean`:
-the inner predicate is parameterised by the outer one and needs a `@[partial_fixpoint_monotone]`
-lemma, which the command can generate uniformly.
+DONE:
+
+* uniform blocks, `codata` or `data`, with parameters and indices, and constructor names shared
+  by several types (qualified in the block-level inductives only);
+* induction over a block by `induction x` for `x : Blk m i`, with per-constructor alternatives;
+  Lean's `induction` tactic refuses mutual inductives, so this is not less than `inductive`.
+
+NOT DONE:
+
+* types of one block with different index telescopes (Lean allows them): the block index would
+  be a dependent pair `(m : Which) ×' Ix m`;
+* a mixed inductive/coinductive block. Rejected with a message: it is a nested fixpoint whose
+  nesting order the block does not express (`Sketch/MixedFail.lean`), and Lean's fixpoint
+  machinery rejects it too. It is section 4: the inductive types of the block become
+  parameterised types nested in the coinductive ones.
 
 ## 4. Nested types — NOT DONE
 
@@ -110,6 +125,6 @@ for the types allowed in nested positions (`List`, `Option`, products, previousl
 
 1. Indices: DONE (front-end leftovers listed above).
 2. `data`: DONE (leftovers listed above).
-3. Mutual blocks via the index trick; then mixed blocks as nested fixpoints.
-4. Nested types through containers.
+3. Mutual blocks: DONE (leftovers listed above).
+4. Nested types through containers, which also gives the mixed blocks.
 5. Surface items, as they become blocking.

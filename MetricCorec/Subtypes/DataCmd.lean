@@ -215,8 +215,8 @@ def genRec (ctx : Ctx) : CommandElabM Unit := do
           ihs := ihs.push (← `(bracketedBinderF| ($(ihId x) : ∀ $[$tbs]*, $body)))
     let allBs := bs ++ ihs
     let ty ← if allBs.isEmpty then `($mc $capp) else `(∀ $[$allBs]*, $mc $capp)
-    `(bracketedBinderF| ($(c.name) : $ty))
-  let minorIds := ctx.ctors.map fun c => idT c.name
+    `(bracketedBinderF| ($(c.fname) : $ty))
+  let minorIds := ctx.ctors.map fun c => idT c.fname
   -- `recAux`: the minor premises assembled into the hypothesis of the generic recursor, whose
   -- induction hypotheses are indexed by the positions of `toC`.
   let bId : Ident := ⟨(← `(b)).raw⟩
@@ -238,7 +238,7 @@ def genRec (ctx : Ctx) : CommandElabM Unit := do
         for x in g.ids do
           ihArgs := ihArgs.push
             (← `(fun $[$ys:ident]* => $ihId' (@$(ctx.bCtor c x) $pTerms* $valData* $ys*)))
-    let rhs ← mkAppT c.name ((ctx.valArgs c).map idT ++ ihArgs)
+    let rhs ← mkAppT c.fname ((ctx.valArgs c).map idT ++ ihArgs)
     ctx.alt c #[← ctx.fPat c] (← `(fun $ihId':ident => $rhs))
   let discrsY := ctx.discrs (← `(y))
   elabCommand (← `(def $(ctx.recAux):ident $[$pImp]* {$motive : $mTy} $[$minors]* $[$ib]*
@@ -276,7 +276,7 @@ def genRec (ctx : Ctx) : CommandElabM Unit := do
         for x in g.ids do
           let body ← recApp idx (← `($x $ys*))
           ihArgs := ihArgs.push (← `(fun $[$ys':ident]* => $body))
-    let rhs ← mkAppT c.name (c.args.map idT ++ ihArgs)
+    let rhs ← mkAppT c.fname (c.args.map idT ++ ihArgs)
     elabCommand (← `(@[simp] theorem $(ctx.tName' c "rec_" ""):ident $[$pImp]* {$motive : $mTy}
         $[$bs]* $[$minors]* : $(← recApp c.idx capp) = $rhs :=
       $(ctx.rec_ctor) $minorIds:term* $fapp))
@@ -290,23 +290,45 @@ def genRec (ctx : Ctx) : CommandElabM Unit := do
     elabCommand (← `(@[simp] theorem $(ctx.tName' c "fold_" ""):ident $[$pImp]* {$S : $xTy}
         (a : $aTy) $[$bs]* : $(ctx.fold) a $capp = $rhs := $(ctx.fold_ctor) a $fapp))
 
+/-- In a mutual `data` block, the block-level `fold` restricted to each type (`dtor` and `ctor`
+are reached by dot notation, see `genAliases`). Induction stays at the block level (`Blk.rec`,
+with its motive over the block), as Lean's own mutual recursors, so there is no per-type
+`rec`. -/
+def genDataAliases (ctx : Ctx) : CommandElabM Unit := do
+  unless ctx.isMutual do return
+  let pImp := ctx.pImp
+  let xTy ← ctx.famTy
+  let S := ctx.Sid
+  let aTy ← ctx.famFn (← `($(ctx.Fp) $S)) (idT S)
+  let ib ← ctx.uIxB
+  for m in [0:ctx.types.size] do
+    let Ti ← ctx.tyAtU m
+    let Si ← appT (idT S) (ctx.fullArgs m)
+    elabCommand (← `(abbrev $(ctx.tyId m "fold"):ident $[$pImp]* {$S : $xTy} (a : $aTy) $[$ib]*
+        (t : $Ti) : $Si := $(ctx.fold) a t))
+
 /-! ### The command -/
 
-@[command_elab dataCmd] def elabData : CommandElab := fun stx => do
-  let `(data $T:ident $paramsStx:bracketedBinder* $[: $sortStx]? $ctorsStx:codataCtor*) := stx
-    | throwUnsupportedSyntax
-  let ctx ← mkCtx false T paramsStx sortStx ctorsStx
+/-- The generators of `data`, in order. The encoding decides equality of shapes classically, and
+the recursor is by well-founded recursion: the type's constructors and recursors are
+noncomputable. -/
+def dataPipeline (ctx : Ctx) : CommandElabM Unit := do
   genFunctor ctx
   genSignature ctx
   genIso ctx
-  -- The encoding decides equality of shapes classically, and the recursor is by well-founded
-  -- recursion: the type's constructors and recursors are noncomputable.
   elabCommand (← `(noncomputable section))
   genDataContract ctx
+  genTypes ctx
   genDataDerived ctx
   genCtors ctx
   genCases ctx
   genRec ctx
+  genDataAliases ctx
   elabCommand (← `(end))
+
+@[command_elab dataCmd] def elabData : CommandElab := fun stx => do
+  let `(data $T:ident $paramsStx:bracketedBinder* $[: $sortStx]? $ctorsStx:codataCtor*) := stx
+    | throwUnsupportedSyntax
+  dataPipeline (← mkCtx false T paramsStx sortStx #[(T, ctorsStx)] none)
 
 end Codata

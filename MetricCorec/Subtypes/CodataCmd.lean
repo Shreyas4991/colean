@@ -69,7 +69,10 @@ decides equality of shapes classically.
 The analysis of the declaration (`mkCtx`) and the generators of `T.F`, the signature, the
 isomorphism, the constructors and `casesOn` are shared with the `data` command
 (`DataCmd.lean`), which differs only in the contract and what is derived from it; `T.F.Rel`,
-`rel_map` and `rel_ofC` are generated for `codata` only.
+`rel_map` and `rel_ofC` are generated for `codata` only. A mutual block (`MutualCmd.lean`) is
+one family whose first index enumerates its types: `mkCtx` receives the types with their
+constructors and the enumeration, every generator works on the block, and the user-facing
+types, constructors, `casesOn` and aliases are per type (`genTypes`, `genCases`, `genAliases`).
 -/
 
 open Lean Elab Command Lean.Parser.Term
@@ -103,11 +106,17 @@ structure Group where
   implicit : Bool
 
 /-- A constructor, analysed: its name, binder groups, and the index arguments of its result type
-(none without indices). -/
+(none without indices; in a mutual block, the first index is the type's constructor of `Which`).
+-/
 structure CtorInfo where
   name : Ident
   groups : Array Group
   idx : Array Term
+  /-- The position of the type it belongs to in the block (`0` outside mutual blocks). -/
+  owner : Nat
+  /-- Its name in the block-level inductives `F`, `Shape`, `B`: the name itself, or `T_name`
+  when another type of the block has a constructor of the same name. -/
+  fname : Ident
 
 def idT (x : Ident) : Term := ⟨x.raw⟩
 
@@ -177,16 +186,23 @@ def appT (f : Term) (args : Array Term) : CommandElabM Term :=
 
 def mkAppT (f : Ident) (args : Array Term) : CommandElabM Term := appT (idT f) args
 
-/-- If `ty` is the type `T p₁ … pₙ idx…` being defined, applied to its parameters, its index
-arguments. -/
-private def recIdx (tName : Name) (params : Array Ident) (ty : Term) : Option (Array Term) :=
+/-- If `ty` is one of the types `T p₁ … pₙ idx…` being defined, applied to its parameters: its
+position in the block and its index arguments. -/
+private def recIdx (tNames : Array Name) (params : Array Ident) (ty : Term) :
+    Option (Nat × Array Term) :=
   match ty with
   | `($f:ident $as:term*) =>
-    if f.getId == tName && as.size ≥ params.size &&
-        (params.zip as).all (fun (p, a) => a.raw.isIdent && a.raw.getId == p.getId) then
-      some (as.extract params.size as.size)
-    else none
-  | `($f:ident) => if params.isEmpty && f.getId == tName then some #[] else none
+    match tNames.findIdx? (· == f.getId) with
+    | some m =>
+      if as.size ≥ params.size &&
+          (params.zip as).all (fun (p, a) => a.raw.isIdent && a.raw.getId == p.getId) then
+        some (m, as.extract params.size as.size)
+      else none
+    | none => none
+  | `($f:ident) =>
+    match tNames.findIdx? (· == f.getId) with
+    | some m => if params.isEmpty then some (m, #[]) else none
+    | none => none
   | _ => none
 
 /-- A binder `(x y : A)` or `{x y : A}`: its names, type, and whether it is implicit. -/
@@ -205,10 +221,11 @@ private def freshId (s : String) : CommandElabM Ident :=
 
 /-- Classify the type of a constructor argument: a plain recursive argument `T params idx`, a
 recursive argument under a telescope of arrows ending in one, or non-recursive data, which may
-not mention `T` at all. -/
-private partial def classify (tName : Name) (params : Array Ident) (ty : Term) :
-    CommandElabM Kind := do
-  if let some idx := recIdx tName params ty then return .pos idx
+not mention the types being defined at all. `pre m` is the block index of the `m`-th type (its
+constructor of `Which`, nothing outside mutual blocks), prepended to the index arguments. -/
+private partial def classify (tNames : Array Name) (params : Array Ident)
+    (pre : Nat → Array Term) (ty : Term) : CommandElabM Kind := do
+  if let some (m, idx) := recIdx tNames params ty then return .pos (pre m ++ idx)
   let rec go (t : Term) (acc : Array (Ident × Term)) : CommandElabM (Option Kind) := do
     match t with
     | `($b:bracketedBinder → $cod) =>
@@ -216,15 +233,15 @@ private partial def classify (tName : Name) (params : Array Ident) (ty : Term) :
       go cod (acc ++ ids.map (·, dom))
     | `($dom → $cod) =>
       go cod (acc.push (← freshId s!"y{Nat.toSubscriptString (acc.size + 1)}", dom))
-    | _ => return (recIdx tName params t).map (.fn acc)
+    | _ => return (recIdx tNames params t).map fun (m, idx) => .fn acc (pre m ++ idx)
   if let some k ← go ty #[] then
     if let .fn tele _ := k then
       for (_, dom) in tele do
-        if mentionsAny dom.raw #[tName] then
-          throwErrorAt dom "the type being defined may not occur in the domain of a function"
+        if mentionsAny dom.raw tNames then
+          throwErrorAt dom "the types being defined may not occur in the domain of a function"
     return k
-  if mentionsAny ty.raw #[tName] then
-    throwErrorAt ty "recursive occurrence not recognised: expected the type being defined \
+  if mentionsAny ty.raw tNames then
+    throwErrorAt ty "recursive occurrence not recognised: expected a type being defined \
       applied to its parameters (and indices), possibly under arrows"
   return .data
 
@@ -249,8 +266,13 @@ and the types applied to the parameters. -/
 structure Ctx where
   /-- `codata` (`true`) or `data`. -/
   co : Bool
+  /-- The family being defined: the type itself, or the block `T₁_T₂` of a mutual block. -/
   T : Ident
   tName : Name
+  /-- The user-facing types: `#[T]`, or the types of the block, in order. -/
+  types : Array Ident
+  /-- In a mutual block, the enumeration of the types, which is the first index of the block. -/
+  which : Option Ident
   pids : Array Ident
   pExp : Array (TSyntax ``bracketedBinderF)
   pImp : Array (TSyntax ``bracketedBinderF)
@@ -315,7 +337,7 @@ structure Ctx where
 
 /-- The short name of the position constructor for the argument `x` of constructor `c`. -/
 def posCtorName (c : CtorInfo) (x : Ident) : Ident :=
-  mkIdent (Name.mkSimple (c.name.getId.toString ++ "_" ++ x.getId.toString))
+  mkIdent (Name.mkSimple (c.fname.getId.toString ++ "_" ++ x.getId.toString))
 
 /-- The binders of a constructor, with the user's types. -/
 def binders (c : CtorInfo) : CommandElabM (Array (TSyntax ``bracketedBinderF)) :=
@@ -348,13 +370,34 @@ namespace Ctx
 
 variable (ctx : Ctx)
 
-def fCtor (c : CtorInfo) : Ident := mkIdent (ctx.F.getId ++ c.name.getId)
-def shapeCtor (c : CtorInfo) : Ident := mkIdent (ctx.Shape.getId ++ c.name.getId)
+def fCtor (c : CtorInfo) : Ident := mkIdent (ctx.F.getId ++ c.fname.getId)
+def shapeCtor (c : CtorInfo) : Ident := mkIdent (ctx.Shape.getId ++ c.fname.getId)
 def bCtor (c : CtorInfo) (x : Ident) : Ident := mkIdent (ctx.B.getId ++ (posCtorName c x).getId)
-def tCtor (c : CtorInfo) : Ident := mkIdent (ctx.tName ++ c.name.getId)
+
+/-! In a mutual block, the user-facing declarations of a constructor live under its own type. -/
+
+/-- The name of the `m`-th type of the block. -/
+def tyName (m : Nat) : Name := ctx.types[m]!.getId
+
+/-- `T.s`, for the `m`-th type. -/
+def tyId (m : Nat) (s : String) : Ident := mkIdent (.str (ctx.tyName m) s)
+
+def tCtor (c : CtorInfo) : Ident := mkIdent (ctx.tyName c.owner ++ c.name.getId)
 def tName' (c : CtorInfo) (pre post : String) : Ident :=
-  mkIdent (ctx.tName ++ Name.mkSimple (pre ++ c.name.getId.toString ++ post))
+  mkIdent (ctx.tyName c.owner ++ Name.mkSimple (pre ++ c.name.getId.toString ++ post))
 def nF (s : String) : Ident := mkIdent (.str (.str ctx.tName "F") s)
+
+def isMutual : Bool := ctx.which.isSome
+
+/-- The number of leading indices that are not the user's: one in a mutual block. -/
+def off : Nat := if ctx.isMutual then 1 else 0
+
+/-- The constructor of `Which` for the `m`-th type. -/
+def whichCtor (m : Nat) : Term :=
+  idT (mkIdent (ctx.which.get!.getId ++ Name.mkSimple (ctx.tyName m).getString!))
+
+/-- The block index of the `m`-th type: its constructor of `Which`, or nothing. -/
+def pre (m : Nat) : Array Term := if ctx.isMutual then #[ctx.whichCtor m] else #[]
 
 /-- A declaration of the generic signature theory. -/
 def sigId (_ : Ctx) (n : Name) : Ident := mkIdent (`Codata.Signature ++ n)
@@ -518,6 +561,56 @@ def alt (c : CtorInfo) (pats : Array Term) (rhs : Term) : CommandElabM (TSyntax 
   let pats := (← ctx.idxPats c) ++ pats
   `(matchAltExpr| | $[$pats:term],* => $rhs:term)
 
+/-! The user's indices, without the block index: what the per-type declarations of a mutual
+block (the types, `casesOn`, the aliases) are stated with. Outside mutual blocks these coincide
+with the helpers above. -/
+
+/-- The number of the user's indices. -/
+def uk : Nat := ctx.k - ctx.off
+
+def uIdxed : Bool := ctx.uk > 0
+
+def uIArgs : Array Term := ctx.iArgs.extract ctx.off ctx.k
+def uJArgs : Array Term := ctx.jArgs.extract ctx.off ctx.k
+
+/-- The user's index binders, named as in `names` (which names all indices). -/
+def uIxBindersWith (names : Array Ident) (implicit : Bool) :
+    CommandElabM (Array (TSyntax ``bracketedBinderF)) :=
+  (Array.range ctx.k).filterMapM fun m => do
+    if m < ctx.off then return none
+    return some (← mkBinder implicit #[names[m]!] (ctx.renameTo names ctx.idx[m]!.2))
+
+def uIxB : CommandElabM (Array (TSyntax ``bracketedBinderF)) := ctx.uIxBindersWith ctx.iIds true
+def uIxBExp : CommandElabM (Array (TSyntax ``bracketedBinderF)) := ctx.uIxBindersWith ctx.iIds false
+def uJB : CommandElabM (Array (TSyntax ``bracketedBinderF)) := ctx.uIxBindersWith ctx.jIds false
+
+/-- The user's index arguments of a constructor's result type. -/
+def uIdxOf (c : CtorInfo) : Array Term := c.idx.extract ctx.off c.idx.size
+
+/-- The `m`-th user-facing type applied to the parameters. -/
+def tyP (m : Nat) : CommandElabM Term :=
+  if ctx.isMutual then mkAppT ctx.types[m]! ctx.pTerms else pure ctx.Tp
+
+/-- `Tₘ params i…`, at the user's index binders. -/
+def tyAtU (m : Nat) : CommandElabM Term := do appT (← ctx.tyP m) ctx.uIArgs
+
+/-- The user-facing type of a constructor's result, `Tₘ params idx…`. -/
+def tyAt (c : CtorInfo) : CommandElabM Term := do appT (← ctx.tyP c.owner) (ctx.uIdxOf c)
+
+/-- The full index arguments of the `m`-th type at the user's index binders: its block index,
+then the user's binders. -/
+def fullArgs (m : Nat) : Array Term := ctx.pre m ++ ctx.uIArgs
+
+/-- The patterns for the user's indices. -/
+def uIdxPats (c : CtorInfo) : CommandElabM (Array Term) :=
+  return (← ctx.idxPats c).extract ctx.off ctx.k
+
+def uDiscrs (x : Term) : Array Term := ctx.uIArgs.push x
+
+def uAlt (c : CtorInfo) (pats : Array Term) (rhs : Term) : CommandElabM (TSyntax ``matchAlt) := do
+  let pats := (← ctx.uIdxPats c) ++ pats
+  `(matchAltExpr| | $[$pats:term],* => $rhs:term)
+
 /-- `@F.c params X args…`. -/
 def fApp (c : CtorInfo) (X : Term) (args : Array Term) : CommandElabM Term := do
   let pTerms := ctx.pTerms
@@ -630,7 +723,7 @@ def genRel (ctx : Ctx) : CommandElabM Unit := do
           ys := ys.push (idT t')
     let lhs ← ctx.fApp c X xs
     let rhs ← ctx.fApp c Y ys
-    `(Parser.Command.ctor| | $(c.name):ident $[$bs]* $[$hyps]* : $(ctx.Rel) R $lhs $rhs)
+    `(Parser.Command.ctor| | $(c.fname):ident $[$bs]* $[$hyps]* : $(ctx.Rel) R $lhs $rhs)
   let relTy ← ctx.famRel X Y
   if ctx.idxed then
     elabCommand (← `(inductive $(ctx.Rel):ident $[$pImp]* {X Y : $xTy} (R : $relTy) :
@@ -669,9 +762,9 @@ def genFunctor (ctx : Ctx) : CommandElabM Unit := do
     let bs ← fBinders c
     if ctx.idxed then
       let res ← appT (← `($(ctx.Fp) X)) c.idx
-      `(Parser.Command.ctor| | $(c.name):ident $[$bs]* : $res)
+      `(Parser.Command.ctor| | $(c.fname):ident $[$bs]* : $res)
     else
-      `(Parser.Command.ctor| | $(c.name):ident $[$bs]*)
+      `(Parser.Command.ctor| | $(c.fname):ident $[$bs]*)
   if ctx.idxed then
     elabCommand (← `(inductive $(ctx.F):ident $[$pExp]* (X : $xTy) : $xTy where
       $[$fCtors:ctor]*))
@@ -689,7 +782,7 @@ def genFunctor (ctx : Ctx) : CommandElabM Unit := do
     let lhs ← ctx.fApp c X (c.allIds.map idT)
     let rhs ← ctx.fApp c Y (← ctx.mappedArgs c false)
     let FXc ← appT (← `($(ctx.Fp) X)) c.idx
-    elabCommand (← `(@[simp] theorem $(ctx.nF ("map_" ++ c.name.getId.toString)):ident
+    elabCommand (← `(@[simp] theorem $(ctx.nF ("map_" ++ c.fname.getId.toString)):ident
         $[$pImp]* {X Y : $xTy} (f : $fTy) $[$bs]* :
         $(ctx.Fmap) f ($lhs : $FXc) = $rhs := rfl))
   -- The functor laws.
@@ -716,9 +809,9 @@ def genSignature (ctx : Ctx) : CommandElabM Unit := do
     let bs ← (c.groups.filter (·.kind.isData)).mapM fun g => mkBinder g.implicit g.ids g.ty
     if ctx.idxed then
       let res ← appT ctx.Shapep c.idx
-      `(Parser.Command.ctor| | $(c.name):ident $[$bs]* : $res)
+      `(Parser.Command.ctor| | $(c.fname):ident $[$bs]* : $res)
     else
-      `(Parser.Command.ctor| | $(c.name):ident $[$bs]*)
+      `(Parser.Command.ctor| | $(c.fname):ident $[$bs]*)
   let ixBExp ← ctx.ixBExp
   let ib ← ctx.ixB
   if ctx.idxed then
@@ -1091,7 +1184,7 @@ def genCtors (ctx : Ctx) : CommandElabM Unit := do
     let bs ← binders c
     let fapp ← ctx.fApp c ctx.Tp (c.allIds.map idT)
     let capp ← ctx.tApp c
-    let Tc ← appT ctx.Tp c.idx
+    let Tc ← ctx.tyAt c
     let FTc ← appT (← `($(ctx.Fp) $(ctx.Tp))) c.idx
     elabCommand (← `(def $cId:ident $[$pImp]* $[$bs]* : $Tc := $(ctx.ctor) $fapp))
     elabCommand (← `(@[simp] theorem $(ctx.tName' c "dtor_" ""):ident $[$pImp]* $[$bs]* :
@@ -1102,12 +1195,12 @@ def genCtors (ctx : Ctx) : CommandElabM Unit := do
     if c.args.isEmpty || c.hasImplicit || c.dependent || c.idxDependent then continue
     let bs ← binders c
     let bs' ← binders' c
-    let Tc ← appT ctx.Tp c.idx
+    let Tc ← ctx.tyAt c
     let capp ← mkAppT (ctx.tCtor c) (c.args.map idT)
     let capp' ← mkAppT (ctx.tCtor c) ((c.args.map prime).map idT)
     let eqs ← (c.args.zip (c.args.map prime)).mapM fun (x, x') => `($x:ident = $x':ident)
     let conj ← eqs.foldrM (init := eqs.back!) (start := eqs.size - 1) fun e acc => `($e ∧ $acc)
-    let injEq := mkIdent (ctx.F.getId ++ c.name.getId ++ `injEq)
+    let injEq := mkIdent (ctx.F.getId ++ c.fname.getId ++ `injEq)
     let fapp ← mkAppT (ctx.fCtor c) (c.args.map idT)
     let fapp' ← mkAppT (ctx.fCtor c) ((c.args.map prime).map idT)
     let args := c.args.map idT ++ (c.args.map prime).map idT
@@ -1116,14 +1209,14 @@ def genCtors (ctx : Ctx) : CommandElabM Unit := do
       Codata.inj_of $(ctx.ctor) $(ctx.ctor_injective) $fapp $fapp' ($injEq $args:term*)))
   for c in ctx.ctors do
     for c' in ctx.ctors do
-      if c.name.getId == c'.name.getId then continue
+      if c.name.getId == c'.name.getId || c.owner != c'.owner then continue
       unless idxEq c.idx c'.idx && !c.idxDependent && !c'.idxDependent do continue
       let bs ← binders c
       let bs' ← binders' c'
-      let Tc ← appT ctx.Tp c.idx
+      let Tc ← ctx.tyAt c
       let capp ← mkAppT (ctx.tCtor c) (c.args.map idT)
       let capp' ← mkAppT (ctx.tCtor c') ((c'.args.map prime).map idT)
-      let name := mkIdent (ctx.tName ++
+      let name := mkIdent (ctx.tyName c.owner ++
         Name.mkSimple (c.name.getId.toString ++ "_ne_" ++ c'.name.getId.toString))
       let dtorC ← mkAppT (ctx.tName' c "dtor_" "") (c.args.map idT)
       let dtorC' ← mkAppT (ctx.tName' c' "dtor_" "") ((c'.args.map prime).map idT)
@@ -1131,52 +1224,96 @@ def genCtors (ctx : Ctx) : CommandElabM Unit := do
           ($capp : $Tc) ≠ $capp' :=
         Codata.ne_of $(ctx.dtor) $dtorC $dtorC' fun h => nomatch h))
 
-/-- Case analysis: `t = ctor (dtor t)`, and `dtor t` is an inductive value. -/
+/-- Case analysis, per type of the block: `t = ctor (dtor t)`, and `dtor t` is an inductive
+value whose possible constructors are those of the type. -/
 def genCases (ctx : Ctx) : CommandElabM Unit := do
   let pImp := ctx.pImp
   let pTerms := ctx.pTerms
-  let ib ← ctx.ixB
-  let jB ← ctx.jB
-  let iArg := ctx.iArg
+  let ib ← ctx.uIxB
+  let jB ← ctx.uJB
+  let iArg := ctx.uIArgs
   let motive := ctx.motiveId
-  let mTy ← if ctx.idxed then `(∀ $[$jB]*, $(← appT ctx.Tp ctx.jArgs) → Sort _)
-    else `($(ctx.Tp) → Sort _)
-  let mI ← appT (idT motive) iArg
-  let Ti ← ctx.atI ctx.Tp
-  let FTi ← ctx.atI (← `($(ctx.Fp) $(ctx.Tp)))
-  let minors ← ctx.ctors.mapM fun c => do
-    let bs ← binders c
-    let capp ← ctx.tApp c
-    let mc ← appT (idT motive) c.idx
-    let ty ← if c.groups.isEmpty then `($mc $capp) else `(∀ $[$bs]*, $mc $capp)
-    `(bracketedBinderF| ($(c.name) : $ty))
-  let auxAlts : Array (TSyntax ``matchAlt) ← ctx.ctors.mapM fun c => do
-    ctx.alt c #[← ctx.fPat c] (← mkAppT c.name ((ctx.valArgs c).map idT))
-  let discrsY := ctx.discrs (← `(y))
-  elabCommand (← `(def $(ctx.casesOnAux):ident $[$pImp]* {$motive : $mTy} $[$ib]* (y : $FTi)
-      $[$minors]* : $mI ($(ctx.ctor) y) := match $[$discrsY:term],* with $auxAlts:matchAlt*))
-  let minorIds := ctx.ctors.map fun c => idT c.name
-  elabCommand (← `(@[elab_as_elim, cases_eliminator]
-    def $(ctx.casesOnId):ident $[$pImp]* {$motive : $mTy} $[$ib]* (t : $Ti) $[$minors]* :
-        $mI t :=
-      (congrArg $mI ($(ctx.ctor_dtor) t)).mp ($(ctx.casesOnAux) ($(ctx.dtor) t) $minorIds:term*)))
-  -- Its computation rules: the cast disappears once `dtor (ctor y) = y` is substituted.
-  elabCommand (← `(theorem $(ctx.casesOn_ctor):ident $[$pImp]* {$motive : $mTy} $[$ib]*
-      (y : $FTi) $[$minors]* :
-      @$(ctx.casesOnId) $pTerms:term* $motive $iArg:term* ($(ctx.ctor) y) $minorIds:term* =
-        $(ctx.casesOnAux) y $minorIds:term* :=
-    Codata.cast_ctor_dtor $(ctx.ctor) $(ctx.dtor) $(ctx.ctor_dtor) $(ctx.dtor_ctor)
-      (fun y => $(ctx.casesOnAux) y $minorIds:term*) y))
-  for c in ctx.ctors do
-    let bs ← binders c
-    let capp ← ctx.tApp c
-    let fapp ← ctx.fApp c ctx.Tp (c.allIds.map idT)
-    let rhs ← mkAppT c.name (c.args.map idT)
-    let cidx := c.idx
-    elabCommand (← `(@[simp] theorem $(ctx.tName' c "casesOn_" ""):ident $[$pImp]*
-        {$motive : $mTy} $[$bs]* $[$minors]* :
-        @$(ctx.casesOnId) $pTerms:term* $motive $cidx:term* $capp $minorIds:term* = $rhs :=
-      $(ctx.casesOn_ctor) $fapp $minorIds:term*))
+  for m in [0:ctx.types.size] do
+    let ctors := ctx.ctors.filter (·.owner == m)
+    let Tm ← ctx.tyP m
+    let mTy ← if ctx.uIdxed then `(∀ $[$jB]*, $(← appT Tm ctx.uJArgs) → Sort _)
+      else `($Tm → Sort _)
+    let mI ← appT (idT motive) iArg
+    let Ti ← ctx.tyAtU m
+    let FTi ← appT (← `($(ctx.Fp) $(ctx.Tp))) (ctx.fullArgs m)
+    let casesOnAux := ctx.tyId m "casesOnAux"
+    let casesOnId := ctx.tyId m "casesOn"
+    let casesOn_ctor := ctx.tyId m "casesOn_ctor"
+    let minors ← ctors.mapM fun c => do
+      let bs ← binders c
+      let capp ← ctx.tApp c
+      let mc ← appT (idT motive) (ctx.uIdxOf c)
+      let ty ← if c.groups.isEmpty then `($mc $capp) else `(∀ $[$bs]*, $mc $capp)
+      `(bracketedBinderF| ($(c.name) : $ty))
+    let auxAlts : Array (TSyntax ``matchAlt) ← ctors.mapM fun c => do
+      ctx.uAlt c #[← ctx.fPat c] (← mkAppT c.name ((ctx.valArgs c).map idT))
+    let discrsY := ctx.uDiscrs (← `(y))
+    elabCommand (← `(def $casesOnAux:ident $[$pImp]* {$motive : $mTy} $[$ib]* (y : $FTi)
+        $[$minors]* : $mI ($(ctx.ctor) y) := match $[$discrsY:term],* with $auxAlts:matchAlt*))
+    let minorIds := ctors.map fun c => idT c.name
+    elabCommand (← `(@[elab_as_elim, cases_eliminator]
+      def $casesOnId:ident $[$pImp]* {$motive : $mTy} $[$ib]* (t : $Ti) $[$minors]* :
+          $mI t :=
+        (congrArg $mI ($(ctx.ctor_dtor) t)).mp ($casesOnAux ($(ctx.dtor) t) $minorIds:term*)))
+    -- Its computation rules: the cast disappears once `dtor (ctor y) = y` is substituted.
+    elabCommand (← `(theorem $casesOn_ctor:ident $[$pImp]* {$motive : $mTy} $[$ib]*
+        (y : $FTi) $[$minors]* :
+        @$casesOnId $pTerms:term* $motive $iArg:term* ($(ctx.ctor) y) $minorIds:term* =
+          $casesOnAux y $minorIds:term* :=
+      Codata.cast_ctor_dtor $(ctx.ctor) $(ctx.dtor) $(ctx.ctor_dtor) $(ctx.dtor_ctor)
+        (fun y => $casesOnAux y $minorIds:term*) y))
+    for c in ctors do
+      let bs ← binders c
+      let capp ← ctx.tApp c
+      let fapp ← ctx.fApp c ctx.Tp (c.allIds.map idT)
+      let rhs ← mkAppT c.name (c.args.map idT)
+      let cidx := ctx.uIdxOf c
+      elabCommand (← `(@[simp] theorem $(ctx.tName' c "casesOn_" ""):ident $[$pImp]*
+          {$motive : $mTy} $[$bs]* $[$minors]* :
+          @$casesOnId $pTerms:term* $motive $cidx:term* $capp $minorIds:term* = $rhs :=
+        $casesOn_ctor $fapp $minorIds:term*))
+
+/-! ### Mutual blocks: the user-facing types and aliases -/
+
+/-- In a mutual block, the user-facing types: `Tₘ params i… := Blk params .Tₘ i…`. Defined
+after the family and before anything that mentions the types in a binder. -/
+def genTypes (ctx : Ctx) : CommandElabM Unit := do
+  unless ctx.isMutual do return
+  let pExp := ctx.pExp
+  let ixBExp ← ctx.uIxBExp
+  for m in [0:ctx.types.size] do
+    let body ← appT ctx.Tp (ctx.fullArgs m)
+    elabCommand (← `(def $(ctx.types[m]!):ident $[$pExp]* $[$ixBExp]* : Type _ := $body))
+
+/-- In a mutual `codata` block, the block-level `corec` and `bisim` restricted to each type.
+`dtor` and `ctor` are not aliased: dot notation `t.dtor` resolves to the block-level `dtor`
+through the definition of the type, and an alias at the head of a lemma would not be seen
+through by `rw`. -/
+def genAliases (ctx : Ctx) : CommandElabM Unit := do
+  unless ctx.isMutual do return
+  let pImp := ctx.pImp
+  let xTy ← ctx.famTy
+  let ixBExp ← ctx.ixBExp
+  let iArgs := ctx.iArgs
+  let S := ctx.Sid
+  let cTy ← ctx.famFn (idT S) (← `($(ctx.Fp) $S))
+  let RTy ← ctx.famRel ctx.Tp ctx.Tp
+  let Rixy ← appT (← `(R)) (iArgs ++ #[← `(x), ← `(y)])
+  let HTy ← `(∀ $[$ixBExp]* x y, $Rixy → $(ctx.Rel) R ($(ctx.dtor) x) ($(ctx.dtor) y))
+  let ib ← ctx.uIxB
+  for m in [0:ctx.types.size] do
+    let Ti ← ctx.tyAtU m
+    let Si ← appT (idT S) (ctx.fullArgs m)
+    let Rm ← appT (← `(R)) (ctx.fullArgs m ++ #[← `(x), ← `(y)])
+    elabCommand (← `(abbrev $(ctx.tyId m "corec"):ident $[$pImp]* {$S : $xTy} (c : $cTy) $[$ib]*
+        (s : $Si) : $Ti := $(ctx.corec) c s))
+    elabCommand (← `(theorem $(ctx.tyId m "bisim"):ident $[$pImp]* (R : $RTy) (H : $HTy) $[$ib]*
+        {x y : $Ti} (h : $Rm) : x = y := $(ctx.bisim) R H h))
 
 /-! ### The command -/
 
@@ -1192,10 +1329,16 @@ private partial def readSort (t : Term) : CommandElabM (Array (Ident × Term)) :
     return #[(← freshId s!"i{Nat.toSubscriptString (rest.size + 1)}", dom)] ++ rest
   | _ => return #[]
 
-/-- Analyse a declaration and name everything: shared by `codata` and `data`. -/
+/-- Analyse a declaration, or the declarations of a mutual block, and name everything: shared by
+`codata` and `data`. `T` is the family being defined (the type, or the block `T₁_T₂`), `decls`
+the types with their constructors, `which` the enumeration of the types of a mutual block, which
+becomes the first index. -/
 def mkCtx (co : Bool) (T : Ident) (paramsStx : Array (TSyntax ``bracketedBinder))
-    (sortStx : Option Term) (ctorsStx : Array (TSyntax ``codataCtor)) : CommandElabM Ctx := do
+    (sortStx : Option Term) (decls : Array (Ident × Array (TSyntax ``codataCtor)))
+    (which : Option Ident) : CommandElabM Ctx := do
   let tName := T.getId
+  let types := decls.map (·.1)
+  let tNames := types.map (·.getId)
   let params ← paramsStx.mapM fun b => do
     let (ids, ty, _) ← readBinder b
     return (ids, ty)
@@ -1207,45 +1350,65 @@ def mkCtx (co : Bool) (T : Ident) (paramsStx : Array (TSyntax ``bracketedBinder)
   let idx0 ← match sortStx with
     | none => pure #[]
     | some sort => readSort sort
-  let idx ← idx0.mapIdxM fun m (x, ty) => do
+  let uidx ← idx0.mapIdxM fun m (x, ty) => do
     if x.getId.hasMacroScopes then return (← freshId s!"i{Nat.toSubscriptString (m + 1)}", ty)
     else return (x, ty)
-  let nIdx := idx.size
-  let ctors : Array CtorInfo ← ctorsStx.mapM fun c => do
+  let rawCtors ← decls.mapM fun (_, cs) => cs.mapM fun c => do
     let `(codataCtor| | $name:ident $bs:bracketedBinder* $[: $resTy]?) := c
       | throwUnsupportedSyntax
     let raw ← bs.mapM readBinder
-    let groups ← raw.mapM fun (ids, ty, implicit) => do
-      return { ids, ty, kind := ← classify tName pids ty, implicit : Group }
-    for g in groups do
-      if g.implicit && !g.kind.isData then
-        throwErrorAt g.ty "implicit binders must not be recursive"
-      unless g.kind.isData || g.kind.idx.size == nIdx do
-        throwErrorAt g.ty "recursive argument with the wrong number of indices"
-    let cidx ← match resTy with
-      | none =>
-        if nIdx > 0 then throwErrorAt c "the constructor needs a result type" else pure #[]
-      | some r =>
-        match recIdx tName pids r with
-        | some cidx =>
-          if cidx.size == nIdx then pure cidx
-          else throwErrorAt r "result type with the wrong number of indices"
-        | none => throwErrorAt r "the result type must be the declared type applied to its parameters"
-    return { name, groups, idx := cidx }
-  let n (s : String) : Ident := mkIdent (.str tName s)
-  let nF (s : String) : Ident := mkIdent (.str (.str tName "F") s)
-  let pTerms := pids.map idT
+    return (name, raw, resTy, c)
   -- Names the user may refer to: plain unless the declaration uses them.
-  let used : Array Name := pids.map (·.getId) ++ idx.map (·.1.getId) ++ ctors.foldl (fun acc c =>
-    acc.push c.name.getId ++ c.groups.foldl (fun acc g => acc ++ g.ids.map (·.getId)) #[]) #[]
+  let used : Array Name := pids.map (·.getId) ++ uidx.map (·.1.getId) ++
+    rawCtors.foldl (fun acc cs => cs.foldl (fun acc (name, raw, _, _) =>
+      acc.push name.getId ++ raw.foldl (fun acc (ids, _, _) => acc ++ ids.map (·.getId)) #[]) acc) #[]
   let plainOr (n : Name) (hyg : Ident) : Ident := if used.contains n then hyg else mkIdent n
   let motiveId := plainOr `motive ⟨(← `(motive)).raw⟩
   let Sid := plainOr `S ⟨(← `(S)).raw⟩
+  let mId := plainOr `m ⟨(← `(m)).raw⟩
+  -- In a mutual block, the enumeration of the types is the first index, and every index list
+  -- starts with the type's constructor.
+  let idx := (match which with | some W => #[(mId, idT W)] | none => #[]) ++ uidx
+  let nIdx := idx.size
+  let pre (m : Nat) : Array Term := match which with
+    | some W => #[idT (mkIdent (W.getId ++ Name.mkSimple tNames[m]!.getString!))]
+    | none => #[]
+  -- Constructor names shared by several types of the block are qualified in `F`, `Shape`, `B`.
+  let allNames := rawCtors.map fun cs => cs.map (·.1.getId)
+  let clashes (n : Name) : Bool := (allNames.filter (·.contains n)).size ≥ 2
+  let mut ctors : Array CtorInfo := #[]
+  for m in [0:rawCtors.size] do
+    for (name, raw, resTy, c) in rawCtors[m]! do
+      let groups ← raw.mapM fun (ids, ty, implicit) => do
+        return { ids, ty, kind := ← classify tNames pids pre ty, implicit : Group }
+      for g in groups do
+        if g.implicit && !g.kind.isData then
+          throwErrorAt g.ty "implicit binders must not be recursive"
+        unless g.kind.isData || g.kind.idx.size == nIdx do
+          throwErrorAt g.ty "recursive argument with the wrong number of indices"
+      let cidx ← match resTy with
+        | none =>
+          if uidx.size > 0 then throwErrorAt c "the constructor needs a result type"
+          else pure (pre m)
+        | some r =>
+          match recIdx tNames pids r with
+          | some (m', cidx) =>
+            unless m' == m do throwErrorAt r "the result type must be the type being declared"
+            if cidx.size == uidx.size then pure (pre m ++ cidx)
+            else throwErrorAt r "result type with the wrong number of indices"
+          | none => throwErrorAt r "the result type must be the declared type applied to its parameters"
+      let fname := if clashes name.getId then
+          mkIdent (Name.mkSimple (tNames[m]!.getString! ++ "_" ++ name.getId.toString))
+        else name
+      ctors := ctors.push { name, groups, idx := cidx, owner := m, fname }
+  let n (s : String) : Ident := mkIdent (.str tName s)
+  let nF (s : String) : Ident := mkIdent (.str (.str tName "F") s)
+  let pTerms := pids.map idT
   let jIds ← idx.mapIdxM fun m _ => freshId s!"j{Nat.toSubscriptString (m + 1)}"
   let Ixp ← if nIdx ≥ 2 then mkAppT (n "Ix") pTerms
     else if nIdx == 1 then pure idx[0]!.2 else `(Unit)
   return {
-    co, T, tName, pids, pExp, pImp, pTerms, ctors, idx, jIds, Ixp, motiveId, Sid
+    co, T, tName, types, which, pids, pExp, pImp, pTerms, ctors, idx, jIds, Ixp, motiveId, Sid
     Ix := n "Ix", idxId := n "idx", F := n "F", Shape := n "Shape", B := n "B", sig := n "sig"
     Fmap := nF "map", Rel := nF "Rel"
     Fmap_id := nF "map_id", Fmap_comp := nF "map_comp", Frel_map := nF "rel_map"
@@ -1261,20 +1424,24 @@ def mkCtx (co : Bool) (T : Ident) (paramsStx : Array (TSyntax ``bracketedBinder)
     Tp := ← mkAppT T pTerms, Fp := ← mkAppT (n "F") pTerms, Shapep := ← mkAppT (n "Shape") pTerms
     Bp := ← mkAppT (n "B") pTerms, sigp := ← mkAppT (n "sig") pTerms }
 
-@[command_elab codataCmd] def elabCodata : CommandElab := fun stx => do
-  let `(codata $T:ident $paramsStx:bracketedBinder* $[: $sortStx]? $ctorsStx:codataCtor*) := stx
-    | throwUnsupportedSyntax
-  let ctx ← mkCtx true T paramsStx sortStx ctorsStx
+/-- The generators of `codata`, in order. The encoding decides equality of shapes classically:
+the type's corecursor and constructors are noncomputable. -/
+def codataPipeline (ctx : Ctx) : CommandElabM Unit := do
   genFunctor ctx
   genSignature ctx
   genIso ctx
-  -- The encoding decides equality of shapes classically: the type's corecursor and constructors
-  -- are noncomputable.
   elabCommand (← `(noncomputable section))
   genContract ctx
+  genTypes ctx
   genDerived ctx
   genCtors ctx
   genCases ctx
+  genAliases ctx
   elabCommand (← `(end))
+
+@[command_elab codataCmd] def elabCodata : CommandElab := fun stx => do
+  let `(codata $T:ident $paramsStx:bracketedBinder* $[: $sortStx]? $ctorsStx:codataCtor*) := stx
+    | throwUnsupportedSyntax
+  codataPipeline (← mkCtx true T paramsStx sortStx #[(T, ctorsStx)] none)
 
 end Codata

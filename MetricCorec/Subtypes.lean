@@ -3,6 +3,7 @@ import MetricCorec.Subtypes.Codata
 import MetricCorec.Subtypes.CodataCmd
 import MetricCorec.Subtypes.Data
 import MetricCorec.Subtypes.DataCmd
+import MetricCorec.Subtypes.MutualCmd
 import MetricCorec.Subtypes.Test.Alt
 import MetricCorec.Subtypes.Test.Bounded
 import MetricCorec.Subtypes.Test.BTree
@@ -24,6 +25,9 @@ import MetricCorec.Subtypes.Test.FinVec
 import MetricCorec.Subtypes.Test.LeT
 import MetricCorec.Subtypes.Test.Nat
 import MetricCorec.Subtypes.Test.WType
+import MetricCorec.Subtypes.Test.MTree
+import MetricCorec.Subtypes.Test.MRose
+import MetricCorec.Subtypes.Test.EvenOdd
 -- import MetricCorec.Subtypes.Sketch.CoList
 -- import MetricCorec.Subtypes.Sketch.CoListLemmas
 -- import MetricCorec.Subtypes.Sketch.FinList
@@ -43,6 +47,6 @@ import MetricCorec.Subtypes.Test.WType
 /-!
 # (Co)inductive types as subtypes of one general type
 The generic theory (`Codata`, `Data`), the `codata` and `data` commands (`CodataCmd`,
-`DataCmd`), the tests (one type per file in `Test/`) and the hand-written sketches that preceded
+`DataCmd`) and their mutual blocks (`MutualCmd`), the tests (one type per file in `Test/`) and the hand-written sketches that preceded
 the commands (`Sketch/`).
 -/
