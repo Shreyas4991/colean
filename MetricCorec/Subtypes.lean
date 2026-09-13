@@ -1,6 +1,8 @@
 import MetricCorec.Subtypes.Raw
 import MetricCorec.Subtypes.Codata
 import MetricCorec.Subtypes.CodataCmd
+import MetricCorec.Subtypes.Data
+import MetricCorec.Subtypes.DataCmd
 import MetricCorec.Subtypes.Test.Alt
 import MetricCorec.Subtypes.Test.Bounded
 import MetricCorec.Subtypes.Test.BTree
@@ -16,6 +18,12 @@ import MetricCorec.Subtypes.Test.Tele
 import MetricCorec.Subtypes.Test.Tree
 import MetricCorec.Subtypes.Test.Vec
 import MetricCorec.Subtypes.Test.Walk
+import MetricCorec.Subtypes.Test.FinList
+import MetricCorec.Subtypes.Test.FinTree
+import MetricCorec.Subtypes.Test.FinVec
+import MetricCorec.Subtypes.Test.LeT
+import MetricCorec.Subtypes.Test.Nat
+import MetricCorec.Subtypes.Test.WType
 -- import MetricCorec.Subtypes.Sketch.CoList
 -- import MetricCorec.Subtypes.Sketch.CoListLemmas
 -- import MetricCorec.Subtypes.Sketch.FinList
@@ -33,7 +41,8 @@ import MetricCorec.Subtypes.Test.Walk
 -- import MetricCorec.Subtypes.Sketch.Vec
 
 /-!
-# Coinductive types as subtypes of one general type
-The generic theory (`Codata`), the `codata` command (`CodataCmd`), the tests (one type per
-file in `Test/`) and the hand-written sketches that preceded the command (`Sketch/`).
+# (Co)inductive types as subtypes of one general type
+The generic theory (`Codata`, `Data`), the `codata` and `data` commands (`CodataCmd`,
+`DataCmd`), the tests (one type per file in `Test/`) and the hand-written sketches that preceded
+the commands (`Sketch/`).
 -/

@@ -105,6 +105,95 @@ theorem child_encode_of_ne (i : σ.I) (z : σ.Obj (fun _ => Raw σ.Idx σ.Lbl) i
     (h : l ≠ ⟨i, z.shape⟩) (b : σ.B l.1 l.2) : (encode i z).child ⟨l, b⟩ = Raw.empty :=
   dif_neg h
 
+/-! ### Predicates that are fixpoints of the one-layer operator
+
+Both fixpoints, the greatest (`IsWf`, below) and the least (`IsFin`, in `Data.lean`), unfold
+into one layer whose children satisfy the predicate again, and fold back. The destructor and the
+constructor of the subtype cut out by such a predicate, and their two computation rules, depend
+on nothing else, so they are proved once here. -/
+
+variable (σ) in
+/-- `P` is a fixpoint of the operator "one layer whose children satisfy `P`". -/
+def IsFix (P : σ.I → Raw σ.Idx σ.Lbl → Prop) : Prop :=
+  ∀ i t, P i t ↔ ∃ z : σ.Obj (fun _ => Raw σ.Idx σ.Lbl) i, t = encode i z ∧ ∀ b, P (σ.idx b) (z.child b)
+
+namespace IsFix
+
+variable {P : σ.I → Raw σ.Idx σ.Lbl → Prop} (hP : σ.IsFix P)
+include hP
+
+theorem root_ne_none {i : σ.I} {t : Raw σ.Idx σ.Lbl} (h : P i t) : t.root ≠ none := by
+  obtain ⟨z, rfl, -⟩ := (hP i t).1 h
+  simp
+
+theorem root_idx {i : σ.I} {t : Raw σ.Idx σ.Lbl} (h : P i t) {l : σ.Lbl}
+    (hl : t.root = some l) : l.1 = i := by
+  obtain ⟨z, rfl, -⟩ := (hP i t).1 h
+  obtain rfl := Option.some.inj hl
+  rfl
+
+theorem child {i : σ.I} {t : Raw σ.Idx σ.Lbl} (h : P i t) {s : σ.Shape i}
+    (hs : t.root = some ⟨i, s⟩) (b : σ.B i s) : P (σ.idx b) (t.child ⟨⟨i, s⟩, b⟩) := by
+  obtain ⟨z, rfl, hz⟩ := (hP i t).1 h
+  obtain rfl : s = z.shape := (eq_of_heq (Sigma.mk.inj (Option.some.inj hs)).2).symm
+  rw [child_encode_self]
+  exact hz b
+
+theorem child_eq_empty {i : σ.I} {t : Raw σ.Idx σ.Lbl} (h : P i t) {s : σ.Shape i}
+    (hs : t.root = some ⟨i, s⟩) {l' : σ.Lbl} (hne : l' ≠ ⟨i, s⟩) (b : σ.B l'.1 l'.2) :
+    t.child ⟨l', b⟩ = Raw.empty := by
+  obtain ⟨z, rfl, -⟩ := (hP i t).1 h
+  obtain rfl : s = z.shape := (eq_of_heq (Sigma.mk.inj (Option.some.inj hs)).2).symm
+  exact child_encode_of_ne i z hne b
+
+/-- A tree satisfying `P` is the layer made of its root and its children. -/
+theorem eq_encode {i : σ.I} {t : Raw σ.Idx σ.Lbl} (h : P i t) {s : σ.Shape i}
+    (hs : t.root = some ⟨i, s⟩) : t = encode i ⟨s, fun b => t.child ⟨⟨i, s⟩, b⟩⟩ := by
+  refine Raw.ext_root_child hs fun ⟨l', b⟩ => ?_
+  by_cases hl : l' = ⟨i, s⟩
+  · subst hl
+    exact (child_encode_self i ⟨s, fun b => t.child ⟨⟨i, s⟩, b⟩⟩ b).symm
+  · rw [child_encode_of_ne _ _ hl, hP.child_eq_empty h hs hl]
+
+/-- The shape at the root, which `P` guarantees to exist and to produce the index. -/
+def rootShape {i : σ.I} (t : {t // P i t}) : σ.Shape i :=
+  match h : t.1.root with
+  | some l => (hP.root_idx t.2 h) ▸ l.2
+  | none => absurd h (hP.root_ne_none t.2)
+
+theorem root_eq {i : σ.I} (t : {t // P i t}) : t.1.root = some ⟨i, hP.rootShape t⟩ := by
+  unfold rootShape
+  split
+  · rename_i l h
+    obtain ⟨i', s⟩ := l
+    have hi : i' = i := hP.root_idx t.2 h
+    subst hi
+    exact h
+  · exact absurd ‹_› (hP.root_ne_none t.2)
+
+/-- The destructor of the subtype, on the container. -/
+def dtor {i : σ.I} (t : {t // P i t}) : σ.Obj (fun j => {t // P j t}) i :=
+  ⟨hP.rootShape t, fun b => ⟨t.1.child ⟨⟨i, hP.rootShape t⟩, b⟩, hP.child t.2 (hP.root_eq t) b⟩⟩
+
+/-- The tree is the layer of its destructor. -/
+theorem val_eq_encode_dtor {i : σ.I} (t : {t // P i t}) :
+    t.1 = encode i (Obj.map (fun _ => Subtype.val) (hP.dtor t)) :=
+  hP.eq_encode t.2 (hP.root_eq t)
+
+/-- The constructor of the subtype: encode one layer. -/
+noncomputable def ctor {i : σ.I} (z : σ.Obj (fun j => {t // P j t}) i) : {t // P i t} :=
+  ⟨encode i (Obj.map (fun _ => Subtype.val) z), (hP i _).2 ⟨_, rfl, fun b => (z.child b).2⟩⟩
+
+theorem dtor_ctor {i : σ.I} (z : σ.Obj (fun j => {t // P j t}) i) : hP.dtor (hP.ctor z) = z := by
+  obtain ⟨s, c⟩ := z
+  refine congrArg (Obj.mk s) (funext fun b => Subtype.ext ?_)
+  exact child_encode_self i (Obj.map (fun _ => Subtype.val) (⟨s, c⟩ : σ.Obj (fun j => {t // P j t}) i)) b
+
+theorem ctor_dtor {i : σ.I} (t : {t // P i t}) : hP.ctor (hP.dtor t) = t :=
+  Subtype.ext (hP.val_eq_encode_dtor t).symm
+
+end IsFix
+
 /-! ### The predicate and the type -/
 
 /-- Well-formed trees at index `i`: every node is a layer whose children are well-formed at
@@ -113,73 +202,21 @@ def IsWf (i : σ.I) (t : Raw σ.Idx σ.Lbl) : Prop :=
   ∃ z : σ.Obj (fun _ => Raw σ.Idx σ.Lbl) i, t = encode i z ∧ ∀ b, IsWf (σ.idx b) (z.child b)
 coinductive_fixpoint
 
+theorem IsWf.isFix : σ.IsFix IsWf := fun i t => Iff.of_eq (IsWf.eq_def i t)
+
 /-- The coinductive family of a signature. -/
 def Cotype (σ : Signature.{w, u, v}) (i : σ.I) : Type (max w u v) :=
   {t : Raw σ.Idx σ.Lbl // IsWf i t}
 
-theorem IsWf.root_ne_none {i : σ.I} {t : Raw σ.Idx σ.Lbl} (h : IsWf i t) : t.root ≠ none := by
-  rw [IsWf.eq_def] at h
-  obtain ⟨z, rfl, -⟩ := h
-  simp
-
-theorem IsWf.root_idx {i : σ.I} {t : Raw σ.Idx σ.Lbl} (h : IsWf i t) {l : σ.Lbl}
-    (hl : t.root = some l) : l.1 = i := by
-  rw [IsWf.eq_def] at h
-  obtain ⟨z, rfl, -⟩ := h
-  obtain rfl := Option.some.inj hl
-  rfl
-
-theorem IsWf.child {i : σ.I} {t : Raw σ.Idx σ.Lbl} (h : IsWf i t) {s : σ.Shape i}
-    (hs : t.root = some ⟨i, s⟩) (b : σ.B i s) : IsWf (σ.idx b) (t.child ⟨⟨i, s⟩, b⟩) := by
-  rw [IsWf.eq_def] at h
-  obtain ⟨z, rfl, hz⟩ := h
-  obtain rfl : s = z.shape := (eq_of_heq (Sigma.mk.inj (Option.some.inj hs)).2).symm
-  rw [child_encode_self]
-  exact hz b
-
-theorem IsWf.child_eq_empty {i : σ.I} {t : Raw σ.Idx σ.Lbl} (h : IsWf i t) {s : σ.Shape i}
-    (hs : t.root = some ⟨i, s⟩) {l' : σ.Lbl} (hne : l' ≠ ⟨i, s⟩) (b : σ.B l'.1 l'.2) :
-    t.child ⟨l', b⟩ = Raw.empty := by
-  rw [IsWf.eq_def] at h
-  obtain ⟨z, rfl, -⟩ := h
-  obtain rfl : s = z.shape := (eq_of_heq (Sigma.mk.inj (Option.some.inj hs)).2).symm
-  exact child_encode_of_ne i z hne b
-
-/-- A well-formed tree is the layer made of its root and its children. -/
-theorem IsWf.eq_encode {i : σ.I} {t : Raw σ.Idx σ.Lbl} (h : IsWf i t) {s : σ.Shape i}
-    (hs : t.root = some ⟨i, s⟩) : t = encode i ⟨s, fun b => t.child ⟨⟨i, s⟩, b⟩⟩ := by
-  refine Raw.ext_root_child hs fun ⟨l', b⟩ => ?_
-  by_cases hl : l' = ⟨i, s⟩
-  · subst hl
-    exact (child_encode_self i ⟨s, fun b => t.child ⟨⟨i, s⟩, b⟩⟩ b).symm
-  · rw [child_encode_of_ne _ _ hl, h.child_eq_empty hs hl]
-
 /-! ### The destructor -/
 
-/-- The shape at the root, which `IsWf` guarantees to exist and to produce the index. -/
-def rootShape {i : σ.I} (t : σ.Cotype i) : σ.Shape i :=
-  match h : t.1.root with
-  | some l => (t.2.root_idx h) ▸ l.2
-  | none => absurd h t.2.root_ne_none
-
-theorem root_eq {i : σ.I} (t : σ.Cotype i) : t.1.root = some ⟨i, rootShape t⟩ := by
-  unfold rootShape
-  split
-  · rename_i l h
-    obtain ⟨i', s⟩ := l
-    have hi : i' = i := t.2.root_idx h
-    subst hi
-    exact h
-  · exact absurd ‹_› t.2.root_ne_none
-
 /-- The destructor on the container. -/
-def dtorC {i : σ.I} (t : σ.Cotype i) : σ.Obj σ.Cotype i :=
-  ⟨rootShape t, fun b => ⟨t.1.child ⟨⟨i, rootShape t⟩, b⟩, t.2.child (root_eq t) b⟩⟩
+def dtorC {i : σ.I} (t : σ.Cotype i) : σ.Obj σ.Cotype i := IsWf.isFix.dtor t
 
 /-- The tree is the layer of its destructor. -/
 theorem val_eq_encode_dtorC {i : σ.I} (t : σ.Cotype i) :
     t.1 = encode i (Obj.map (fun _ => Subtype.val) (dtorC t)) :=
-  t.2.eq_encode (root_eq t)
+  IsWf.isFix.val_eq_encode_dtor t
 
 /-! ### The corecursor -/
 

@@ -72,3 +72,44 @@ Universes: `u` is arbitrary, but the encoding stores the index in the tree, so t
 in a universe at least that of `I` (and of the constructors' data), `u ≥ w`; `inductive` has no
 such constraint. The command writes `Type _` for the family and lets Lean compute the level, so
 a declaration with `u` too small comes out one level higher rather than failing.
+
+
+# Inductive types
+
+```
+data T
+  | ctor₁ …
+  | ctor₂ …
+```
+
+The same functor `F`, with `F.map` and the functor laws. Its lifting to predicates is *defined*
+from `F.map`: `F.All P a` holds when `a` is the projection of a value over elements satisfying
+`P`,
+
+```
+F.All P a := ∃ z : F {x : X // P x}, F.map (·.1) z = a
+```
+
+which for the generated `F` means: every recursive field satisfies `P`. The command produces:
+
+1. The type `T`.
+2. Constructor `ctor : F T → T`.
+3. Fold `fold : (F S → S) → T → S`, for any `S : Type v`, in any universe `v`.
+4. `fold_ctor : ∀ a y, fold a (ctor y) = a (F.map (fold a) y)`.
+5. `induction : (∀ y, F.All motive y → motive (ctor y)) → ∀ t, motive t`, for any
+   `motive : T → Prop`.
+
+This is the dual of the coinductive contract and tight in the same way: `F.All` is not a
+parameter, so `induction` is the induction principle for `F` and nothing weaker, and `(T, ctor)`
+is an initial algebra of `F`. Derived from the contract alone: `dtor : T → F T`
+(`dtor := fold (F.map ctor)`) with `dtor_ctor` and `ctor_dtor`, `fold_eq : fold a t =
+a (F.map (fold a) (dtor t))`, uniqueness of `fold`, and the isomorphism between any two
+implementations. Indexed families are read over `I → Type u` exactly as in the previous section:
+`fold : (∀ i, F S i → S i) → ∀ {i}, T i → S i` and `induction` for `motive : ∀ i, T i → Prop`,
+with the same universe remarks.
+
+Beyond the contract, the command generates the dependent recursor `T.rec` into any `Sort`, with
+one minor premise per constructor carrying an induction hypothesis for each recursive argument.
+It is not derivable from the contract, whose `induction` is in `Prop`; it comes from the
+encoding, by well-founded recursion on the immediate-child relation, so its computation rules
+`T.rec_ctorᵢ` hold propositionally and not by `rfl`.

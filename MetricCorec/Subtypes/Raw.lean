@@ -29,8 +29,8 @@ convention is what makes `Raw.node` injective).
 
 ## Layout
 
-The hand-written experiments live in `Sketch/`; the `codata` command and its generic theory
-live next to this file.
+The hand-written experiments live in `Sketch/`; the `codata` and `data` commands and their
+generic theory live next to this file.
 
 * `CoList.lean`, `Tree.lean`, `Str.lean`: three coinductive types, each file containing only the
   translation (raw constructors, the predicate by `coinductive_fixpoint`, the subtype, its

@@ -4,7 +4,8 @@
 
 `Subtypes/Codata.lean`: the generic theory, for indexed polynomial signatures (a plain type is
 a family over `Unit`), the contract (`contract.md`, plain and indexed sections), and the derived
-layer. `Subtypes/CodataCmd.lean`: the `codata` command. `Subtypes/Test/`: one test per type.
+layer. `Subtypes/CodataCmd.lean`: the `codata` command. `Subtypes/Data.lean` and
+`Subtypes/DataCmd.lean`: the inductive dual. `Subtypes/Test/`: one test per type.
 `Subtypes.lean` imports everything and is the only import of the root module, so `lake build`
 checks it all. `todo.md` holds deferred items that are not features.
 
@@ -49,26 +50,30 @@ NOT DONE, and not planned:
   too; the user writes the parameter as an index, at the same universe cost as in Lean;
 * the family's universe not depending on the index universe: deferred, see `todo.md`.
 
-## 2. `data`: the inductive dual — NOT DONE
+## 2. `data`: the inductive dual — DONE
 
-Contract for `data`, to be written in `contract.md` when we start: `T`, `ctor : F T → T`,
-`rec : (F S → S) → T → S`, `rec_ctor : rec a (ctor y) = a (F.map (rec a) y)`, and induction
-(`∀ t, (∀ y, F.All motive y → motive (ctor y)) → motive t`). Derived: `dtor`, `ctor_dtor`,
-`dtor_ctor`, uniqueness of `rec`, `casesOn`, injectivity, disjointness.
+Contract in `contract.md` (`ctor`, `fold`, `fold_ctor`, `induction` with `F.All` defined from
+`F.map`). `Subtypes/Data.lean`: the least fixpoint, the recursor by well-founded recursion on
+the immediate-child relation, the transport theorems, `Data.Contract` and its derived layer.
+`Subtypes/DataCmd.lean`: the command, sharing the analysis and the generators of `F`, the
+signature, the isomorphism, the constructors and `casesOn` with `codata`.
 
-Encoding: the same `Raw`, the same `encode`, and `IsWf` by `inductive_fixpoint` instead of
-`coinductive_fixpoint`. The recursor is the place where the encoding costs something: the
-predicate is a `Prop`, so `rec` into `Type` goes through well-founded recursion on the
-"immediate child" relation, whose well-foundedness is proved by `IsWf.induct` (see
-`Sketch/FinList.lean`). Consequences to accept: `rec_ctor` is propositional, and `rec` does not
-reduce by `rfl`.
+DONE:
 
-Shared code: `Signature`, `Obj`, `encode`, `dtorC` and the transport machinery are reused; only
-the fixpoint, the recursor and its theorems are new. Keep both commands in one file structure
-(`Data.lean` next to `Codata.lean`, `DataCmd.lean` reusing the generators of `CodataCmd.lean`).
+* the same syntax and scope as `codata`: parameters, indices, telescopes (`Test/FinList.lean`,
+  `Test/FinTree.lean`, `Test/Nat.lean`, `Test/FinVec.lean`, `Test/LeT.lean`, `Test/WType.lean`);
+* `T.fold` for families in any universe, `T.fold_ctor`, `T.fold_ctorᵢ`, `T.fold_eq`,
+  `T.fold_unique`; derived `T.dtor` with `dtor_ctor`, `ctor_dtor`; constructors, injectivity,
+  disjointness, `casesOn` as for `codata`;
+* the dependent recursor `T.rec`, one minor premise per constructor with induction hypotheses,
+  registered as the `induction` eliminator, with computation rules `T.rec_ctorᵢ` (propositional,
+  by design);
+* isomorphisms with the native types: `List`, a native tree, `Nat`, Mathlib's `WType`.
 
-Tests: `FinList`, `FinTree`, `Nat'`, an indexed one, and the isomorphisms with the native
-inductives from the sketches.
+NOT DONE:
+
+* injectivity for constructors with dependent binders (`sup (a : α) (f : β a → W α β)`): the
+  `HEq` form, together with the implicit-binder case in section 5.
 
 ## 3. Mutual types — NOT DONE
 
@@ -104,7 +109,7 @@ for the types allowed in nested positions (`List`, `Option`, products, previousl
 ## Order
 
 1. Indices: DONE (front-end leftovers listed above).
-2. `data`, reusing the indexed layer.
+2. `data`: DONE (leftovers listed above).
 3. Mutual blocks via the index trick; then mixed blocks as nested fixpoints.
 4. Nested types through containers.
 5. Surface items, as they become blocking.

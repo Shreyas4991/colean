@@ -30,7 +30,7 @@ types `T`, `T.F`, `T.Shape`, `T.B`, `T.sig`, implicit elsewhere):
   `T.B : T.Shape → Type`, the positions for recursive arguments, one nullary constructor `ctorᵢ_t`
   per plain argument `t` and one unary constructor `ctorᵢ_f (p : A)` per function argument
   `f : A → T`; bundled as `T.sig`;
-* `T.toC`, `T.ofC` with the three laws `T.ofC_toC`, `T.ofC_map`, `T.rel_ofC`;
+* `T.toC`, `T.ofC` with the four laws `T.ofC_toC`, `T.toC_ofC`, `T.ofC_map`, `T.rel_ofC`;
 * the contract: `T`, `T.dtor`, `T.corec`, `T.dtor_corec`, `T.bisim`, transported from the
   generic `Signature` theorems; `T.corec` accepts a state in any universe;
 * derived from the contract (`Codata.Contract`): `T.ctor`, `T.dtor_ctor`, `T.ctor_dtor`,
@@ -60,11 +60,16 @@ theorems convert between the two forms with lambdas (`fun j₁ j₂ => f ⟨j₁
 `fun p => c p.1 p.2`), so that every statement above is definitionally the generic one. With one
 index nothing is packed.
 
-Only the six lemmas about the generated inductive `T.F` (`map_id`, `map_comp`, `rel_map`,
-`ofC_toC`, `ofC_map`, `rel_ofC`) are proved by tactic scripts, and those are `cases` followed by
-`rfl` or `solve_by_elim`; everything else instantiates a theorem of `Codata.lean` or
-`CodataIdx.lean`. The declarations from `T` on are generated in a `noncomputable section`, since
-the encoding decides equality of shapes classically.
+Only the seven lemmas about the generated inductive `T.F` (`map_id`, `map_comp`, `rel_map`,
+`ofC_toC`, `toC_ofC`, `ofC_map`, `rel_ofC`) are proved by tactic scripts, and those are `cases`
+followed by `rfl` or `solve_by_elim`; everything else instantiates a theorem of `Codata.lean`.
+The declarations from `T` on are generated in a `noncomputable section`, since the encoding
+decides equality of shapes classically.
+
+The analysis of the declaration (`mkCtx`) and the generators of `T.F`, the signature, the
+isomorphism, the constructors and `casesOn` are shared with the `data` command
+(`DataCmd.lean`), which differs only in the contract and what is derived from it; `T.F.Rel`,
+`rel_map` and `rel_ofC` are generated for `codata` only.
 -/
 
 open Lean Elab Command Lean.Parser.Term
@@ -104,7 +109,7 @@ structure CtorInfo where
   groups : Array Group
   idx : Array Term
 
-private def idT (x : Ident) : Term := ⟨x.raw⟩
+def idT (x : Ident) : Term := ⟨x.raw⟩
 
 def Kind.isData : Kind → Bool
   | .data => true
@@ -157,6 +162,11 @@ def CtorInfo.idxDependent (c : CtorInfo) : Bool :=
   let names := c.groups.foldl (fun acc g => acc ++ g.ids.map (·.getId)) #[]
   c.idx.any fun t => mentionsAny t.raw names
 
+/-- Does the type of a binder depend on an earlier binder? -/
+def CtorInfo.dependent (c : CtorInfo) : Bool :=
+  (c.groups.foldl (fun (acc : Array Name × Bool) g =>
+    (acc.1 ++ g.ids.map (·.getId), acc.2 || mentionsAny g.ty.raw acc.1)) (#[], false)).2
+
 /-- Syntactic equality of index arguments. -/
 def idxEq (a b : Array Term) : Bool :=
   a.size == b.size && (a.zip b).all fun (x, y) => x.raw.structEq y.raw
@@ -165,7 +175,7 @@ def idxEq (a b : Array Term) : Bool :=
 def appT (f : Term) (args : Array Term) : CommandElabM Term :=
   if args.isEmpty then pure f else `($f $args*)
 
-private def mkAppT (f : Ident) (args : Array Term) : CommandElabM Term := appT (idT f) args
+def mkAppT (f : Ident) (args : Array Term) : CommandElabM Term := appT (idT f) args
 
 /-- If `ty` is the type `T p₁ … pₙ idx…` being defined, applied to its parameters, its index
 arguments. -/
@@ -237,6 +247,8 @@ private def mkBinder (implicit : Bool) (ids : Array Ident) (ty : Term) :
 namespaces of the generic theory to instantiate, and the names of the generated declarations
 and the types applied to the parameters. -/
 structure Ctx where
+  /-- `codata` (`true`) or `data`. -/
+  co : Bool
   T : Ident
   tName : Name
   pids : Array Ident
@@ -272,6 +284,7 @@ structure Ctx where
   ofC_toC : Ident
   ofC_map : Ident
   rel_ofC : Ident
+  toC_ofC : Ident
   dtor : Ident
   corec : Ident
   dtor_corec : Ident
@@ -286,6 +299,14 @@ structure Ctx where
   casesOnAux : Ident
   casesOnId : Ident
   casesOn_ctor : Ident
+  /-- `data` only: the fold, the dependent recursor and their computation rules. -/
+  fold : Ident
+  fold_ctor : Ident
+  fold_eq : Ident
+  fold_unique : Ident
+  recAux : Ident
+  recId : Ident
+  rec_ctor : Ident
   Tp : Term
   Fp : Term
   Shapep : Term
@@ -302,9 +323,12 @@ def binders (c : CtorInfo) : CommandElabM (Array (TSyntax ``bracketedBinderF)) :
 
 def prime (x : Ident) : Ident := mkIdent (x.getId.appendAfter "'")
 
-/-- The binders of a constructor with primed names. -/
+/-- The binders of a constructor with primed names, in the types too. -/
 def binders' (c : CtorInfo) : CommandElabM (Array (TSyntax ``bracketedBinderF)) :=
-  c.groups.mapM fun g => mkBinder g.implicit (g.ids.map prime) g.ty
+  let ids := c.allIds.map (·.getId)
+  c.groups.mapM fun g =>
+    mkBinder g.implicit (g.ids.map prime)
+      ⟨substIds g.ty.raw fun n => if ids.contains n then some (prime (mkIdent n)) else none⟩
 
 /-- The binders of a constructor of `F`: recursive types replaced by `X` (at their index). -/
 def fBinders (c : CtorInfo) : CommandElabM (Array (TSyntax ``bracketedBinderF)) :=
@@ -337,6 +361,10 @@ def sigId (_ : Ctx) (n : Name) : Ident := mkIdent (`Codata.Signature ++ n)
 
 /-- A declaration derived from the contract. -/
 def topId (_ : Ctx) (n : Name) : Ident := mkIdent (`Codata ++ n)
+
+/-- The generic family of the signature: `Cotype sig` or `Intype sig`. -/
+def famT : CommandElabM Term :=
+  `($(ctx.sigId (if ctx.co then `Cotype else `Intype)) $(ctx.sigp))
 
 /-- The number of indices. -/
 def k : Nat := ctx.idx.size
@@ -531,16 +559,20 @@ def shapePat (c : CtorInfo) : CommandElabM Term := do
   `(@$(ctx.shapeCtor c):ident $hs* $ids*)
 
 /-- The arguments of a constructor of `F` after `map f`, implicit ones included; with
-`afterMatch`, in the value form. -/
-def mappedArgs (c : CtorInfo) (afterMatch : Bool) : CommandElabM (Array Term) := do
+`afterMatch`, in the value form. `app` applies the function to a recursive argument (by default
+`f _ _ x`, for `f : ∀ j₁ j₂, X j₁ j₂ → Y j₁ j₂`). -/
+def mappedArgs (c : CtorInfo) (afterMatch : Bool) (app : Option (Term → CommandElabM Term) := none) :
+    CommandElabM (Array Term) := do
   let holes ← ctx.holes
+  let app := app.getD fun x => `(f $holes* $x)
   let args ← c.groups.mapM fun g => do
     g.ids.mapM fun (x : Ident) => match g.kind with
       | .data => pure (idT (if afterMatch then (ctx.bareIdx c x.getId).getD x else x))
-      | .pos _ => `(f $holes* $x:ident)
-      | .fn tele _ =>
+      | .pos _ => app (idT x)
+      | .fn tele _ => do
         let ys := teleIds tele
-        `(fun $[$ys:ident]* => f $holes* ($x:ident $ys*))
+        let body ← app (← `($x:ident $ys*))
+        `(fun $[$ys:ident]* => $body)
   return args.foldl (· ++ ·) #[]
 
 end Ctx
@@ -549,8 +581,8 @@ open Ctx
 
 /-! ### The functor `F` and its laws -/
 
-def genFunctor (ctx : Ctx) : CommandElabM Unit := do
-  let pExp := ctx.pExp
+/-- `F.Rel`, the lifting to relations, and `F.rel_map`; for `codata` only. -/
+def genRel (ctx : Ctx) : CommandElabM Unit := do
   let pImp := ctx.pImp
   let xTy ← ctx.famTy
   let ib ← ctx.ixB
@@ -562,33 +594,6 @@ def genFunctor (ctx : Ctx) : CommandElabM Unit := do
   let fTy ← ctx.famFn X Y
   let FX ← ctx.atI (← `($(ctx.Fp) X))
   let FY ← ctx.atI (← `($(ctx.Fp) Y))
-  let fCtors ← ctx.ctors.mapM fun c => do
-    let bs ← fBinders c
-    if ctx.idxed then
-      let res ← appT (← `($(ctx.Fp) X)) c.idx
-      `(Parser.Command.ctor| | $(c.name):ident $[$bs]* : $res)
-    else
-      `(Parser.Command.ctor| | $(c.name):ident $[$bs]*)
-  if ctx.idxed then
-    elabCommand (← `(inductive $(ctx.F):ident $[$pExp]* (X : $xTy) : $xTy where
-      $[$fCtors:ctor]*))
-  else
-    elabCommand (← `(inductive $(ctx.F):ident $[$pExp]* (X : $xTy) where
-      $[$fCtors:ctor]*))
-  -- `F.map`, and its computation on constructors.
-  let mapAlts : Array (TSyntax ``matchAlt) ← ctx.ctors.mapM fun c => do
-    ctx.alt c #[← ctx.fPat c] (← ctx.fApp c Y (← ctx.mappedArgs c true))
-  let discrsA := ctx.discrs (← `(a))
-  elabCommand (← `(def $(ctx.Fmap):ident $[$pImp]* {X Y : $xTy} (f : $fTy) $[$ib]*
-      (a : $FX) : $FY := match $[$discrsA:term],* with $mapAlts:matchAlt*))
-  for c in ctx.ctors do
-    let bs ← fBinders c
-    let lhs ← ctx.fApp c X (c.allIds.map idT)
-    let rhs ← ctx.fApp c Y (← ctx.mappedArgs c false)
-    let FXc ← appT (← `($(ctx.Fp) X)) c.idx
-    elabCommand (← `(@[simp] theorem $(ctx.nF ("map_" ++ c.name.getId.toString)):ident
-        $[$pImp]* {X Y : $xTy} (f : $fTy) $[$bs]* :
-        $(ctx.Fmap) f ($lhs : $FXc) = $rhs := rfl))
   -- `F.Rel`: same constructor, equal non-recursive data, related recursive arguments.
   let relCtors ← ctx.ctors.mapM fun c => do
     let mut bs : Array (TSyntax ``bracketedBinderF) := #[]
@@ -635,6 +640,58 @@ def genFunctor (ctx : Ctx) : CommandElabM Unit := do
     elabCommand (← `(inductive $(ctx.Rel):ident $[$pImp]* {X Y : $xTy} (R : $relTy) :
         $FX → $FY → Prop where
       $[$relCtors:ctor]*))
+  let rTy ← ctx.famRel Y (← `(Z))
+  let gTy' ← ctx.famFn X (← `(Z))
+  let hTy ← if ctx.idxed then `(∀ $[$jB]* x, R $jArgs* (f $jArgs* x) (g $jArgs* x))
+    else `(∀ x, R (f x) (g x))
+  elabCommand (← `(theorem $(ctx.Frel_map):ident $[$pImp]* {X Y Z : $xTy}
+      (R : $rTy) (f : $fTy) (g : $gTy') $[$ib]* (a : $FX) (h : $hTy) :
+      $(ctx.Rel) R ($(ctx.Fmap) f a) ($(ctx.Fmap) g a) := by
+    cases a
+    all_goals simp only [$(ctx.Fmap):ident]
+    all_goals constructor
+    all_goals intros
+    all_goals apply h))
+
+def genFunctor (ctx : Ctx) : CommandElabM Unit := do
+  let pExp := ctx.pExp
+  let pImp := ctx.pImp
+  let xTy ← ctx.famTy
+  let ib ← ctx.ixB
+  let holes ← ctx.holes
+  let jArgs := ctx.jArgs
+  let X ← `(X)
+  let Y ← `(Y)
+  let fTy ← ctx.famFn X Y
+  let FX ← ctx.atI (← `($(ctx.Fp) X))
+  let FY ← ctx.atI (← `($(ctx.Fp) Y))
+  let fCtors ← ctx.ctors.mapM fun c => do
+    let bs ← fBinders c
+    if ctx.idxed then
+      let res ← appT (← `($(ctx.Fp) X)) c.idx
+      `(Parser.Command.ctor| | $(c.name):ident $[$bs]* : $res)
+    else
+      `(Parser.Command.ctor| | $(c.name):ident $[$bs]*)
+  if ctx.idxed then
+    elabCommand (← `(inductive $(ctx.F):ident $[$pExp]* (X : $xTy) : $xTy where
+      $[$fCtors:ctor]*))
+  else
+    elabCommand (← `(inductive $(ctx.F):ident $[$pExp]* (X : $xTy) where
+      $[$fCtors:ctor]*))
+  -- `F.map`, and its computation on constructors.
+  let mapAlts : Array (TSyntax ``matchAlt) ← ctx.ctors.mapM fun c => do
+    ctx.alt c #[← ctx.fPat c] (← ctx.fApp c Y (← ctx.mappedArgs c true))
+  let discrsA := ctx.discrs (← `(a))
+  elabCommand (← `(def $(ctx.Fmap):ident $[$pImp]* {X Y : $xTy} (f : $fTy) $[$ib]*
+      (a : $FX) : $FY := match $[$discrsA:term],* with $mapAlts:matchAlt*))
+  for c in ctx.ctors do
+    let bs ← fBinders c
+    let lhs ← ctx.fApp c X (c.allIds.map idT)
+    let rhs ← ctx.fApp c Y (← ctx.mappedArgs c false)
+    let FXc ← appT (← `($(ctx.Fp) X)) c.idx
+    elabCommand (← `(@[simp] theorem $(ctx.nF ("map_" ++ c.name.getId.toString)):ident
+        $[$pImp]* {X Y : $xTy} (f : $fTy) $[$bs]* :
+        $(ctx.Fmap) f ($lhs : $FXc) = $rhs := rfl))
   -- The functor laws.
   let idFn ← if ctx.idxed then `(fun $[$holes]* x => x) else `(id)
   elabCommand (← `(theorem $(ctx.Fmap_id):ident $[$pImp]* {X : $xTy} $[$ib]* (a : $FX) :
@@ -648,18 +705,7 @@ def genFunctor (ctx : Ctx) : CommandElabM Unit := do
       (f : $fTy) $[$ib]* (a : $FX) : $(ctx.Fmap) $gf a = $(ctx.Fmap) g ($(ctx.Fmap) f a) := by
     cases a
     all_goals rfl))
-  let rTy ← ctx.famRel Y (← `(Z))
-  let gTy' ← ctx.famFn X (← `(Z))
-  let hTy ← if ctx.idxed then `(∀ $[$jB]* x, R $jArgs* (f $jArgs* x) (g $jArgs* x))
-    else `(∀ x, R (f x) (g x))
-  elabCommand (← `(theorem $(ctx.Frel_map):ident $[$pImp]* {X Y Z : $xTy}
-      (R : $rTy) (f : $fTy) (g : $gTy') $[$ib]* (a : $FX) (h : $hTy) :
-      $(ctx.Rel) R ($(ctx.Fmap) f a) ($(ctx.Fmap) g a) := by
-    cases a
-    all_goals simp only [$(ctx.Fmap):ident]
-    all_goals constructor
-    all_goals intros
-    all_goals apply h))
+  if ctx.co then genRel ctx
 
 /-! ### The signature: shapes, positions and their indices -/
 
@@ -810,6 +856,13 @@ def genIso (ctx : Ctx) : CommandElabM Unit := do
       $(ctx.ofC) ($(ctx.toC) a) = a := by
     cases a
     all_goals rfl))
+  elabCommand (← `(theorem $(ctx.toC_ofC):ident $[$pImp]* $[$famBX]* $[$ib]* (z : $ObjX) :
+      $(ctx.toC) ($(ctx.ofC) z) = z := by
+    obtain ⟨s, ch⟩ := z
+    cases s
+    all_goals refine congrArg (Codata.Signature.Obj.mk _) (funext fun b => ?_)
+    all_goals cases b
+    all_goals rfl))
   -- `f : ∀ q, X q → Y q` on the packed index, curried for `F.map`.
   let fTyP ← `(∀ q, X q → Y q)
   let fCur ← ctx.curryN (← `(f)) #[⟨(← `(x)).raw⟩]
@@ -818,20 +871,21 @@ def genIso (ctx : Ctx) : CommandElabM Unit := do
     obtain ⟨s, ch⟩ := z
     cases s
     all_goals rfl))
-  let relTyP ← `(∀ q, X q → Y q → Prop)
-  let RCur ← ctx.curryN (← `(R)) #[]
-  elabCommand (← `(theorem $(ctx.rel_ofC):ident $[$pImp]* $[$famB]* (R : $relTyP) $[$ib]*
-      (z : $ObjX) (z' : $ObjY) (h : $(ctx.Rel) $RCur ($(ctx.ofC) z) ($(ctx.ofC) z')) :
-      $(ctx.sigId `Obj.Rel) R z z' := by
-    obtain ⟨s, ch⟩ := z
-    obtain ⟨s', ch'⟩ := z'
-    cases s
-    all_goals cases s'
-    all_goals try simp only [$(ctx.ofC):ident] at h
-    all_goals cases h
-    all_goals refine ⟨_, _, _, rfl, rfl, fun b => ?_⟩
-    all_goals cases b
-    all_goals solve_by_elim))
+  if ctx.co then
+    let relTyP ← `(∀ q, X q → Y q → Prop)
+    let RCur ← ctx.curryN (← `(R)) #[]
+    elabCommand (← `(theorem $(ctx.rel_ofC):ident $[$pImp]* $[$famB]* (R : $relTyP) $[$ib]*
+        (z : $ObjX) (z' : $ObjY) (h : $(ctx.Rel) $RCur ($(ctx.ofC) z) ($(ctx.ofC) z')) :
+        $(ctx.sigId `Obj.Rel) R z z' := by
+      obtain ⟨s, ch⟩ := z
+      obtain ⟨s', ch'⟩ := z'
+      cases s
+      all_goals cases s'
+      all_goals try simp only [$(ctx.ofC):ident] at h
+      all_goals cases h
+      all_goals refine ⟨_, _, _, rfl, rfl, fun b => ?_⟩
+      all_goals cases b
+      all_goals solve_by_elim))
 
 /-! ### The contract, and what is derived from it -/
 
@@ -857,6 +911,14 @@ structure Conv where
   ofC_map : Term
   /-- `fun R {p} z z' h => @rel_ofC params T T R p.1 p.2 z z' h` -/
   rel_ofC : Term
+  /-- `fun {p} a => @toC params T p.1 p.2 a` -/
+  toCT : Term
+  /-- `fun {p} a => @ofC_toC params T p.1 p.2 a` -/
+  ofC_toCT : Term
+  /-- `fun {p} z => @toC_ofC params T p.1 p.2 z` -/
+  toC_ofC : Term
+  /-- `fun f {p} z => @ofC_map params T Sp f p.1 p.2 z` -/
+  ofC_mapTS : Term
   /-- `fun f {_} a => F.map (curry f) a` -/
   map : Term
   /-- `fun R {_} a b => F.Rel (curry R) a b` -/
@@ -875,7 +937,7 @@ def mkConv (ctx : Ctx) : CommandElabM Conv := do
   let FTp ← if ctx.packed then `(fun (p : $(ctx.Ixp)) => $(← appT (← `($(ctx.Fp) $(ctx.Tp))) pArgs))
     else `($(ctx.Fp) $(ctx.Tp))
   let Tpk ← ctx.packFam ctx.Tp
-  let Cot ← `($(ctx.sigId `Cotype) $(ctx.sigp))
+  let Cot ← ctx.famT
   let pTerms := ctx.pTerms
   let x : Ident := ⟨(← `(x)).raw⟩
   return {
@@ -886,6 +948,10 @@ def mkConv (ctx : Ctx) : CommandElabM Conv := do
     ofC_toC := ← `(fun {p} a => @$(ctx.ofC_toC) $pTerms* $Sp $pArgs* a)
     ofC_map := ← `(fun f {p} z => @$(ctx.ofC_map) $pTerms* $Sp $Cot f $pArgs* z)
     rel_ofC := ← `(fun R {p} z z' h => @$(ctx.rel_ofC) $pTerms* $Cot $Cot R $pArgs* z z' h)
+    toCT := ← `(fun {p} a => @$(ctx.toC) $pTerms* $Cot $pArgs* a)
+    ofC_toCT := ← `(fun {p} a => @$(ctx.ofC_toC) $pTerms* $Cot $pArgs* a)
+    toC_ofC := ← `(fun {p} z => @$(ctx.toC_ofC) $pTerms* $Cot $pArgs* z)
+    ofC_mapTS := ← `(fun f {p} z => @$(ctx.ofC_map) $pTerms* $Cot $Sp f $pArgs* z)
     map := ← `(fun f {_} a => $(ctx.Fmap) $(← ctx.curryN (← `(f)) #[x]) a)
     Rel := ← `(fun R {_} a b => $(ctx.Rel) $(← ctx.curryN (← `(R)) #[]) a b)
     c := ← ctx.uncurryN (← `(c)) #[⟨(← `(s)).raw⟩]
@@ -1033,7 +1099,7 @@ def genCtors (ctx : Ctx) : CommandElabM Unit := do
     elabCommand (← `(@[simp] theorem $(ctx.tName' c "ctor_" ""):ident $[$pImp]* $[$bs]* :
         $(ctx.ctor) ($fapp : $FTc) = $capp := rfl))
   for c in ctx.ctors do
-    if c.args.isEmpty || c.hasImplicit || c.idxDependent then continue
+    if c.args.isEmpty || c.hasImplicit || c.dependent || c.idxDependent then continue
     let bs ← binders c
     let bs' ← binders' c
     let Tc ← appT ctx.Tp c.idx
@@ -1126,9 +1192,9 @@ private partial def readSort (t : Term) : CommandElabM (Array (Ident × Term)) :
     return #[(← freshId s!"i{Nat.toSubscriptString (rest.size + 1)}", dom)] ++ rest
   | _ => return #[]
 
-@[command_elab codataCmd] def elabCodata : CommandElab := fun stx => do
-  let `(codata $T:ident $paramsStx:bracketedBinder* $[: $sortStx]? $ctorsStx:codataCtor*) := stx
-    | throwUnsupportedSyntax
+/-- Analyse a declaration and name everything: shared by `codata` and `data`. -/
+def mkCtx (co : Bool) (T : Ident) (paramsStx : Array (TSyntax ``bracketedBinder))
+    (sortStx : Option Term) (ctorsStx : Array (TSyntax ``codataCtor)) : CommandElabM Ctx := do
   let tName := T.getId
   let params ← paramsStx.mapM fun b => do
     let (ids, ty, _) ← readBinder b
@@ -1178,20 +1244,27 @@ private partial def readSort (t : Term) : CommandElabM (Array (Ident × Term)) :
   let jIds ← idx.mapIdxM fun m _ => freshId s!"j{Nat.toSubscriptString (m + 1)}"
   let Ixp ← if nIdx ≥ 2 then mkAppT (n "Ix") pTerms
     else if nIdx == 1 then pure idx[0]!.2 else `(Unit)
-  let ctx : Ctx := {
-    T, tName, pids, pExp, pImp, pTerms, ctors, idx, jIds, Ixp, motiveId, Sid
+  return {
+    co, T, tName, pids, pExp, pImp, pTerms, ctors, idx, jIds, Ixp, motiveId, Sid
     Ix := n "Ix", idxId := n "idx", F := n "F", Shape := n "Shape", B := n "B", sig := n "sig"
     Fmap := nF "map", Rel := nF "Rel"
     Fmap_id := nF "map_id", Fmap_comp := nF "map_comp", Frel_map := nF "rel_map"
     toC := n "toC", ofC := n "ofC"
-    ofC_toC := n "ofC_toC", ofC_map := n "ofC_map", rel_ofC := n "rel_ofC"
+    ofC_toC := n "ofC_toC", ofC_map := n "ofC_map", rel_ofC := n "rel_ofC", toC_ofC := n "toC_ofC"
     dtor := n "dtor", corec := n "corec", dtor_corec := n "dtor_corec", bisim := n "bisim"
     contract := n "contract", ctor := n "ctor", dtor_ctor := n "dtor_ctor"
     ctor_dtor := n "ctor_dtor", ctor_injective := n "ctor_injective"
     corec_eq := n "corec_eq", corec_unique := n "corec_unique"
     casesOnAux := n "casesOnAux", casesOnId := n "casesOn", casesOn_ctor := n "casesOn_ctor"
+    fold := n "fold", fold_ctor := n "fold_ctor", fold_eq := n "fold_eq"
+    fold_unique := n "fold_unique", recAux := n "recAux", recId := n "rec", rec_ctor := n "rec_ctor"
     Tp := ← mkAppT T pTerms, Fp := ← mkAppT (n "F") pTerms, Shapep := ← mkAppT (n "Shape") pTerms
     Bp := ← mkAppT (n "B") pTerms, sigp := ← mkAppT (n "sig") pTerms }
+
+@[command_elab codataCmd] def elabCodata : CommandElab := fun stx => do
+  let `(codata $T:ident $paramsStx:bracketedBinder* $[: $sortStx]? $ctorsStx:codataCtor*) := stx
+    | throwUnsupportedSyntax
+  let ctx ← mkCtx true T paramsStx sortStx ctorsStx
   genFunctor ctx
   genSignature ctx
   genIso ctx
