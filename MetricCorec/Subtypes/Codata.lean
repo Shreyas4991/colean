@@ -285,27 +285,42 @@ end Signature
 
 /-! ### Derived from the contract, for indexed families -/
 
-/-- The contract for an indexed family `T : I → Type u` and a functor `F` on families, together
-with the laws of `F.map` and `F.Rel`. -/
+/-- The lifting of a functor `F` on families to relations, defined from its action on
+functions: `a` and `b` are related when they are the two projections of one `F`-value over
+`R`-related pairs. This is the only lifting for which `bisim` below is Park's coinduction
+principle, so it is fixed here rather than left as a field of the contract. -/
+def Rel {I : Type w} {F : (I → Type u) → I → Type u}
+    (map : ∀ {X Y : I → Type u}, (∀ j, X j → Y j) → ∀ {i}, F X i → F Y i)
+    {X Y : I → Type u} (R : ∀ j, X j → Y j → Prop) {i : I} (a : F X i) (b : F Y i) : Prop :=
+  ∃ z : F (fun j => {p : X j × Y j // R j p.1 p.2}) i,
+    map (fun _ p => p.1.1) z = a ∧ map (fun _ p => p.1.2) z = b
+
+/-- The contract for an indexed family `T : I → Type u` and a functor `F` on families, given by
+its action on functions with the functor laws: `(T, dtor)` is a coalgebra with a corecursor
+satisfying its computation rule, and the coinduction principle holds for the canonical lifting
+`Rel map`. -/
 structure Contract {I : Type w} (T : I → Type u) (F : (I → Type u) → I → Type u) where
   map {X Y : I → Type u} : (∀ j, X j → Y j) → ∀ {i}, F X i → F Y i
-  Rel {X Y : I → Type u} : (∀ j, X j → Y j → Prop) → ∀ {i}, F X i → F Y i → Prop
   map_id {X : I → Type u} {i : I} (a : F X i) : map (fun _ x => x) a = a
   map_comp {X Y Z : I → Type u} (g : ∀ j, Y j → Z j) (f : ∀ j, X j → Y j) {i : I} (a : F X i) :
     map (fun j x => g j (f j x)) a = map g (map f a)
-  rel_map {X Y Z : I → Type u} (R : ∀ j, Y j → Z j → Prop) (f : ∀ j, X j → Y j)
-    (g : ∀ j, X j → Z j) {i : I} (a : F X i) (h : ∀ j x, R j (f j x) (g j x)) :
-    Rel R (map f a) (map g a)
   dtor {i : I} : T i → F T i
   corec {S : I → Type u} : (∀ i, S i → F S i) → ∀ {i}, S i → T i
   dtor_corec {S : I → Type u} (c : ∀ i, S i → F S i) {i : I} (s : S i) :
     dtor (corec c s) = map (fun _ s => corec c s) (c i s)
-  bisim (R : ∀ i, T i → T i → Prop) (H : ∀ i x y, R i x y → Rel R (dtor x) (dtor y)) {i : I}
+  bisim (R : ∀ i, T i → T i → Prop) (H : ∀ i x y, R i x y → Rel map R (dtor x) (dtor y)) {i : I}
     {x y : T i} (h : R i x y) : x = y
 
 namespace Contract
 
 variable {I : Type w} {T : I → Type u} {F : (I → Type u) → I → Type u} (K : Contract T F)
+
+/-- The images of one value under pointwise related functions are related. -/
+theorem rel_map {X Y Z : I → Type u} (R : ∀ j, Y j → Z j → Prop) (f : ∀ j, X j → Y j)
+    (g : ∀ j, X j → Z j) {i : I} (a : F X i) (h : ∀ j x, R j (f j x) (g j x)) :
+    Rel K.map R (K.map f a) (K.map g a) :=
+  ⟨K.map (fun j x => ⟨(f j x, g j x), h j x⟩) a, by simp only [← K.map_comp],
+    by simp only [← K.map_comp]⟩
 
 /-- The constructor, by Lambek's lemma. -/
 def ctor {i : I} (y : F T i) : T i := K.corec (fun _ => K.map fun _ t => K.dtor t) y
@@ -317,7 +332,7 @@ theorem ctor_dtor {i : I} (t : T i) : K.ctor (K.dtor t) = t := by
     (fun _ t => K.corec (fun _ => K.map fun _ t => K.dtor t) (K.dtor t)) (fun _ t => t)
     (K.dtor y) fun _ _ => rfl
   rw [K.map_id] at h
-  show K.Rel _ (K.dtor (K.corec (fun _ => K.map fun _ t => K.dtor t) (K.dtor y))) (K.dtor y)
+  show Rel K.map _ (K.dtor (K.corec (fun _ => K.map fun _ t => K.dtor t) (K.dtor y))) (K.dtor y)
   rw [K.dtor_corec, ← K.map_comp]
   exact h
 
@@ -332,6 +347,24 @@ theorem ctor_injective {i : I} : Function.Injective (K.ctor (i := i)) := fun a b
   rw [← K.dtor_ctor a, ← K.dtor_ctor b, h]
 
 end Contract
+
+/-- `bisim` for the canonical lifting, from `bisim` for a lifting `Rel'` that contains it (for
+the command: the inductive `F.Rel`, which contains it by `F.rel_map`). -/
+theorem bisim_canonical_of {I : Type w} {T : I → Type u} {F : (I → Type u) → I → Type u}
+    (map : ∀ {X Y : I → Type u}, (∀ j, X j → Y j) → ∀ {i}, F X i → F Y i)
+    (Rel' : ∀ {X Y : I → Type u}, (∀ j, X j → Y j → Prop) → ∀ {i}, F X i → F Y i → Prop)
+    (rel_map : ∀ {X Y Z : I → Type u} (R : ∀ j, Y j → Z j → Prop) (f : ∀ j, X j → Y j)
+      (g : ∀ j, X j → Z j) {i} (a : F X i), (∀ j x, R j (f j x) (g j x)) →
+      Rel' R (map f a) (map g a))
+    (dtor : ∀ {i}, T i → F T i)
+    (bisim : ∀ (R : ∀ i, T i → T i → Prop), (∀ i x y, R i x y → Rel' R (dtor x) (dtor y)) →
+      ∀ {i} {x y : T i}, R i x y → x = y)
+    (R : ∀ i, T i → T i → Prop) (H : ∀ i x y, R i x y → Rel map R (dtor x) (dtor y)) {i : I}
+    {x y : T i} (h : R i x y) : x = y :=
+  bisim R (fun i x y hxy => by
+    obtain ⟨z, hz, hz'⟩ := H i x y hxy
+    rw [← hz, ← hz']
+    exact rel_map R _ _ z fun _ p => p.2) h
 
 section
 variable {I : Type w} {T : I → Type u} {S : I → Type u₃} {FS : I → Type u₁} {FT : I → Type u₂}
@@ -364,6 +397,42 @@ theorem corec_unique_of (dtor : ∀ {i}, T i → FT i) (corec : (∀ i, S i → 
   exact rel_map _ _ _ _ fun j s => ⟨s, rfl, rfl⟩
 
 end
+
+/-! ### The contract characterises `T`: it is the final coalgebra of `(F, map)`
+
+`dtor_corec` gives a coalgebra morphism out of any coalgebra, `corec_unique` its uniqueness. So
+any two implementations of the contract, for the same `map`, are isomorphic as coalgebras, by
+the `corec`s in both directions. -/
+
+namespace Contract
+
+variable {I : Type w} {T : I → Type u} {F : (I → Type u) → I → Type u} (K : Contract T F)
+
+/-- Uniqueness of coalgebra morphisms into `T`. -/
+theorem corec_unique {S : I → Type u} (c : ∀ i, S i → F S i) (h : ∀ i, S i → T i)
+    (hh : ∀ i (s : S i), K.dtor (h i s) = K.map h (c i s)) {i : I} (s : S i) :
+    h i s = K.corec c s :=
+  corec_unique_of K.dtor K.corec K.map (Rel K.map) K.bisim K.dtor_corec K.rel_map c h hh s
+
+/-- The identity is the coalgebra morphism `T → T`. -/
+theorem corec_dtor_self {i : I} (t : T i) : K.corec (fun _ t => K.dtor t) t = t :=
+  (K.corec_unique (fun _ t => K.dtor t) (fun _ t => t) (fun _ _ => (K.map_id _).symm) t).symm
+
+variable {T' : I → Type u} (K' : Contract T' F)
+
+/-- Two implementations of the contract for the same functor are inverse to each other through
+their corecursors: `T` and `T'` are isomorphic, as coalgebras. The other composite is this
+theorem with the roles exchanged. -/
+theorem corec_corec (hmap : ∀ {X Y : I → Type u} (f : ∀ j, X j → Y j) {i} (a : F X i),
+      K.map f a = K'.map f a) {i : I} (t : T i) :
+    K.corec (fun _ t => K'.dtor t) (K'.corec (fun _ t => K.dtor t) t) = t := by
+  refine (K.corec_unique (fun _ t => K.dtor t)
+    (fun _ t => K.corec (fun _ t => K'.dtor t) (K'.corec (fun _ t => K.dtor t) t)) ?_ t).trans
+    (K.corec_dtor_self t)
+  intro i t
+  rw [K.dtor_corec, K'.dtor_corec, ← hmap, ← K.map_comp]
+
+end Contract
 
 /-! ### Lemmas that do not mention the index, used at a fixed index -/
 

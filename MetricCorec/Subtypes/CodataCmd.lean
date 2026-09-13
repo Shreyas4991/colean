@@ -428,13 +428,26 @@ def valArgs (c : CtorInfo) : Array Ident :=
   c.args.map fun x => (ctx.bareIdx c x.getId).getD x
 
 /-- The index binders as discriminant patterns for a constructor: the index binder itself where
-the constructor's index is one of its binders (the binder is then a hole, and right-hand sides
-use the index binder), `_` where it is another term. -/
+the constructor's index is one of its binders, at the binder's first occurrence (the binder is
+then a hole, and right-hand sides use the index binder), `_` where it is another term or a
+repeated binder. Generated `match`es take the index binders as explicit discriminants so that
+the generator, not Lean, decides what is generalised and named: a hole is always assigned to
+the older, named pattern variable, which is what makes right-hand sides well-typed. -/
 def idxPats (c : CtorInfo) : CommandElabM (Array Term) :=
   (Array.range ctx.k).mapM fun m => do
     let t := c.idx[m]!
-    if t.raw.isIdent && c.allDataIds.any (·.getId == t.raw.getId) then pure (idT ctx.iIds[m]!)
-    else `(_)
+    let bare := t.raw.isIdent && c.allDataIds.any (·.getId == t.raw.getId)
+    if bare && (c.idx.findIdx? fun t' => t'.raw.isIdent && t'.raw.getId == t.raw.getId) == some m
+    then pure (idT ctx.iIds[m]!) else `(_)
+
+/-- `i₁, i₂, x`: the discriminants of a `match` on `x` whose type has the index binders as
+indices. -/
+def discrs (x : Term) : Array Term := ctx.iArgs.push x
+
+/-- A `match` alternative `| i₁, _, pats… => rhs` for the constructor `c`. -/
+def alt (c : CtorInfo) (pats : Array Term) (rhs : Term) : CommandElabM (TSyntax ``matchAlt) := do
+  let pats := (← ctx.idxPats c) ++ pats
+  `(matchAltExpr| | $[$pats:term],* => $rhs:term)
 
 /-- `@F.c params X args…`. -/
 def fApp (c : CtorInfo) (X : Term) (args : Array Term) : CommandElabM Term := do
@@ -521,11 +534,10 @@ def genFunctor (ctx : Ctx) : CommandElabM Unit := do
       $[$fCtors:ctor]*))
   -- `F.map`, and its computation on constructors.
   let mapAlts : Array (TSyntax ``matchAlt) ← ctx.ctors.mapM fun c => do
-    let lhs ← ctx.fPat c
-    let rhs ← ctx.fApp c Y (← ctx.mappedArgs c true)
-    `(matchAltExpr| | $lhs:term => $rhs:term)
+    ctx.alt c #[← ctx.fPat c] (← ctx.fApp c Y (← ctx.mappedArgs c true))
+  let discrsA := ctx.discrs (← `(a))
   elabCommand (← `(def $(ctx.Fmap):ident $[$pImp]* {X Y : $xTy} (f : $fTy) $[$ib]*
-      (a : $FX) : $FY := match a with $mapAlts:matchAlt*))
+      (a : $FX) : $FY := match $[$discrsA:term],* with $mapAlts:matchAlt*))
   for c in ctx.ctors do
     let bs ← fBinders c
     let lhs ← ctx.fApp c X (c.allIds.map idT)
@@ -642,7 +654,7 @@ def genSignature (ctx : Ctx) : CommandElabM Unit := do
             let packed ← ctx.pack (idx.map (ctx.substBare c))
             let dataPats ← ctx.patIds c c.allDataIds
             idxAlts := idxAlts.push
-              (← `(matchAltExpr| | @$(ctx.bCtor c x):ident $pHoles* $dataPats* => $packed))
+              (← ctx.alt c #[← `(_), ← `(@$(ctx.bCtor c x):ident $pHoles* $dataPats*)] packed)
       | .fn dom idx =>
         let res ← appT ctx.Bp (c.idx ++ #[shape])
         for x in g.ids do
@@ -652,7 +664,7 @@ def genSignature (ctx : Ctx) : CommandElabM Unit := do
             let packed ← ctx.pack (idx.map (ctx.substBare c))
             let dataPats ← ctx.patIds c c.allDataIds
             idxAlts := idxAlts.push
-              (← `(matchAltExpr| | @$(ctx.bCtor c x):ident $pHoles* $dataPats* _ => $packed))
+              (← ctx.alt c #[← `(_), ← `(@$(ctx.bCtor c x):ident $pHoles* $dataPats* _)] packed)
   if !ctx.idxed then
     -- A plain type is a family over `Unit`.
     elabCommand (← `(inductive $(ctx.B):ident $[$pExp]* : $(ctx.Shapep) → Type _ where
@@ -673,7 +685,10 @@ def genSignature (ctx : Ctx) : CommandElabM Unit := do
       Ix ← `(PSigma fun ($x:ident : $ty) => $Ix)
     elabCommand (← `(abbrev $(ctx.Ix):ident $[$pExp]* : Type _ := $Ix))
   let BIs ← appT ctx.Bp (ctx.iArgs ++ #[← `(s)])
-  let idxBody ← if idxAlts.isEmpty then `(nomatch b) else `(match b with $idxAlts:matchAlt*)
+  -- The shape is a discriminant too (with the pattern `_`), so that it is refined.
+  let discrsB := ctx.discrs (← `(s)) |>.push (← `(b))
+  let idxBody ← if idxAlts.isEmpty then `(nomatch b)
+    else `(match $[$discrsB:term],* with $idxAlts:matchAlt*)
   elabCommand (← `(def $(ctx.idxId):ident $[$pImp]* $[$ib]* {s : $ShapeI} (b : $BIs) :
       $(ctx.Ixp) := $idxBody))
   if ctx.packed then
@@ -700,7 +715,6 @@ def genIso (ctx : Ctx) : CommandElabM Unit := do
   let pImp := ctx.pImp
   let ib ← ctx.ixB
   let X ← `(X)
-  let Y ← `(Y)
   let famB : Array (TSyntax ``bracketedBinderF) := #[← `(bracketedBinderF| {X Y : $(ctx.Ixp) → Type _})]
   let famBX : Array (TSyntax ``bracketedBinderF) := #[← `(bracketedBinderF| {X : $(ctx.Ixp) → Type _})]
   let curX ← ctx.curryFam X
@@ -723,9 +737,10 @@ def genIso (ctx : Ctx) : CommandElabM Unit := do
           alts := alts.push (← `(matchAltExpr| | $(ctx.bCtor c x):ident q => $x:ident q))
     let child ← if alts.isEmpty then `(fun b => nomatch b)
       else `(fun b => match b with $alts:matchAlt*)
-    `(matchAltExpr| | $lhs:term => ⟨$shape, $child⟩)
+    ctx.alt c #[lhs] (← `(⟨$shape, $child⟩))
+  let discrsA := ctx.discrs (← `(a))
   elabCommand (← `(def $(ctx.toC):ident $[$pImp]* $[$famBX]* $[$ib]* (a : $FXi) : $ObjX :=
-    match a with $toCAlts:matchAlt*))
+    match $[$discrsA:term],* with $toCAlts:matchAlt*))
   let ofCAlts : Array (TSyntax ``matchAlt) ← ctx.ctors.mapM fun c => do
     let shape ← ctx.shapePat c
     let mut args : Array Term := #[]
@@ -737,11 +752,10 @@ def genIso (ctx : Ctx) : CommandElabM Unit := do
         | .fn .. => args := args.push (← `(fun q => ch ($(ctx.bCtor c x) q)))
     let rhs ← ctx.fApp c (← `(_)) args
     let pat ← if c.hasRec then `(⟨$shape, ch⟩) else `(⟨$shape, _⟩)
-    let pats := (← ctx.idxPats c).push pat
-    `(matchAltExpr| | $[$pats:term],* => $rhs:term)
-  let discrs := ctx.iArgs.push (← `(z))
+    ctx.alt c #[pat] rhs
+  let discrsZ := ctx.discrs (← `(z))
   elabCommand (← `(def $(ctx.ofC):ident $[$pImp]* $[$famBX]* $[$ib]* (z : $ObjX) : $FXi :=
-    match $[$discrs:term],* with $ofCAlts:matchAlt*))
+    match $[$discrsZ:term],* with $ofCAlts:matchAlt*))
   elabCommand (← `(theorem $(ctx.ofC_toC):ident $[$pImp]* $[$famBX]* $[$ib]* (a : $FXi) :
       $(ctx.ofC) ($(ctx.toC) a) = a := by
     cases a
@@ -898,18 +912,23 @@ def genDerived (ctx : Ctx) : CommandElabM Unit := do
   let cur (f : Term) (extra : Array Ident) := ctx.curryN f extra
   let Hcur ← `(fun $[$jIds:ident]* x y h =>
     $(← appT (← `(H)) (#[← ctx.pack ctx.jArgs] ++ #[← `(x), ← `(y), ← `(h)])))
+  -- The contract's `bisim` is for the canonical lifting; the generated one is for the
+  -- inductive `F.Rel`, which contains it by `F.rel_map`.
+  let mapP ← `(fun {_ _} f {_} a => $(ctx.Fmap) $(← cur (← `(f)) #[x]) a)
+  let RelP ← `(fun {_ _} R {_} a b => $(ctx.Rel) $(← cur (← `(R)) #[]) a b)
+  let relMapP ← `(fun {_ _ _} R f g {_} a h => $(ctx.Frel_map) $(← cur (← `(R)) #[])
+    $(← cur (← `(f)) #[]) $(← cur (← `(g)) #[]) a $(← cur (← `(h)) #[x]))
+  let bisimP ← `(fun R H {_ _ _} h => $(ctx.bisim) $(← cur (← `(R)) #[]) $Hcur h)
   elabCommand (← `(def $(ctx.contract):ident $[$pImp]* :
       $(ctx.topId `Contract) (I := $(ctx.Ixp)) $(cv.Tpk) $Fpk where
-    map := fun {_ _} f {_} a => $(ctx.Fmap) $(← cur (← `(f)) #[x]) a
-    Rel := fun {_ _} R {_} a b => $(ctx.Rel) $(← cur (← `(R)) #[]) a b
+    map := $mapP
     map_id := fun {_ _} a => $(ctx.Fmap_id) a
     map_comp := fun {_ _ _} g f {_} a => $(ctx.Fmap_comp) $(← cur (← `(g)) #[]) $(← cur (← `(f)) #[]) a
-    rel_map := fun {_ _ _} R f g {_} a h => $(ctx.Frel_map) $(← cur (← `(R)) #[]) $(← cur (← `(f)) #[])
-      $(← cur (← `(g)) #[]) a $(← cur (← `(h)) #[x])
     dtor := fun {_} t => $(ctx.dtor) t
     corec := fun {_} c {_} s => $(ctx.corec) $(← cur (← `(c)) #[sId]) s
     dtor_corec := fun {_} c {_} s => $(ctx.dtor_corec) $(← cur (← `(c)) #[sId]) s
-    bisim := fun R H {_ _ _} h => $(ctx.bisim) $(← cur (← `(R)) #[]) $Hcur h))
+    bisim := $(ctx.topId `bisim_canonical_of) (I := $(ctx.Ixp)) (T := $(cv.Tpk)) (F := $Fpk)
+      $mapP $RelP $relMapP (fun {_} t => $(ctx.dtor) t) $bisimP))
   elabCommand (← `(def $(ctx.ctor):ident $[$pImp]* $[$ib]* : $FTi → $Ti :=
     $(ctx.topId `Contract.ctor) $(ctx.contract) (i := $(cv.pI))))
   elabCommand (← `(theorem $(ctx.dtor_ctor):ident $[$pImp]* $[$ib]* (y : $FTi) :
@@ -1016,11 +1035,10 @@ def genCases (ctx : Ctx) : CommandElabM Unit := do
     let ty ← if c.groups.isEmpty then `($mc $capp) else `(∀ $[$bs]*, $mc $capp)
     `(bracketedBinderF| ($(c.name) : $ty))
   let auxAlts : Array (TSyntax ``matchAlt) ← ctx.ctors.mapM fun c => do
-    let pat ← ctx.fPat c
-    let rhs ← mkAppT c.name ((ctx.valArgs c).map idT)
-    `(matchAltExpr| | $pat:term => $rhs:term)
+    ctx.alt c #[← ctx.fPat c] (← mkAppT c.name ((ctx.valArgs c).map idT))
+  let discrsY := ctx.discrs (← `(y))
   elabCommand (← `(def $(ctx.casesOnAux):ident $[$pImp]* {$motive : $mTy} $[$ib]* (y : $FTi)
-      $[$minors]* : $mI ($(ctx.ctor) y) := match y with $auxAlts:matchAlt*))
+      $[$minors]* : $mI ($(ctx.ctor) y) := match $[$discrsY:term],* with $auxAlts:matchAlt*))
   let minorIds := ctx.ctors.map fun c => idT c.name
   elabCommand (← `(@[elab_as_elim, cases_eliminator]
     def $(ctx.casesOnId):ident $[$pImp]* {$motive : $mTy} $[$ib]* (t : $Ti) $[$minors]* :

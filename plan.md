@@ -64,12 +64,18 @@ independent of the constructor's arguments, and equal for disjointness). `casesO
 Tests: `Test/Vec.lean` (with `toList`/`ofList` inverse to each other, up to the equality of
 lengths), `Test/Alt.lean` (streams alternating between two sorts), `Test/Walk.lean` (walks on
 `Int` with the position as index, determined by their steps, by bisimulation), `Test/Cyc.lean`
-(two indices, the second depending on the first), `Test/Bounded.lean` (a proposition as index);
+(two indices, the second depending on the first), `Test/Bounded.lean` (a proposition as index), `Test/Diag.lean` (indices that are bare or
+repeated binders);
 `Sketch/IdxVec.lean` and `Sketch/IdxCyc.lean` are hand-written templates of the generated
 declarations for one and two indices.
 
-Known limitation: a constructor whose result index repeats one of its own binders (`T n n`)
-is not handled by the pattern-variable bookkeeping in the generated `match`es.
+The generated `match`es (`F.map`, `idx`, `toC`, `ofC`, `casesOnAux`) take the index binders
+as explicit discriminants, name a binder's index pattern at its first occurrence only, and use
+`_` for the constructor's own arguments in those positions; Lean's pattern elaborator refuses to
+name a forced variable, and which index variables `match a with` generalises is Lean's choice,
+not the generator's (`Test/Diag.lean`: `step {n} … : Diag n n`, `stop {n m} : Diag n m`). The
+one constructor shape left unsupported is a proof binder that occurs only inside index terms
+and in no field: it can be recovered neither by name nor by unification.
 
 Left for later: `data` families (section 2), and non-uniform parameters (`Nest α` with
 `Nest (α × α)` inside), which are indices in disguise; decide whether to support them by
