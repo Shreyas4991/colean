@@ -12,6 +12,7 @@ import MetricCorec.Subtypes.Test.ITree
 import MetricCorec.Subtypes.Test.PList
 import MetricCorec.Subtypes.Test.PTree
 import MetricCorec.Subtypes.Test.Str
+import MetricCorec.Subtypes.Test.Tele
 import MetricCorec.Subtypes.Test.Tree
 import MetricCorec.Subtypes.Test.Vec
 import MetricCorec.Subtypes.Test.Walk

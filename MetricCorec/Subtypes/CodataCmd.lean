@@ -4,8 +4,10 @@ import MetricCorec.Subtypes.Codata
 # The `codata` command
 
 Current scope: parameters, a single type, any number of indices. Constructor binders may be
-explicit or implicit; recursive arguments may be plain (`t : T params idx`) or under a function
-type (`f : A → T params idx`), where `A` may depend on the constructor's own data.
+explicit or implicit; recursive arguments may be plain (`t : T params idx`) or under a telescope
+of arrows (`f : (y₁ : B₁) → … → Bₙ → T params idx`), dependent or not, where the domains may
+depend on the constructor's own data and the index on the bound variables. A data binder may not
+mention `T`.
 
 ```
 codata ITree (E : Type → Type) (R : Type)
@@ -84,7 +86,9 @@ index arguments of their type (none without indices). -/
 inductive Kind where
   | data
   | pos (idx : Array Term)
-  | fn (dom : Term) (idx : Array Term)
+  /-- A recursive argument under a telescope, `(y₁ : B₁) → … → (yₙ : Bₙ) → T params idx`, where
+  the index may mention the `yⱼ` (fresh names when an arrow is not dependent). -/
+  | fn (tele : Array (Ident × Term)) (idx : Array Term)
 
 /-- A binder group of a constructor. -/
 structure Group where
@@ -175,17 +179,54 @@ private def recIdx (tName : Name) (params : Array Ident) (ty : Term) : Option (A
   | `($f:ident) => if params.isEmpty && f.getId == tName then some #[] else none
   | _ => none
 
-/-- Classify the type of a constructor argument. -/
-private def classify (tName : Name) (params : Array Ident) (ty : Term) : Kind :=
-  match recIdx tName params ty with
-  | some idx => .pos idx
-  | none =>
-    match ty with
+/-- A binder `(x y : A)` or `{x y : A}`: its names, type, and whether it is implicit. -/
+private def readBinder (b : TSyntax ``bracketedBinder) : CommandElabM (Array Ident × Term × Bool) := do
+  let toIdents (ids : TSyntaxArray [`ident, ``Parser.Term.hole]) : CommandElabM (Array Ident) := do
+    unless ids.all (·.raw.isIdent) do throwErrorAt b "binders must be named"
+    return ids.map fun x => ⟨x.raw⟩
+  match b with
+  | `(bracketedBinderF| ($ids* : $ty)) => return (← toIdents ids, ty, false)
+  | `(bracketedBinderF| {$ids* : $ty}) => return (← toIdents ids, ty, true)
+  | _ => throwErrorAt b "unsupported binder: expected an explicit or implicit binder with a type"
+
+/-- A fresh hygienic identifier. -/
+private def freshId (s : String) : CommandElabM Ident :=
+  return mkIdent (← MonadQuotation.addMacroScope (Name.mkSimple s))
+
+/-- Classify the type of a constructor argument: a plain recursive argument `T params idx`, a
+recursive argument under a telescope of arrows ending in one, or non-recursive data, which may
+not mention `T` at all. -/
+private partial def classify (tName : Name) (params : Array Ident) (ty : Term) :
+    CommandElabM Kind := do
+  if let some idx := recIdx tName params ty then return .pos idx
+  let rec go (t : Term) (acc : Array (Ident × Term)) : CommandElabM (Option Kind) := do
+    match t with
+    | `($b:bracketedBinder → $cod) =>
+      let (ids, dom, _) ← readBinder b
+      go cod (acc ++ ids.map (·, dom))
     | `($dom → $cod) =>
-      match recIdx tName params cod with
-      | some idx => .fn dom idx
-      | none => .data
-    | _ => .data
+      go cod (acc.push (← freshId s!"y{Nat.toSubscriptString (acc.size + 1)}", dom))
+    | _ => return (recIdx tName params t).map (.fn acc)
+  if let some k ← go ty #[] then
+    if let .fn tele _ := k then
+      for (_, dom) in tele do
+        if mentionsAny dom.raw #[tName] then
+          throwErrorAt dom "the type being defined may not occur in the domain of a function"
+    return k
+  if mentionsAny ty.raw #[tName] then
+    throwErrorAt ty "recursive occurrence not recognised: expected the type being defined \
+      applied to its parameters (and indices), possibly under arrows"
+  return .data
+
+/-- The binders `(y₁ : B₁) … (yₙ : Bₙ)` of a telescope. -/
+def teleBinders (tele : Array (Ident × Term)) : CommandElabM (Array (TSyntax ``bracketedBinderF)) :=
+  tele.mapM fun (y, B) => `(bracketedBinderF| ($y:ident : $B))
+
+def teleIds (tele : Array (Ident × Term)) : Array Ident := tele.map (·.1)
+
+/-- `(y₁ : B₁) → … → (yₙ : Bₙ) → cod`. -/
+def mkPi (tele : Array (Ident × Term)) (cod : Term) : CommandElabM Term :=
+  tele.foldrM (init := cod) fun (y, B) acc => `(($y:ident : $B) → $acc)
 
 /-- A binder group as a `bracketedBinder`, explicit or implicit as declared. -/
 private def mkBinder (implicit : Bool) (ids : Array Ident) (ty : Term) :
@@ -271,7 +312,7 @@ def fBinders (c : CtorInfo) : CommandElabM (Array (TSyntax ``bracketedBinderF)) 
     let ty ← match g.kind with
       | .data => pure g.ty
       | .pos idx => appT (← `(X)) idx
-      | .fn dom idx => do `($dom → $(← appT (← `(X)) idx))
+      | .fn tele idx => do mkPi tele (← appT (← `(X)) idx)
     mkBinder g.implicit g.ids ty
 
 /-- The data binders of a constructor, all implicit (for the constructors of `B`, where the
@@ -497,7 +538,9 @@ def mappedArgs (c : CtorInfo) (afterMatch : Bool) : CommandElabM (Array Term) :=
     g.ids.mapM fun (x : Ident) => match g.kind with
       | .data => pure (idT (if afterMatch then (ctx.bareIdx c x.getId).getD x else x))
       | .pos _ => `(f $holes* $x:ident)
-      | .fn .. => `(fun q => f $holes* ($x:ident q))
+      | .fn tele _ =>
+        let ys := teleIds tele
+        `(fun $[$ys:ident]* => f $holes* ($x:ident $ys*))
   return args.foldl (· ++ ·) #[]
 
 end Ctx
@@ -568,14 +611,16 @@ def genFunctor (ctx : Ctx) : CommandElabM Unit := do
           hyps := hyps.push (← `(bracketedBinderF| (_ : R $holes* $t $t')))
           xs := xs.push (idT t)
           ys := ys.push (idT t')
-      | .fn dom idx =>
-        let Xi ← appT X idx
-        let Yi ← appT Y idx
+      | .fn tele idx =>
+        let Xi ← mkPi tele (← appT X idx)
+        let Yi ← mkPi tele (← appT Y idx)
+        let ps := teleIds tele
         for t in g.ids do
           let t' := prime t
-          bs := bs.push (← `(bracketedBinderF| ($t : $dom → $Xi)))
-          bs := bs.push (← `(bracketedBinderF| ($t' : $dom → $Yi)))
-          hyps := hyps.push (← `(bracketedBinderF| (_ : ∀ p, R $holes* ($t p) ($t' p))))
+          bs := bs.push (← `(bracketedBinderF| ($t : $Xi)))
+          bs := bs.push (← `(bracketedBinderF| ($t' : $Yi)))
+          hyps := hyps.push
+            (← `(bracketedBinderF| (_ : ∀ $[$ps:ident]*, R $holes* ($t $ps*) ($t' $ps*))))
           xs := xs.push (idT t)
           ys := ys.push (idT t')
     let lhs ← ctx.fApp c X xs
@@ -655,16 +700,18 @@ def genSignature (ctx : Ctx) : CommandElabM Unit := do
             let dataPats ← ctx.patIds c c.allDataIds
             idxAlts := idxAlts.push
               (← ctx.alt c #[← `(_), ← `(@$(ctx.bCtor c x):ident $pHoles* $dataPats*)] packed)
-      | .fn dom idx =>
+      | .fn tele idx =>
         let res ← appT ctx.Bp (c.idx ++ #[shape])
+        let tbs ← teleBinders tele
+        let ys := (teleIds tele).map idT
         for x in g.ids do
           bCtors := bCtors.push (← `(Parser.Command.ctor|
-            | $(posCtorName c x):ident $[$dbs]* (p : $dom) : $res))
+            | $(posCtorName c x):ident $[$dbs]* $[$tbs]* : $res))
           if ctx.idxed then
             let packed ← ctx.pack (idx.map (ctx.substBare c))
             let dataPats ← ctx.patIds c c.allDataIds
             idxAlts := idxAlts.push
-              (← ctx.alt c #[← `(_), ← `(@$(ctx.bCtor c x):ident $pHoles* $dataPats* _)] packed)
+              (← ctx.alt c #[← `(_), ← `(@$(ctx.bCtor c x):ident $pHoles* $dataPats* $ys*)] packed)
   if !ctx.idxed then
     -- A plain type is a family over `Unit`.
     elabCommand (← `(inductive $(ctx.B):ident $[$pExp]* : $(ctx.Shapep) → Type _ where
@@ -732,9 +779,10 @@ def genIso (ctx : Ctx) : CommandElabM Unit := do
       | .pos _ =>
         for x in g.ids do
           alts := alts.push (← `(matchAltExpr| | $(ctx.bCtor c x):ident => $x:ident))
-      | .fn .. =>
+      | .fn tele _ =>
+        let ys := teleIds tele
         for x in g.ids do
-          alts := alts.push (← `(matchAltExpr| | $(ctx.bCtor c x):ident q => $x:ident q))
+          alts := alts.push (← `(matchAltExpr| | $(ctx.bCtor c x):ident $ys* => $x:ident $ys*))
     let child ← if alts.isEmpty then `(fun b => nomatch b)
       else `(fun b => match b with $alts:matchAlt*)
     ctx.alt c #[lhs] (← `(⟨$shape, $child⟩))
@@ -749,7 +797,9 @@ def genIso (ctx : Ctx) : CommandElabM Unit := do
         match g.kind with
         | .data => args := args.push (idT ((ctx.bareIdx c x.getId).getD x))
         | .pos _ => args := args.push (← `(ch $(ctx.bCtor c x)))
-        | .fn .. => args := args.push (← `(fun q => ch ($(ctx.bCtor c x) q)))
+        | .fn tele _ =>
+          let ys := teleIds tele
+          args := args.push (← `(fun $[$ys:ident]* => ch ($(ctx.bCtor c x) $ys*)))
     let rhs ← ctx.fApp c (← `(_)) args
     let pat ← if c.hasRec then `(⟨$shape, ch⟩) else `(⟨$shape, _⟩)
     ctx.alt c #[pat] rhs
@@ -1064,20 +1114,6 @@ def genCases (ctx : Ctx) : CommandElabM Unit := do
 
 /-! ### The command -/
 
-/-- A binder `(x y : A)` or `{x y : A}`: its names, type, and whether it is implicit. -/
-private def readBinder (b : TSyntax ``bracketedBinder) : CommandElabM (Array Ident × Term × Bool) := do
-  let toIdents (ids : TSyntaxArray [`ident, ``Parser.Term.hole]) : CommandElabM (Array Ident) := do
-    unless ids.all (·.raw.isIdent) do throwErrorAt b "binders must be named"
-    return ids.map fun x => ⟨x.raw⟩
-  match b with
-  | `(bracketedBinderF| ($ids* : $ty)) => return (← toIdents ids, ty, false)
-  | `(bracketedBinderF| {$ids* : $ty}) => return (← toIdents ids, ty, true)
-  | _ => throwErrorAt b "unsupported binder: expected an explicit or implicit binder with a type"
-
-/-- A fresh hygienic identifier. -/
-private def freshId (s : String) : CommandElabM Ident :=
-  return mkIdent (← MonadQuotation.addMacroScope (Name.mkSimple s))
-
 /-- The index telescope of a declared sort `(i₁ : I₁) → I₂ → … → Type u`: names (fresh when
 the arrow is not dependent) and types. -/
 private partial def readSort (t : Term) : CommandElabM (Array (Ident × Term)) := do
@@ -1113,8 +1149,8 @@ private partial def readSort (t : Term) : CommandElabM (Array (Ident × Term)) :
     let `(codataCtor| | $name:ident $bs:bracketedBinder* $[: $resTy]?) := c
       | throwUnsupportedSyntax
     let raw ← bs.mapM readBinder
-    let groups := raw.map fun (ids, ty, implicit) =>
-      { ids, ty, kind := classify tName pids ty, implicit : Group }
+    let groups ← raw.mapM fun (ids, ty, implicit) => do
+      return { ids, ty, kind := ← classify tName pids ty, implicit : Group }
     for g in groups do
       if g.implicit && !g.kind.isData then
         throwErrorAt g.ty "implicit binders must not be recursive"
