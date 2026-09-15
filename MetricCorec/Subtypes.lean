@@ -1,5 +1,7 @@
 import MetricCorec.Subtypes.Raw
 import MetricCorec.Subtypes.Codata
+import MetricCorec.Subtypes.Container
+import MetricCorec.Subtypes.Param
 import MetricCorec.Subtypes.CodataCmd
 import MetricCorec.Subtypes.Data
 import MetricCorec.Subtypes.DataCmd
@@ -28,6 +30,11 @@ import MetricCorec.Subtypes.Test.WType
 import MetricCorec.Subtypes.Test.MTree
 import MetricCorec.Subtypes.Test.MRose
 import MetricCorec.Subtypes.Test.EvenOdd
+import MetricCorec.Subtypes.Test.Rose
+import MetricCorec.Subtypes.Test.FinRose
+import MetricCorec.Subtypes.Test.Param
+import MetricCorec.Subtypes.Test.Mixed
+import MetricCorec.Subtypes.Test.MixedOrder
 -- import MetricCorec.Subtypes.Sketch.CoList
 -- import MetricCorec.Subtypes.Sketch.CoListLemmas
 -- import MetricCorec.Subtypes.Sketch.FinList

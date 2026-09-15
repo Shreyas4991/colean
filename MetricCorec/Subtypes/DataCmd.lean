@@ -213,6 +213,12 @@ def genRec (ctx : Ctx) : CommandElabM Unit := do
         for x in g.ids do
           let body ← appT (idT motive) (idx ++ #[← `($x $ys*)])
           ihs := ihs.push (← `(bracketedBinderF| ($(ihId x) : ∀ $[$tbs]*, $body)))
+      | .nest G Sh Pos fam idx =>
+        for x in g.ids do
+          let toC := contId fam.isSome `toC
+          let idx ← nestIdxAt { x, G, Sh, Pos, fam, idx } (← `(($toC (G := $G) $x).1)) (← `(q))
+          let body ← appT (idT motive) (idx ++ #[← `(($toC (G := $G) $x).2 q)])
+          ihs := ihs.push (← `(bracketedBinderF| ($(ihId x) : ∀ q, $body)))
     let allBs := bs ++ ihs
     let ty ← if allBs.isEmpty then `($mc $capp) else `(∀ $[$allBs]*, $mc $capp)
     `(bracketedBinderF| ($(c.fname) : $ty))
@@ -225,19 +231,21 @@ def genRec (ctx : Ctx) : CommandElabM Unit := do
   let mIdxB ← appT (idT motive) idxB
   let ihTy ← `(∀ $bId:ident, $mIdxB ((@$(ctx.toC) $pTerms* $Int $iArg* y).child $bId))
   let auxAlts : Array (TSyntax ``matchAlt) ← ctx.ctors.mapM fun c => do
-    let valData := (ctx.valDataIds c).map idT
     let mut ihArgs : Array Term := #[]
     for g in c.groups do
       match g.kind with
       | .data => pure ()
       | .pos _ =>
         for x in g.ids do
-          ihArgs := ihArgs.push (← `($ihId' (@$(ctx.bCtor c x) $pTerms* $valData*)))
+          ihArgs := ihArgs.push (← `($ihId' $(← ctx.bApp c x #[])))
       | .fn tele _ =>
         let ys := teleIds tele
         for x in g.ids do
           ihArgs := ihArgs.push
-            (← `(fun $[$ys:ident]* => $ihId' (@$(ctx.bCtor c x) $pTerms* $valData* $ys*)))
+            (← `(fun $[$ys:ident]* => $ihId' $(← ctx.bApp c x (ys.map idT))))
+      | .nest .. =>
+        for x in g.ids do
+          ihArgs := ihArgs.push (← `(fun q => $ihId' $(← ctx.bApp c x #[← `(q)])))
     let rhs ← mkAppT c.fname ((ctx.valArgs c).map idT ++ ihArgs)
     ctx.alt c #[← ctx.fPat c] (← `(fun $ihId':ident => $rhs))
   let discrsY := ctx.discrs (← `(y))
@@ -276,6 +284,12 @@ def genRec (ctx : Ctx) : CommandElabM Unit := do
         for x in g.ids do
           let body ← recApp idx (← `($x $ys*))
           ihArgs := ihArgs.push (← `(fun $[$ys':ident]* => $body))
+      | .nest G Sh Pos fam idx =>
+        for x in g.ids do
+          let toC := contId fam.isSome `toC
+          let idx ← nestIdxAt { x, G, Sh, Pos, fam, idx } (← `(($toC (G := $G) $x).1)) (← `(q))
+          let body ← recApp idx (← `(($toC (G := $G) $x).2 q))
+          ihArgs := ihArgs.push (← `(fun q => $body))
     let rhs ← mkAppT c.fname (c.args.map idT ++ ihArgs)
     elabCommand (← `(@[simp] theorem $(ctx.tName' c "rec_" ""):ident $[$pImp]* {$motive : $mTy}
         $[$bs]* $[$minors]* : $(← recApp c.idx capp) = $rhs :=
@@ -286,6 +300,7 @@ def genRec (ctx : Ctx) : CommandElabM Unit := do
     let capp ← ctx.tApp c
     let fapp ← ctx.fApp c ctx.Tp (c.allIds.map idT)
     let mapped ← ctx.mappedArgs c false (some fun x => `($(ctx.fold) a $x))
+      (some (← `(fun t => $(ctx.fold) a t)))
     let rhs ← appT (← `(a)) (c.idx ++ #[← ctx.fApp c (idT S) mapped])
     elabCommand (← `(@[simp] theorem $(ctx.tName' c "fold_" ""):ident $[$pImp]* {$S : $xTy}
         (a : $aTy) $[$bs]* : $(ctx.fold) a $capp = $rhs := $(ctx.fold_ctor) a $fapp))
@@ -324,6 +339,7 @@ def dataPipeline (ctx : Ctx) : CommandElabM Unit := do
   genCases ctx
   genRec ctx
   genDataAliases ctx
+  genContainer ctx
   elabCommand (← `(end))
 
 @[command_elab dataCmd] def elabData : CommandElab := fun stx => do

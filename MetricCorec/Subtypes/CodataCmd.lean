@@ -1,13 +1,22 @@
 import MetricCorec.Subtypes.Codata
+import MetricCorec.Subtypes.Container
+import MetricCorec.Subtypes.Param
 
 /-!
 # The `codata` command
 
-Current scope: parameters, a single type, any number of indices. Constructor binders may be
-explicit or implicit; recursive arguments may be plain (`t : T params idx`) or under a telescope
-of arrows (`f : (y₁ : B₁) → … → Bₙ → T params idx`), dependent or not, where the domains may
-depend on the constructor's own data and the index on the bound variables. A data binder may not
-mention `T`.
+Current scope: parameters, a single type or a mutual block, any number of indices. Constructor
+binders may be explicit or implicit; recursive arguments may be plain (`t : T params idx`),
+under a telescope of arrows (`f : (y₁ : B₁) → … → Bₙ → T params idx`), dependent or not, where
+the domains may depend on the constructor's own data and the index on the bound variables, or
+nested through a container (`children : List (T params idx)`, see `Container.lean`). A data
+binder may not mention `T`. When the last parameter is a type `α`, or a family `X : J → Type u`,
+used only at parameter positions (`(a : α)`, `(f : A → α)`, `(as : G α)` through a container
+`G`; `(t : X j)`, …), the type is itself a container in it (see `Param.lean`), so that later
+declarations may nest through it: `children : Forest (T params idx)` through a declared
+`Forest`, or `children : Forest (fun p => T params (idx p))` through a declared `Forest` with a
+family parameter (an indexed container, `IContainer`), which is what mixed `mutual` blocks
+elaborate to (`MutualCmd.lean`).
 
 ```
 codata ITree (E : Type → Type) (R : Type)
@@ -26,10 +35,21 @@ types `T`, `T.F`, `T.Shape`, `T.B`, `T.sig`, implicit elsewhere):
 * `T.F (params) (X : Type _)`: the constructor list with `T params` replaced by `X`, as an
   inductive type; `T.F.map` and `T.F.Rel`, its action on functions and its lifting to relations,
   with the laws `T.F.map_id`, `T.F.map_comp`, `T.F.rel_map`, and the simp lemmas `T.F.map_ctorᵢ`;
-* the signature: `T.Shape` (the constructors with their non-recursive data only) and
-  `T.B : T.Shape → Type`, the positions for recursive arguments, one nullary constructor `ctorᵢ_t`
-  per plain argument `t` and one unary constructor `ctorᵢ_f (p : A)` per function argument
-  `f : A → T`; bundled as `T.sig`;
+* the signature: `T.Shape` (the constructors with their non-recursive data only, plus the shape
+  `x_s` of each nested argument `x`) and `T.B : T.Shape → Type`, the positions for recursive
+  arguments, one nullary constructor `ctorᵢ_t` per plain argument `t`, one unary constructor
+  `ctorᵢ_f (p : A)` per function argument `f : A → T` and one `ctorᵢ_x (q : Pos x_s)` per nested
+  argument; bundled as `T.sig`;
+* with a container parameter `α`: the erased shapes `T.Shape₀` (the shapes without the
+  arguments at parameter positions, plus the shape of each container `G α`), the parameter
+  positions `T.P : T.Shape₀ → Type`, one constructor `ctorᵢ_a` per argument `(a : α)`,
+  `ctorᵢ_f (y : A)` per `(f : A → α)` and `ctorᵢ_as (q : Pos as_s)` per `(as : G α)`, the
+  equivalence `T.shapeEquiv : T.Shape α ≃ Σ s₀, T.P s₀ → α` (by `T.shapeTo`/`T.shapeOf`), the
+  parameterised signature `T.psig` (`T.B` is then over `T.Shape₀`, `T.sig := T.psig.sig …`),
+  and after the type the container `T.Sh`, `T.Pos` and
+  `instance : Container (fun α => T params α idx) T.Sh T.Pos`; for a family parameter
+  `X : J → Type u`, also the positions' indices `T.pidx : T.P s₀ → J`, `T.posIdx` and
+  `instance : IContainer (fun X => T params X idx) T.Sh T.Pos T.posIdx`;
 * `T.toC`, `T.ofC` with the four laws `T.ofC_toC`, `T.toC_ofC`, `T.ofC_map`, `T.rel_ofC`;
 * the contract: `T`, `T.dtor`, `T.corec`, `T.dtor_corec`, `T.bisim`, transported from the
   generic `Signature` theorems; `T.corec` accepts a state in any universe;
@@ -62,7 +82,8 @@ index nothing is packed.
 
 Only the seven lemmas about the generated inductive `T.F` (`map_id`, `map_comp`, `rel_map`,
 `ofC_toC`, `toC_ofC`, `ofC_map`, `rel_ofC`) are proved by tactic scripts, and those are `cases`
-followed by `rfl` or `solve_by_elim`; everything else instantiates a theorem of `Codata.lean`.
+followed by `rfl` or `solve_by_elim`, with the laws of `Container.lean` for nested arguments;
+everything else instantiates a theorem of `Codata.lean`.
 The declarations from `T` on are generated in a `noncomputable section`, since the encoding
 decides equality of shapes classically.
 
@@ -97,6 +118,28 @@ inductive Kind where
   /-- A recursive argument under a telescope, `(y₁ : B₁) → … → (yₙ : Bₙ) → T params idx`, where
   the index may mention the `yⱼ` (fresh names when an arrow is not dependent). -/
   | fn (tele : Array (Ident × Term)) (idx : Array Term)
+  /-- A nested recursive argument `G (T params idx)` through a container `G` (`List`, `Option`,
+  `A × ·`, …), with the shapes and positions of its `Container` instance; or, with `fam`, a
+  nested occurrence of the family `G (fun p => T params idx)` through an indexed container,
+  where `idx` mention `p` and `fam` is `p` with the container's position index `pidx`. -/
+  | nest (G Sh Pos : Term) (fam : Option (Ident × Term)) (idx : Array Term)
+
+/-- How a non-recursive argument uses the container parameter (the last parameter, when it is
+a type variable `α`): not at all, as its type `α`, under a telescope `(y₁ : B₁) → … → α`, or
+through a container `G α`. When every argument uses `α` in one of these ways, the declared type
+is a container in `α`: its erased shapes `Shape₀` are the non-recursive data without these
+arguments (plus the shapes of the containers), and its parameter positions `P` are these
+arguments, one constructor each. -/
+inductive PKind where
+  | none
+  /-- `X j` (`j` is `()` for a type parameter). -/
+  | val (j : Term)
+  | fn (tele : Array (Ident × Term)) (j : Term)
+  | nest (G Sh Pos : Term) (j : Term)
+
+def PKind.isNone : PKind → Bool
+  | .none => true
+  | _ => false
 
 /-- A binder group of a constructor. -/
 structure Group where
@@ -104,6 +147,8 @@ structure Group where
   ty : Term
   kind : Kind
   implicit : Bool
+  /-- How the group uses the container parameter (`.none` for recursive groups). -/
+  pk : PKind := .none
 
 /-- A constructor, analysed: its name, binder groups, and the index arguments of its result type
 (none without indices; in a mutual block, the first index is the type's constructor of `Which`).
@@ -128,6 +173,16 @@ def Kind.idx : Kind → Array Term
   | .data => #[]
   | .pos idx => idx
   | .fn _ idx => idx
+  | .nest _ _ _ _ idx => idx
+
+def Kind.isNest : Kind → Bool
+  | .nest .. => true
+  | _ => false
+
+/-- A nested occurrence of the family, through an indexed container. -/
+def Kind.isFam : Kind → Bool
+  | .nest _ _ _ (some _) _ => true
+  | _ => false
 
 /-- The identifiers of the explicit arguments, in order: what the constructor is applied to. -/
 def CtorInfo.args (c : CtorInfo) : Array Ident :=
@@ -144,6 +199,15 @@ def CtorInfo.allIds (c : CtorInfo) : Array Ident := c.groups.foldl (fun acc g =>
 def CtorInfo.allDataIds (c : CtorInfo) : Array Ident :=
   c.groups.foldl (fun acc g => if g.kind.isData then acc ++ g.ids else acc) #[]
 
+/-- The non-recursive binder identifiers that do not use the container parameter: the data of
+the erased shapes. -/
+def CtorInfo.allDataIds₀ (c : CtorInfo) : Array Ident :=
+  c.groups.foldl (fun acc g => if g.kind.isData && g.pk.isNone then acc ++ g.ids else acc) #[]
+
+/-- The arguments at parameter positions, with how they use the parameter. -/
+def CtorInfo.ppos (c : CtorInfo) : Array (Ident × PKind) :=
+  c.groups.foldl (fun acc g => if g.pk.isNone then acc else acc ++ g.ids.map (·, g.pk)) #[]
+
 def CtorInfo.hasRec (c : CtorInfo) : Bool := c.groups.any fun g => !g.kind.isData
 
 def CtorInfo.hasImplicit (c : CtorInfo) : Bool := c.groups.any (·.implicit)
@@ -154,6 +218,16 @@ partial def mentionsAny (stx : Syntax) (ids : Array Name) : Bool :=
   | .ident _ _ n _ => ids.contains n.eraseMacroScopes
   | .node _ _ args => args.any (mentionsAny · ids)
   | _ => false
+
+/-- Substitute identifiers by terms. -/
+partial def substTerms (stx : Syntax) (f : Name → Option Term) : Syntax :=
+  match stx with
+  | .ident _ _ n _ =>
+    match f n with
+    | some t => t.raw
+    | none => stx
+  | .node info k args => .node info k (args.map (substTerms · f))
+  | _ => stx
 
 /-- Substitute identifiers (without macro scopes, i.e. written by the user) by identifiers. -/
 partial def substIds (stx : Syntax) (f : Name → Option Ident) : Syntax :=
@@ -188,7 +262,7 @@ def mkAppT (f : Ident) (args : Array Term) : CommandElabM Term := appT (idT f) a
 
 /-- If `ty` is one of the types `T p₁ … pₙ idx…` being defined, applied to its parameters: its
 position in the block and its index arguments. -/
-private def recIdx (tNames : Array Name) (params : Array Ident) (ty : Term) :
+def recIdx (tNames : Array Name) (params : Array Ident) (ty : Term) :
     Option (Nat × Array Term) :=
   match ty with
   | `($f:ident $as:term*) =>
@@ -205,8 +279,17 @@ private def recIdx (tNames : Array Name) (params : Array Ident) (ty : Term) :
     | none => none
   | _ => none
 
+/-- A recursive occurrence with its full index: one of the types `T params idx…` (its block
+index prepended, `pre`), or the block family itself `Blk params idx…` (in a mutual block, the
+block name applied to the block index and the user's indices). -/
+def recOcc (tNames : Array Name) (blk : Name) (pre : Nat → Array Term) (params : Array Ident)
+    (ty : Term) : Option (Array Term) :=
+  match recIdx tNames params ty with
+  | some (m, idx) => some (pre m ++ idx)
+  | none => (recIdx #[blk] params ty).map (·.2)
+
 /-- A binder `(x y : A)` or `{x y : A}`: its names, type, and whether it is implicit. -/
-private def readBinder (b : TSyntax ``bracketedBinder) : CommandElabM (Array Ident × Term × Bool) := do
+def readBinder (b : TSyntax ``bracketedBinder) : CommandElabM (Array Ident × Term × Bool) := do
   let toIdents (ids : TSyntaxArray [`ident, ``Parser.Term.hole]) : CommandElabM (Array Ident) := do
     unless ids.all (·.raw.isIdent) do throwErrorAt b "binders must be named"
     return ids.map fun x => ⟨x.raw⟩
@@ -216,16 +299,97 @@ private def readBinder (b : TSyntax ``bracketedBinder) : CommandElabM (Array Ide
   | _ => throwErrorAt b "unsupported binder: expected an explicit or implicit binder with a type"
 
 /-- A fresh hygienic identifier. -/
-private def freshId (s : String) : CommandElabM Ident :=
+def freshId (s : String) : CommandElabM Ident :=
   return mkIdent (← MonadQuotation.addMacroScope (Name.mkSimple s))
 
+/-- `t`, without its parentheses. -/
+def stripParen (t : Term) : Term :=
+  match t with
+  | `(($t')) => t'
+  | _ => t
+
+/-- A nested occurrence `G (T params idx)`, or of the family `G (fun p => T params idx)`: the
+type constructor `G` (the head applied to the other arguments, as a lambda when the occurrence
+is not the last argument, or `Prod A` for `A × T params idx`), the family variable `p` if any,
+and the full index arguments. -/
+def nestedOcc (tNames : Array Name) (blk : Name) (pre : Nat → Array Term)
+    (params : Array Ident) (ty : Term) :
+    CommandElabM (Option (Term × Option Ident × Array Term)) := do
+  let names := tNames.push blk
+  let occ (t : Term) : Option (Option Ident × Array Term) :=
+    match recOcc tNames blk pre params (stripParen t) with
+    | some idx => some (none, idx)
+    | none =>
+      match stripParen t with
+      | `(fun $p:ident => $body) => (recOcc tNames blk pre params (stripParen body)).map (some p, ·)
+      | `(fun ($p:ident : $_) => $body) =>
+        (recOcc tNames blk pre params (stripParen body)).map (some p, ·)
+      | _ => none
+  match ty with
+  | `($a × $b) =>
+    match occ b with
+    | some (fam, idx) => return some (← `(Prod $a), fam, idx)
+    | none => return none
+  | `($f:ident $as:term*) =>
+    if as.isEmpty || names.contains f.getId then return none
+    let ks := (Array.range as.size).filter fun k => mentionsAny as[k]!.raw names
+    if ks.size != 1 then return none
+    let k := ks[0]!
+    match occ as[k]! with
+    | some (fam, idx) =>
+      let G ← if k == as.size - 1 then
+          if as.size == 1 then pure (idT f) else `($f $(as.pop)*)
+        else do
+          let Xv ← freshId "X"
+          `(fun $Xv:ident => $f $(as.set! k (idT Xv))*)
+      return some (G, fam, idx)
+    | none => return none
+  | _ => return none
+
+/-- The shapes and positions of the container `G`, from its `Codata.Container` instance (or,
+with `fam`, the shapes, positions and position index of its `Codata.IContainer` instance), as
+syntax (delaborated, in the scope of the parameters); `none` without an instance. -/
+def containerOf? (pExp : Array (TSyntax ``bracketedBinderF)) (G : Term) (fam : Bool := false) :
+    CommandElabM (Option (Term × Term × Option Term)) :=
+  liftTermElabM do
+    Term.elabBinders pExp fun _ => do
+      let cls ← Term.elabTerm (← if fam then `(Codata.IContainer $G _ _ _)
+        else `(Codata.Container $G _ _)) none
+      Term.synthesizeSyntheticMVarsNoPostponing
+      let cls ← instantiateMVars cls
+      let some _ ← Meta.synthInstance? cls | return none
+      let cls ← instantiateMVars cls
+      let args := cls.getAppArgs
+      if fam then
+        unless args.size == 5 do throwError "unexpected form of the container class: {cls}"
+        return some (← PrettyPrinter.delab args[2]!, ← PrettyPrinter.delab args[3]!,
+          some (← PrettyPrinter.delab args[4]!))
+      unless args.size == 3 do throwError "unexpected form of the container class: {cls}"
+      return some (← PrettyPrinter.delab args[1]!, ← PrettyPrinter.delab args[2]!, none)
+
 /-- Classify the type of a constructor argument: a plain recursive argument `T params idx`, a
-recursive argument under a telescope of arrows ending in one, or non-recursive data, which may
-not mention the types being defined at all. `pre m` is the block index of the `m`-th type (its
-constructor of `Which`, nothing outside mutual blocks), prepended to the index arguments. -/
-private partial def classify (tNames : Array Name) (params : Array Ident)
-    (pre : Nat → Array Term) (ty : Term) : CommandElabM Kind := do
-  if let some (m, idx) := recIdx tNames params ty then return .pos (pre m ++ idx)
+recursive argument under a telescope of arrows ending in one, a nested one `G (T params idx)`
+(or `G (fun p => T params idx)` through an indexed container), or non-recursive data, which
+may not mention the types being defined at all. `pre m` is the block index of the `m`-th type
+(its constructor of `Which`, nothing outside mutual blocks), prepended to the index arguments;
+`blk` is the block family, which nested occurrences may mention directly. -/
+private partial def classify (tNames : Array Name) (blk : Name) (params : Array Ident)
+    (pExp : Array (TSyntax ``bracketedBinderF)) (pre : Nat → Array Term) (ty : Term) :
+    CommandElabM Kind := do
+  let names := tNames.push blk
+  if let some idx := recOcc tNames blk pre params ty then return .pos idx
+  if let some (G, fam, idx) ← nestedOcc tNames blk pre params ty then
+    if mentionsAny G.raw names then
+      throwErrorAt ty "a type being defined may occur only as one argument of a container"
+    let some (Sh, Pos, pidx) ← containerOf? pExp G fam.isSome
+      | throwErrorAt G "no `Codata.Container` instance for the type constructor `{G}`; \
+          nested occurrences are supported through `List`, `Option`, `A × ·`, the types \
+          declared by `data` and `codata` with a type parameter, and any type constructor \
+          with such an instance (`Codata.IContainer` for a family)"
+    let fam := match fam, pidx with
+      | some p, some pidx => some (p, pidx)
+      | _, _ => none
+    return .nest G Sh Pos fam idx
   let rec go (t : Term) (acc : Array (Ident × Term)) : CommandElabM (Option Kind) := do
     match t with
     | `($b:bracketedBinder → $cod) =>
@@ -233,17 +397,78 @@ private partial def classify (tNames : Array Name) (params : Array Ident)
       go cod (acc ++ ids.map (·, dom))
     | `($dom → $cod) =>
       go cod (acc.push (← freshId s!"y{Nat.toSubscriptString (acc.size + 1)}", dom))
-    | _ => return (recIdx tNames params t).map fun (m, idx) => .fn acc (pre m ++ idx)
+    | _ => return (recOcc tNames blk pre params t).map fun idx => .fn acc idx
   if let some k ← go ty #[] then
     if let .fn tele _ := k then
       for (_, dom) in tele do
-        if mentionsAny dom.raw tNames then
+        if mentionsAny dom.raw names then
           throwErrorAt dom "the types being defined may not occur in the domain of a function"
     return k
-  if mentionsAny ty.raw tNames then
+  if mentionsAny ty.raw names then
     throwErrorAt ty "recursive occurrence not recognised: expected a type being defined \
       applied to its parameters (and indices), possibly under arrows"
   return .data
+
+/-- Is `ty` the sort `Type`, `Type u` or `Type _`? -/
+private def isTypeSort (ty : Term) : Bool := ty.raw.isOfKind ``Parser.Term.type
+
+/-- The sort of a container parameter: `some none` for a type `Type u`, `some (some J)` for a
+family `J → Type u` (or `(j : J) → Type u`), `none` otherwise. -/
+private def paramSort (ty : Term) : Option (Option Term) :=
+  if isTypeSort ty then some none
+  else match ty with
+    | `($J → $cod) => if isTypeSort cod then some (some J) else none
+    | `(($_:ident : $J) → $cod) => if isTypeSort cod then some (some J) else none
+    | _ => none
+
+/-- How the type `ty` of a non-recursive argument uses the parameter `a` (a family when `fam`):
+`.none` when it does not occur, `.val j`, `.fn tele j` or `.nest G Sh Pos j` for the recognised
+forms `a j`, `(y₁ : B₁) → … → a j`, `G (a j)` (just `a` for a type parameter, with `j := ()`;
+the domains of the telescope, the container and the index `j` must not mention `a`), and no
+result otherwise. -/
+private partial def classifyParam (a : Ident) (fam : Bool)
+    (pExp : Array (TSyntax ``bracketedBinderF)) (ty : Term) : CommandElabM (Option PKind) := do
+  let an := #[a.getId]
+  let ty := stripParen ty
+  unless mentionsAny ty.raw an do return some .none
+  let isA (t : Term) : Bool := t.raw.isIdent && t.raw.getId == a.getId
+  let unit ← `(())
+  -- `a j` (or `a`): the index.
+  let occA (t : Term) : Option Term :=
+    let t := stripParen t
+    if fam then
+      match t with
+      | `($f:ident $j:term) => if isA f && !mentionsAny j.raw an then some j else none
+      | _ => none
+    else if isA t then some unit else none
+  if let some j := occA ty then return some (.val j)
+  let rec go (t : Term) (acc : Array (Ident × Term)) : CommandElabM (Option PKind) := do
+    match t with
+    | `($b:bracketedBinder → $cod) =>
+      let (ids, dom, _) ← readBinder b
+      if mentionsAny dom.raw an then return none
+      go cod (acc ++ ids.map (·, dom))
+    | `($dom → $cod) =>
+      if mentionsAny dom.raw an then return none
+      go cod (acc.push (← freshId s!"y{Nat.toSubscriptString (acc.size + 1)}", dom))
+    | _ => return if acc.isEmpty then none else (occA t).map (.fn acc)
+  if let some k ← go ty #[] then return some k
+  let withJ (j : Term) (G : Term) : Option (Term × Term) := some (G, j)
+  let G? : Option (Term × Term) ← match ty with
+    | `($a' × $b) =>
+      match occA b with
+      | some j => if mentionsAny a'.raw an then pure none else withJ j <$> `(Prod $a')
+      | none => pure none
+    | `($f:ident $as:term*) =>
+      match (if as.isEmpty then none else occA as.back!) with
+      | some j =>
+        if mentionsAny f.raw an || as.pop.any (mentionsAny ·.raw an) then pure none
+        else withJ j <$> (if as.size == 1 then pure (idT f) else `($f $(as.pop)*))
+      | none => pure none
+    | _ => pure none
+  let some (G, j) := G? | return none
+  let some (Sh, Pos, _) ← containerOf? pExp G | return none
+  return some (.nest G Sh Pos j)
 
 /-- The binders `(y₁ : B₁) … (yₙ : Bₙ)` of a telescope. -/
 def teleBinders (tele : Array (Ident × Term)) : CommandElabM (Array (TSyntax ``bracketedBinderF)) :=
@@ -259,6 +484,12 @@ def mkPi (tele : Array (Ident × Term)) (cod : Term) : CommandElabM Term :=
 private def mkBinder (implicit : Bool) (ids : Array Ident) (ty : Term) :
     CommandElabM (TSyntax ``bracketedBinderF) :=
   if implicit then `(bracketedBinderF| {$ids* : $ty}) else `(bracketedBinderF| ($ids* : $ty))
+
+/-- The container parameter: its name, its sort, and the index type `J` of a family. -/
+structure ParamInfo where
+  a : Ident
+  aTy : Term
+  J : Option Term
 
 /-- Everything the generators need: the analysed declaration, the index telescope if any, the
 namespaces of the generic theory to instantiate, and the names of the generated declarations
@@ -277,6 +508,15 @@ structure Ctx where
   pExp : Array (TSyntax ``bracketedBinderF)
   pImp : Array (TSyntax ``bracketedBinderF)
   pTerms : Array Term
+  /-- The container parameter: the last parameter, when it is a type variable, or a family
+  `J → Type u`, that the constructors use only at parameter positions. Then the type is a
+  container in it, and the declarations that do not depend on it (`Shape₀`, `P`, `B`, `Ix`,
+  `psig`, `Sh`, `Pos`) take the parameters without it, `pids₀` (all of them otherwise). -/
+  param : Option ParamInfo
+  pids₀ : Array Ident
+  pExp₀ : Array (TSyntax ``bracketedBinderF)
+  pImp₀ : Array (TSyntax ``bracketedBinderF)
+  pTerms₀ : Array Term
   ctors : Array CtorInfo
   /-- The index binders, with the names the user gave them (or fresh ones) and their types,
   which may mention the earlier names. Empty for a plain type. -/
@@ -294,6 +534,21 @@ structure Ctx where
   idxId : Ident
   F : Ident
   Shape : Ident
+  /-- The shapes on the packed index (several indices only). -/
+  ShapeP : Ident
+  /-- With a container parameter: the erased shapes, the parameter positions, the equivalence
+  `Shape ≃ Σ s₀, P s₀ → α` and the parameterised signature. -/
+  Shape₀ : Ident
+  Shape₀P : Ident
+  P : Ident
+  shapeTo : Ident
+  shapeOf : Ident
+  shapeOf_shapeTo : Ident
+  shapeTo_shapeOf : Ident
+  shapeEquiv : Ident
+  /-- The index of a parameter position, for a family parameter. -/
+  pidxId : Ident
+  psig : Ident
   B : Ident
   sig : Ident
   Fmap : Ident
@@ -332,6 +587,12 @@ structure Ctx where
   Tp : Term
   Fp : Term
   Shapep : Term
+  ShapePp : Term
+  Shape₀p : Term
+  Shape₀Pp : Term
+  Pp : Term
+  shapeEquivp : Term
+  psigp : Term
   Bp : Term
   sigp : Term
 
@@ -352,6 +613,16 @@ def binders' (c : CtorInfo) : CommandElabM (Array (TSyntax ``bracketedBinderF)) 
     mkBinder g.implicit (g.ids.map prime)
       ⟨substIds g.ty.raw fun n => if ids.contains n then some (prime (mkIdent n)) else none⟩
 
+/-- `t`, or `fun p => t` for a nested occurrence of the family. -/
+def famApp (fam : Option (Ident × Term)) (t : Term) : CommandElabM Term :=
+  match fam with
+  | none => pure t
+  | some (p, _) => `(fun $p:ident => $t)
+
+/-- The container's namespace, `Codata.Container` or `Codata.IContainer` for a family. -/
+def contId (fam : Bool) (n : Name) : Ident :=
+  mkIdent ((if fam then `Codata.IContainer else `Codata.Container) ++ n)
+
 /-- The binders of a constructor of `F`: recursive types replaced by `X` (at their index). -/
 def fBinders (c : CtorInfo) : CommandElabM (Array (TSyntax ``bracketedBinderF)) :=
   c.groups.mapM fun g => do
@@ -359,12 +630,62 @@ def fBinders (c : CtorInfo) : CommandElabM (Array (TSyntax ``bracketedBinderF)) 
       | .data => pure g.ty
       | .pos idx => appT (← `(X)) idx
       | .fn tele idx => do mkPi tele (← appT (← `(X)) idx)
+      | .nest G _ _ fam idx => do appT G #[← famApp fam (← appT (← `(X)) idx)]
     mkBinder g.implicit g.ids ty
 
-/-- The data binders of a constructor, all implicit (for the constructors of `B`, where the
-data is determined by the shape). -/
-def dataBindersImplicit (c : CtorInfo) : CommandElabM (Array (TSyntax ``bracketedBinderF)) :=
-  (c.groups.filter (·.kind.isData)).mapM fun g => mkBinder true g.ids g.ty
+/-- The shape binder of a nested argument `x`: `x_s`, the shape of the container value. -/
+def nestShapeId (x : Ident) : Ident := mkIdent (x.getId.appendAfter "_s")
+
+/-- A nested argument: its name, its container's shapes and positions, the family variable
+and position index if it nests the family, and its full index (mentioning the family variable).
+-/
+structure NestInfo where
+  x : Ident
+  G : Term
+  Sh : Term
+  Pos : Term
+  fam : Option (Ident × Term)
+  idx : Array Term
+
+/-- The nested arguments of a constructor. -/
+def CtorInfo.nested (c : CtorInfo) : Array NestInfo :=
+  c.groups.foldl (init := #[]) fun acc g => match g.kind with
+    | .nest G Sh Pos fam idx => acc ++ g.ids.map fun x => { x, G, Sh, Pos, fam, idx }
+    | _ => acc
+
+/-- The shape binders `(x_s : Sh)` of the nested arguments. -/
+def nestShapeBinders (c : CtorInfo) (implicit : Bool) :
+    CommandElabM (Array (TSyntax ``bracketedBinderF)) :=
+  c.nested.mapM fun n => mkBinder implicit #[nestShapeId n.x] n.Sh
+
+/-- The index of the recursive position `q` of the nested argument `n` (at the shape `xs`): its
+index, with the family variable replaced by the position's index. -/
+def nestIdxAt (n : NestInfo) (xs : Term) (q : Term) : CommandElabM (Array Term) := do
+  match n.fam with
+  | none => pure n.idx
+  | some (p, pidx) =>
+    let at_ ← `($pidx $xs $q)
+    return n.idx.map fun t => ⟨substTerms t.raw fun m => if m == p.getId then some at_ else none⟩
+
+/-- The arguments through a container in the parameter, with the container's shapes and
+positions. -/
+def CtorInfo.pnested (c : CtorInfo) : Array (Ident × Term × Term) :=
+  c.groups.foldl (init := #[]) fun acc g => match g.pk with
+    | .nest _ Sh Pos _ => acc ++ g.ids.map (·, Sh, Pos)
+    | _ => acc
+
+/-- The shape binders `(x_s : Sh)` of the arguments through a container in the parameter. -/
+def pnestShapeBinders (c : CtorInfo) (implicit : Bool) :
+    CommandElabM (Array (TSyntax ``bracketedBinderF)) :=
+  c.pnested.mapM fun (x, Sh, _) => mkBinder implicit #[nestShapeId x] Sh
+
+/-- The data binders of a constructor without the parameter positions, and the shapes of its
+nested arguments and of its containers in the parameter, all implicit (for the constructors of
+`B` and `P`, where they are determined by the erased shape). -/
+def dataBindersImplicit (c : CtorInfo) : CommandElabM (Array (TSyntax ``bracketedBinderF)) := do
+  return (← (c.groups.filter fun g => g.kind.isData && g.pk.isNone).mapM fun g =>
+      mkBinder true g.ids g.ty) ++
+    (← nestShapeBinders c true) ++ (← pnestShapeBinders c true)
 
 namespace Ctx
 
@@ -373,6 +694,11 @@ variable (ctx : Ctx)
 def fCtor (c : CtorInfo) : Ident := mkIdent (ctx.F.getId ++ c.fname.getId)
 def shapeCtor (c : CtorInfo) : Ident := mkIdent (ctx.Shape.getId ++ c.fname.getId)
 def bCtor (c : CtorInfo) (x : Ident) : Ident := mkIdent (ctx.B.getId ++ (posCtorName c x).getId)
+def shape₀Ctor (c : CtorInfo) : Ident := mkIdent (ctx.Shape₀.getId ++ c.fname.getId)
+def pCtor (c : CtorInfo) (x : Ident) : Ident := mkIdent (ctx.P.getId ++ (posCtorName c x).getId)
+
+/-- Does the declaration have a container parameter? -/
+def hasParam : Bool := ctx.param.isSome
 
 /-! In a mutual block, the user-facing declarations of a constructor live under its own type. -/
 
@@ -519,6 +845,9 @@ argument cannot be inferred by unification, since any two proofs are definitiona
 /-- `_` for every parameter. -/
 def pHoles : CommandElabM (Array Term) := ctx.pids.mapM fun _ => `(_)
 
+/-- `_` for every parameter but the container parameter. -/
+def pHoles₀ : CommandElabM (Array Term) := ctx.pids₀.mapM fun _ => `(_)
+
 /-- If the constructor's binder `x` is one of the indices of its result type, that index
 binder. In a `match` whose discriminant has the index binders as indices, the pattern variable
 `x` is eliminated in favour of the index binder, so right-hand sides refer to the latter. -/
@@ -535,6 +864,9 @@ def valIds (c : CtorInfo) : Array Ident :=
 
 def valDataIds (c : CtorInfo) : Array Ident :=
   c.allDataIds.map fun x => (ctx.bareIdx c x.getId).getD x
+
+def valDataIds₀ (c : CtorInfo) : Array Ident :=
+  c.allDataIds₀.map fun x => (ctx.bareIdx c x.getId).getD x
 
 def valArgs (c : CtorInfo) : Array Ident :=
   c.args.map fun x => (ctx.bareIdx c x.getId).getD x
@@ -633,31 +965,128 @@ def tApp (c : CtorInfo) : CommandElabM Term := do
   let ids := c.allIds.map idT
   `(@$(ctx.tCtor c):ident $pTerms* $ids*)
 
-/-- `@Shape.c params data…`, as a term, with the constructor's binders in scope. -/
+/-- The container `G` of a nested argument, after a `match` (index binders for the binders
+that are indices) or with the constructor's binders in scope. The container is passed
+explicitly to `toC`, `ofC`, `map`, `Rel`: it is a lambda when the nested occurrence is not the
+last argument, which unification would not find. -/
+def nestG (c : CtorInfo) (G : Term) (afterMatch : Bool) : Term :=
+  if afterMatch then ctx.substBare c G else G
+
+/-- The shapes of the nested arguments, as values: `(Container.toC x).1` (after a `match`). -/
+def nestShapeVals (c : CtorInfo) : CommandElabM (Array Term) :=
+  c.nested.mapM fun n => `(($(contId n.fam.isSome `toC) (G := $(ctx.nestG c n.G true)) $(n.x)).1)
+
+/-- The shapes of the nested arguments as their binders `x_s`. -/
+def nestShapeIds (c : CtorInfo) : Array Term := c.nested.map fun n => idT (nestShapeId n.x)
+
+/-- `@Shape.c params data… x_s…`, as a term, with the constructor's binders in scope. -/
 def shapeApp (c : CtorInfo) : CommandElabM Term := do
   let pTerms := ctx.pTerms
-  let ids := c.allDataIds.map idT
+  let ids := c.allDataIds.map idT ++ nestShapeIds c
   `(@$(ctx.shapeCtor c):ident $pTerms* $ids*)
 
-/-- `@Shape.c params data…`, as a term on the right-hand side of a `match`. -/
-def shapeVal (c : CtorInfo) : CommandElabM Term := do
+/-- `@Shape.c params data… sh…`, as a term on the right-hand side of a `match` on `F`, with the
+given shapes of the nested arguments. -/
+def shapeValWith (c : CtorInfo) (nestVals : Array Term) : CommandElabM Term := do
   let pTerms := ctx.pTerms
-  let ids := (ctx.valDataIds c).map idT
+  let ids := (ctx.valDataIds c).map idT ++ nestVals
   `(@$(ctx.shapeCtor c):ident $pTerms* $ids*)
 
-/-- `@Shape.c _ data…`, as a pattern. -/
+/-- `@Shape.c params data… (toC x).1…`, as a term on the right-hand side of a `match` on `F`. -/
+def shapeVal (c : CtorInfo) : CommandElabM Term := do
+  ctx.shapeValWith c (← ctx.nestShapeVals c)
+
+/-- `@Shape.c _ data… x_s…`, as a pattern. -/
 def shapePat (c : CtorInfo) : CommandElabM Term := do
   let hs ← ctx.pHoles
-  let ids ← ctx.patIds c c.allDataIds
+  let ids := (← ctx.patIds c c.allDataIds) ++ nestShapeIds c
   `(@$(ctx.shapeCtor c):ident $hs* $ids*)
 
+/-- The shapes of the containers in the parameter, as values: `(Container.toC x).1`. -/
+def pnestShapeVals (c : CtorInfo) : CommandElabM (Array Term) :=
+  c.pnested.mapM fun (x, _, _) => `((Codata.Container.toC $x).1)
+
+/-- The shapes of the containers in the parameter as their binders `x_s`. -/
+def pnestShapeIds (c : CtorInfo) : Array Term := c.pnested.map fun (x, _, _) => idT (nestShapeId x)
+
+/-- `@Shape₀.c params₀ data₀… x_s…`, as a term, with the constructor's binders in scope. -/
+def shape₀App (c : CtorInfo) : CommandElabM Term := do
+  let pTerms₀ := ctx.pTerms₀
+  let ids := c.allDataIds₀.map idT ++ nestShapeIds c ++ pnestShapeIds c
+  `(@$(ctx.shape₀Ctor c):ident $pTerms₀* $ids*)
+
+/-- `@Shape₀.c params₀ data₀… x_s… sh…`, as a term on the right-hand side of a `match` on
+`Shape`, with the given shapes of the containers in the parameter. -/
+def shape₀ValWith (c : CtorInfo) (pnestVals : Array Term) : CommandElabM Term := do
+  let pTerms₀ := ctx.pTerms₀
+  let ids := (ctx.valDataIds₀ c).map idT ++ nestShapeIds c ++ pnestVals
+  `(@$(ctx.shape₀Ctor c):ident $pTerms₀* $ids*)
+
+/-- `@Shape₀.c _ data₀… x_s…`, as a pattern. -/
+def shape₀Pat (c : CtorInfo) : CommandElabM Term := do
+  let hs ← ctx.pHoles₀
+  let ids := (← ctx.patIds c c.allDataIds₀) ++ nestShapeIds c ++ pnestShapeIds c
+  `(@$(ctx.shape₀Ctor c):ident $hs* $ids*)
+
+/-- `@B.c_x params₀ data₀… (toC x).1… extra…`, as a term after a `match` on `F` (the shapes of
+the nested arguments and of the containers in the parameter are computed from the arguments).
+-/
+def bApp (c : CtorInfo) (x : Ident) (extra : Array Term) : CommandElabM Term := do
+  let pTerms₀ := ctx.pTerms₀
+  let ids := (ctx.valDataIds₀ c).map idT ++ (← ctx.nestShapeVals c) ++ (← pnestShapeVals c)
+  `(@$(ctx.bCtor c x):ident $pTerms₀* $ids* $extra*)
+
+/-- `@B.c_x _ data₀… x_s… extra…`, as a pattern. -/
+def bPat (c : CtorInfo) (x : Ident) (extra : Array Term) : CommandElabM Term := do
+  let hs ← ctx.pHoles₀
+  let ids := (← ctx.patIds c c.allDataIds₀) ++ nestShapeIds c ++ pnestShapeIds c
+  `(@$(ctx.bCtor c x):ident $hs* $ids* $extra*)
+
+/-- `@P.c_x _ data₀… x_s… extra…`, as a pattern. -/
+def pPat (c : CtorInfo) (x : Ident) (extra : Array Term) : CommandElabM Term := do
+  let hs ← ctx.pHoles₀
+  let ids := (← ctx.patIds c c.allDataIds₀) ++ nestShapeIds c ++ pnestShapeIds c
+  `(@$(ctx.pCtor c x):ident $hs* $ids* $extra*)
+
+/-- The shapes `S` and the equivalence `e` of the parameterised signature, `sig = psig.sig S e`
+(with the container parameter free): the shapes (on the packed index) and `shapeEquiv` at
+every index. -/
+def sigSE : CommandElabM (Term × Term) := do
+  if !ctx.idxed then return (← `(fun _ => $(ctx.Shapep)), ← `(fun {_} => $(ctx.shapeEquivp)))
+  if ctx.packed then
+    let iPat ← ctx.pack ctx.iArgs
+    let iArgs := ctx.iArgs
+    return (ctx.ShapePp,
+      ← `(fun {p} => match p with | $iPat:term => $(ctx.shapeEquivp) $iArgs*))
+  let i := ctx.iIds[0]!
+  return (ctx.Shapep, ← `(fun {$i:ident} => $(ctx.shapeEquivp) $i:ident))
+
+/-- The index type `J` and the position index of the parameterised signature (`Unit` and
+`fun _ => ()` for a type parameter; the plain and single-index forms). -/
+def psigJ : CommandElabM (Term × Term) := do
+  match ctx.param with
+  | some { J := some J, .. } => return (J, ← `(fun p => $(ctx.pidxId) p))
+  | _ => return (← `(Unit), ← `(fun _ => ()))
+
+/-- The parameter as a family: itself, or `fun _ => α` for a type parameter. -/
+def famX (pinfo : ParamInfo) : CommandElabM Term :=
+  if pinfo.J.isSome then pure (idT pinfo.a) else `(fun _ => $(pinfo.a))
+
+/-- Does the declaration have nested arguments? Then the proofs of the `F`-lemmas go through
+the container laws. -/
+def hasNest : Bool := ctx.ctors.any fun c => c.groups.any (·.kind.isNest)
+
 /-- The arguments of a constructor of `F` after `map f`, implicit ones included; with
-`afterMatch`, in the value form. `app` applies the function to a recursive argument (by default
-`f _ _ x`, for `f : ∀ j₁ j₂, X j₁ j₂ → Y j₁ j₂`). -/
-def mappedArgs (c : CtorInfo) (afterMatch : Bool) (app : Option (Term → CommandElabM Term) := none) :
-    CommandElabM (Array Term) := do
+`afterMatch`, in the value form. `app` applies the function to a recursive argument and `fn` is
+the function itself, for nested arguments (by default `f _ _ x` and `f _ _`, for
+`f : ∀ j₁ j₂, X j₁ j₂ → Y j₁ j₂`). -/
+def mappedArgs (c : CtorInfo) (afterMatch : Bool) (app : Option (Term → CommandElabM Term) := none)
+    (fn : Option Term := none) : CommandElabM (Array Term) := do
   let holes ← ctx.holes
   let app := app.getD fun x => `(f $holes* $x)
+  let fn ← match fn with
+    | some fn => pure fn
+    | none => `(f $holes*)
   let args ← c.groups.mapM fun g => do
     g.ids.mapM fun (x : Ident) => match g.kind with
       | .data => pure (idT (if afterMatch then (ctx.bareIdx c x.getId).getD x else x))
@@ -666,6 +1095,12 @@ def mappedArgs (c : CtorInfo) (afterMatch : Bool) (app : Option (Term → Comman
         let ys := teleIds tele
         let body ← app (← `($x:ident $ys*))
         `(fun $[$ys:ident]* => $body)
+      | .nest G _ _ none _ =>
+        let G := ctx.nestG c G afterMatch
+        `(Codata.Container.map (G := $G) (G' := $G) $fn $x:ident)
+      | .nest G _ _ (some _) _ =>
+        let G := ctx.nestG c G afterMatch
+        `(Codata.IContainer.map (G := $G) (G' := $G) (fun _ => $fn) $x:ident)
   return args.foldl (· ++ ·) #[]
 
 end Ctx
@@ -721,6 +1156,18 @@ def genRel (ctx : Ctx) : CommandElabM Unit := do
             (← `(bracketedBinderF| (_ : ∀ $[$ps:ident]*, R $holes* ($t $ps*) ($t' $ps*))))
           xs := xs.push (idT t)
           ys := ys.push (idT t')
+      | .nest G _ _ fam idx =>
+        let Xi ← appT G #[← famApp fam (← appT X idx)]
+        let Yi ← appT G #[← famApp fam (← appT Y idx)]
+        for t in g.ids do
+          let t' := prime t
+          bs := bs.push (← `(bracketedBinderF| ($t : $Xi)))
+          bs := bs.push (← `(bracketedBinderF| ($t' : $Yi)))
+          hyps := hyps.push (← if fam.isSome then
+              `(bracketedBinderF| (_ : Codata.IContainer.Rel (G := $G) (G' := $G) (fun _ => R $holes*) $t $t'))
+            else `(bracketedBinderF| (_ : Codata.Container.Rel (G := $G) (G' := $G) (R $holes*) $t $t')))
+          xs := xs.push (idT t)
+          ys := ys.push (idT t')
     let lhs ← ctx.fApp c X xs
     let rhs ← ctx.fApp c Y ys
     `(Parser.Command.ctor| | $(c.fname):ident $[$bs]* $[$hyps]* : $(ctx.Rel) R $lhs $rhs)
@@ -744,7 +1191,7 @@ def genRel (ctx : Ctx) : CommandElabM Unit := do
     all_goals simp only [$(ctx.Fmap):ident]
     all_goals constructor
     all_goals intros
-    all_goals apply h))
+    all_goals first | apply h | (apply Codata.Container.rel_map; intro; apply h) | (apply Codata.IContainer.rel_map; intro; intro; apply h)))
 
 def genFunctor (ctx : Ctx) : CommandElabM Unit := do
   let pExp := ctx.pExp
@@ -790,23 +1237,189 @@ def genFunctor (ctx : Ctx) : CommandElabM Unit := do
   elabCommand (← `(theorem $(ctx.Fmap_id):ident $[$pImp]* {X : $xTy} $[$ib]* (a : $FX) :
       $(ctx.Fmap) $idFn a = a := by
     cases a
-    all_goals rfl))
+    all_goals first | rfl | simp only [$(ctx.Fmap):ident, id_eq, Codata.Container.map_id, Codata.Container.map_id', Codata.IContainer.map_id, Codata.IContainer.map_id']))
   let gTy ← ctx.famFn Y (← `(Z))
   let jIds := ctx.jIds
   let gf ← if ctx.idxed then `(fun $[$jIds:ident]* x => g $jArgs* (f $jArgs* x)) else `(g ∘ f)
   elabCommand (← `(theorem $(ctx.Fmap_comp):ident $[$pImp]* {X Y Z : $xTy} (g : $gTy)
       (f : $fTy) $[$ib]* (a : $FX) : $(ctx.Fmap) $gf a = $(ctx.Fmap) g ($(ctx.Fmap) f a) := by
     cases a
-    all_goals rfl))
+    all_goals first | rfl | simp only [$(ctx.Fmap):ident, Codata.Container.map_map, Codata.IContainer.map_map, Function.comp_def]))
   if ctx.co then genRel ctx
 
-/-! ### The signature: shapes, positions and their indices -/
+/-! ### The signature: shapes, positions and their indices
+
+With a container parameter `α`, the signature is a parameterised one, `PSignature`: the erased
+shapes `Shape₀` (the data without the parameter positions), the parameter positions `P`, the
+recursive positions `B` and their indices over the erased shapes, and `sig = psig.sig Shape e`
+with the equivalence `e : Shape ≃ Σ s₀, P s₀ → α` (by `shapeTo`/`shapeOf`); the type is then
+a container in `α` by the generic `PSignature.container`. -/
+
+/-- The erased shapes `Shape₀`, the parameter positions `P`, and the equivalence
+`Shape ≃ Σ s₀, P s₀ → α` by `shapeTo`, `shapeOf` and their two laws (proved as `ofC_toC` and
+`toC_ofC` are). -/
+def genParamShapes (ctx : Ctx) : CommandElabM Unit := do
+  let some pinfo := ctx.param | return
+  let a := pinfo.a
+  let pExp := ctx.pExp
+  let pExp₀ := ctx.pExp₀
+  let pImp := ctx.pImp
+  let pImp₀ := ctx.pImp₀
+  let ib ← ctx.ixB
+  let ixBExp ← ctx.ixBExp
+  let shape₀Ctors ← ctx.ctors.mapM fun c => do
+    let bs := (← (c.groups.filter fun g => g.kind.isData && g.pk.isNone).mapM fun g =>
+        mkBinder g.implicit g.ids g.ty)
+      ++ (← nestShapeBinders c false) ++ (← pnestShapeBinders c false)
+    if ctx.idxed then
+      let res ← appT ctx.Shape₀p c.idx
+      `(Parser.Command.ctor| | $(c.fname):ident $[$bs]* : $res)
+    else
+      `(Parser.Command.ctor| | $(c.fname):ident $[$bs]*)
+  if ctx.idxed then
+    elabCommand (← `(inductive $(ctx.Shape₀):ident $[$pExp₀]* : ∀ $[$ixBExp]*, Type _ where
+      $[$shape₀Ctors:ctor]*))
+  else
+    elabCommand (← `(inductive $(ctx.Shape₀):ident $[$pExp₀]* where $[$shape₀Ctors:ctor]*))
+  -- The parameter positions, one constructor per argument at one.
+  let mut pCtors : Array (TSyntax ``Parser.Command.ctor) := #[]
+  for c in ctx.ctors do
+    let dbs ← dataBindersImplicit c
+    let res ← appT ctx.Pp (c.idx ++ #[← ctx.shape₀App c])
+    for (x, pk) in c.ppos do
+      match pk with
+      | .none => pure ()
+      | .val _ =>
+        pCtors := pCtors.push (← `(Parser.Command.ctor| | $(posCtorName c x):ident $[$dbs]* : $res))
+      | .fn tele _ =>
+        let tbs ← teleBinders tele
+        pCtors := pCtors.push (← `(Parser.Command.ctor|
+          | $(posCtorName c x):ident $[$dbs]* $[$tbs]* : $res))
+      | .nest _ _ Pos _ =>
+        let xs := nestShapeId x
+        pCtors := pCtors.push (← `(Parser.Command.ctor|
+          | $(posCtorName c x):ident $[$dbs]* (q : $Pos $xs) : $res))
+  let Shape₀I ← ctx.atI ctx.Shape₀p
+  if ctx.idxed then
+    elabCommand (← `(inductive $(ctx.P):ident $[$pExp₀]* : ∀ $[$ixBExp]*, $Shape₀I → Type _ where
+      $[$pCtors:ctor]*))
+  else
+    elabCommand (← `(inductive $(ctx.P):ident $[$pExp₀]* : $Shape₀I → Type _ where
+      $[$pCtors:ctor]*))
+  let ShapeI ← ctx.atI ctx.Shapep
+  let PI ← ctx.atI ctx.Pp
+  -- For a family: the index of every parameter position.
+  if let some J := pinfo.J then
+    let mut pAlts : Array (TSyntax ``matchAlt) := #[]
+    for c in ctx.ctors do
+      for (x, pk) in c.ppos do
+        match pk with
+        | .none => pure ()
+        | .val j =>
+          pAlts := pAlts.push (← ctx.alt c #[← `(_), ← ctx.pPat c x #[]] (ctx.substBare c j))
+        | .fn tele j =>
+          let ys := (teleIds tele).map idT
+          pAlts := pAlts.push (← ctx.alt c #[← `(_), ← ctx.pPat c x ys] (ctx.substBare c j))
+        | .nest _ _ _ j =>
+          pAlts := pAlts.push
+            (← ctx.alt c #[← `(_), ← ctx.pPat c x #[← `(q)]] (ctx.substBare c j))
+    let discrsP := ctx.discrs (← `(s₀)) |>.push (← `(p))
+    let body ← if pAlts.isEmpty then `(nomatch p)
+      else `(match $[$discrsP:term],* with $pAlts:matchAlt*)
+    elabCommand (← `(def $(ctx.pidxId):ident $[$pImp₀]* $[$ib]* {s₀ : $Shape₀I} (p : $PI s₀) :
+        $J := $body))
+  -- The equivalence: a shape is its erased shape with the values at the parameter positions.
+  let sigmaTy ← if pinfo.J.isSome then `(Σ s₀ : $Shape₀I, (p : $PI s₀) → $a ($(ctx.pidxId) p))
+    else `(Σ s₀ : $Shape₀I, $PI s₀ → $a)
+  let pId ← freshId "p"
+  let vId ← freshId "v"
+  let toAlts : Array (TSyntax ``matchAlt) ← ctx.ctors.mapM fun c => do
+    let lhs ← ctx.shapePat c
+    -- The layers of the containers in the parameter are bound by a lambda, as in `toC`.
+    let zs : Array Ident ← c.pnested.mapM fun (x, _, _) => freshId s!"z_{x.getId.toString}"
+    let shape₀ ← ctx.shape₀ValWith c (← zs.mapM fun z => `($z:ident.1))
+    let mut alts : Array (TSyntax ``matchAlt) := #[]
+    let mut k := 0
+    for (x, pk) in c.ppos do
+      match pk with
+      | .none => pure ()
+      | .val _ => alts := alts.push (← `(matchAltExpr| | $(ctx.pCtor c x):ident => $x:ident))
+      | .fn tele _ =>
+        let ys := teleIds tele
+        alts := alts.push (← `(matchAltExpr| | $(ctx.pCtor c x):ident $ys* => $x:ident $ys*))
+      | .nest .. =>
+        let z := zs[k]!
+        k := k + 1
+        alts := alts.push (← `(matchAltExpr| | $(ctx.pCtor c x):ident q => $z:ident.2 q))
+    let vals ← if alts.isEmpty then `(fun $pId:ident => nomatch $pId:ident)
+      else `(fun $pId:ident => match $pId:ident with $alts:matchAlt*)
+    let layer ← `(⟨$shape₀, $vals⟩)
+    let rhs ← if zs.isEmpty then pure layer else do
+      let toCs ← c.pnested.mapM fun (x, _, _) => `(Codata.Container.toC $x:ident)
+      `((fun $[$zs:ident]* => $layer) $toCs*)
+    ctx.alt c #[lhs] rhs
+  let discrsS := ctx.discrs (← `(s))
+  elabCommand (← `(def $(ctx.shapeTo):ident $[$pImp]* $[$ib]* (s : $ShapeI) : $sigmaTy :=
+    match $[$discrsS:term],* with $toAlts:matchAlt*))
+  let ofAlts : Array (TSyntax ``matchAlt) ← ctx.ctors.mapM fun c => do
+    let shape₀ ← ctx.shape₀Pat c
+    let mut args : Array Term := #[]
+    for g in c.groups do
+      if g.kind.isData then
+        for x in g.ids do
+          match g.pk with
+          | .none => args := args.push (idT ((ctx.bareIdx c x.getId).getD x))
+          | .val _ => args := args.push (← `($vId $(ctx.pCtor c x)))
+          | .fn tele _ =>
+            let ys := teleIds tele
+            args := args.push (← `(fun $[$ys:ident]* => $vId ($(ctx.pCtor c x) $ys*)))
+          | .nest .. =>
+            let xs := nestShapeId x
+            args := args.push
+              (← `(Codata.Container.ofC ⟨$xs, fun q => $vId ($(ctx.pCtor c x) q)⟩))
+    let pTerms := ctx.pTerms
+    let ns := nestShapeIds c
+    let rhs ← `(@$(ctx.shapeCtor c):ident $pTerms* $args* $ns*)
+    let pat ← if c.ppos.isEmpty then `(⟨$shape₀, _⟩) else `(⟨$shape₀, $vId⟩)
+    ctx.alt c #[pat] rhs
+  let discrsZ := ctx.discrs (← `(z))
+  elabCommand (← `(def $(ctx.shapeOf):ident $[$pImp]* $[$ib]* (z : $sigmaTy) : $ShapeI :=
+    match $[$discrsZ:term],* with $ofAlts:matchAlt*))
+  let pnest := ctx.ctors.any fun c => !c.pnested.isEmpty
+  let seq (tacs : Array (TSyntax `tactic)) : CommandElabM (TSyntax ``Parser.Tactic.tacticSeq) :=
+    `(tacticSeq| $[$tacs:tactic]*)
+  let pf₁ ← seq (#[← `(tactic| cases s)] ++ (← if pnest then
+      return #[← `(tactic| all_goals first | rfl | simp only [$(ctx.shapeTo):ident, $(ctx.shapeOf):ident, Codata.Container.ofC_toC'])]
+    else return #[← `(tactic| all_goals rfl)]))
+  elabCommand (← `(theorem $(ctx.shapeOf_shapeTo):ident $[$pImp]* $[$ib]* (s : $ShapeI) :
+      $(ctx.shapeOf) ($(ctx.shapeTo) s) = s := by $pf₁))
+  let pf₂ ← seq (#[← `(tactic| obtain ⟨s, v⟩ := z), ← `(tactic| cases s)] ++
+    (← if pnest then
+      return #[← `(tactic| all_goals try simp only [$(ctx.shapeTo):ident, $(ctx.shapeOf):ident]),
+        ← `(tactic| all_goals repeat rw [Codata.Container.toC_ofC])]
+    else return #[]) ++
+    #[← `(tactic| all_goals refine congrArg (Sigma.mk _) (funext fun p => ?_)),
+      ← `(tactic| all_goals cases p), ← `(tactic| all_goals rfl)])
+  elabCommand (← `(theorem $(ctx.shapeTo_shapeOf):ident $[$pImp]* $[$ib]* (z : $sigmaTy) :
+      $(ctx.shapeTo) ($(ctx.shapeOf) z) = z := by $pf₂))
+  elabCommand (← `(def $(ctx.shapeEquiv):ident $[$pExp]* $[$ixBExp]* : $ShapeI ≃ $sigmaTy :=
+    ⟨$(ctx.shapeTo), $(ctx.shapeOf), $(ctx.shapeOf_shapeTo), $(ctx.shapeTo_shapeOf)⟩))
+
+/-- The packed index type `(i₁ : I₁) ×' (i₂ : I₂) ×' …` of an index telescope. -/
+def mkIxTerm (idx : Array (Ident × Term)) : CommandElabM Term := do
+  let mut Ix := idx.back!.2
+  for m in [0:idx.size - 1] do
+    let (x, ty) := idx[idx.size - 2 - m]!
+    Ix ← `(PSigma fun ($x:ident : $ty) => $Ix)
+  return Ix
 
 def genSignature (ctx : Ctx) : CommandElabM Unit := do
   let pExp := ctx.pExp
-  let pImp := ctx.pImp
+  let pExp₀ := ctx.pExp₀
+  let pImp₀ := ctx.pImp₀
   let shapeCtors ← ctx.ctors.mapM fun c => do
-    let bs ← (c.groups.filter (·.kind.isData)).mapM fun g => mkBinder g.implicit g.ids g.ty
+    let bs := (← (c.groups.filter (·.kind.isData)).mapM fun g => mkBinder g.implicit g.ids g.ty)
+      ++ (← nestShapeBinders c false)
     if ctx.idxed then
       let res ← appT ctx.Shapep c.idx
       `(Parser.Command.ctor| | $(c.fname):ident $[$bs]* : $res)
@@ -819,28 +1432,28 @@ def genSignature (ctx : Ctx) : CommandElabM Unit := do
       $[$shapeCtors:ctor]*))
   else
     elabCommand (← `(inductive $(ctx.Shape):ident $[$pExp]* where $[$shapeCtors:ctor]*))
+  genParamShapes ctx
+  -- The positions are over the erased shapes when there is a container parameter.
+  let Shape₀p := if ctx.hasParam then ctx.Shape₀p else ctx.Shapep
+  let Shape₀Pp := if ctx.hasParam then ctx.Shape₀Pp else ctx.ShapePp
   -- The positions, one constructor per recursive argument; and (indexed) their indices.
   let mut bCtors : Array (TSyntax ``Parser.Command.ctor) := #[]
   let mut idxAlts : Array (TSyntax ``matchAlt) := #[]
-  let pHoles ← ctx.pHoles
   for c in ctx.ctors do
     let dbs ← dataBindersImplicit c
-    let shape ← ctx.shapeApp c
+    let shape ← if ctx.hasParam then ctx.shape₀App c else ctx.shapeApp c
+    let res ← appT ctx.Bp (c.idx ++ #[shape])
     for g in c.groups do
       match g.kind with
       | .data => pure ()
       | .pos idx =>
-        let res ← appT ctx.Bp (c.idx ++ #[shape])
         for x in g.ids do
           bCtors := bCtors.push
             (← `(Parser.Command.ctor| | $(posCtorName c x):ident $[$dbs]* : $res))
           if ctx.idxed then
             let packed ← ctx.pack (idx.map (ctx.substBare c))
-            let dataPats ← ctx.patIds c c.allDataIds
-            idxAlts := idxAlts.push
-              (← ctx.alt c #[← `(_), ← `(@$(ctx.bCtor c x):ident $pHoles* $dataPats*)] packed)
+            idxAlts := idxAlts.push (← ctx.alt c #[← `(_), ← ctx.bPat c x #[]] packed)
       | .fn tele idx =>
-        let res ← appT ctx.Bp (c.idx ++ #[shape])
         let tbs ← teleBinders tele
         let ys := (teleIds tele).map idT
         for x in g.ids do
@@ -848,48 +1461,150 @@ def genSignature (ctx : Ctx) : CommandElabM Unit := do
             | $(posCtorName c x):ident $[$dbs]* $[$tbs]* : $res))
           if ctx.idxed then
             let packed ← ctx.pack (idx.map (ctx.substBare c))
-            let dataPats ← ctx.patIds c c.allDataIds
-            idxAlts := idxAlts.push
-              (← ctx.alt c #[← `(_), ← `(@$(ctx.bCtor c x):ident $pHoles* $dataPats* $ys*)] packed)
+            idxAlts := idxAlts.push (← ctx.alt c #[← `(_), ← ctx.bPat c x ys] packed)
+      | .nest G Sh Pos fam idx =>
+        for x in g.ids do
+          let xs := nestShapeId x
+          bCtors := bCtors.push (← `(Parser.Command.ctor|
+            | $(posCtorName c x):ident $[$dbs]* (q : $Pos $xs) : $res))
+          if ctx.idxed then
+            let idx ← nestIdxAt { x, G, Sh, Pos, fam, idx } (idT xs) (← `(q))
+            let packed ← ctx.pack (idx.map (ctx.substBare c))
+            idxAlts := idxAlts.push (← ctx.alt c #[← `(_), ← ctx.bPat c x #[← `(q)]] packed)
   if !ctx.idxed then
     -- A plain type is a family over `Unit`.
-    elabCommand (← `(inductive $(ctx.B):ident $[$pExp]* : $(ctx.Shapep) → Type _ where
+    elabCommand (← `(inductive $(ctx.B):ident $[$pExp₀]* : $Shape₀p → Type _ where
       $[$bCtors:ctor]*))
-    elabCommand (← `(abbrev $(ctx.sig):ident $[$pExp]* : Codata.Signature where
-      I := Unit
-      Shape := fun _ => $(ctx.Shapep)
-      B := fun _ s => $(ctx.Bp) s
-      idx := fun _ => ()))
+    if let some pinfo := ctx.param then
+      let (J, pidx) ← ctx.psigJ
+      elabCommand (← `(abbrev $(ctx.psig):ident $[$pExp₀]* : Codata.PSignature where
+        I := Unit
+        J := $J
+        Shape₀ := fun _ => $Shape₀p
+        P := fun s => $(ctx.Pp) s
+        pidx := $pidx
+        B := fun _ s => $(ctx.Bp) s
+        idx := fun _ => ()))
+      let (S, e) ← ctx.sigSE
+      elabCommand (← `(abbrev $(ctx.sig):ident $[$pExp]* : Codata.Signature :=
+        Codata.PSignature.sig $(ctx.psigp) (X := $(← famX pinfo)) $S $e))
+    else
+      elabCommand (← `(abbrev $(ctx.sig):ident $[$pExp]* : Codata.Signature where
+        I := Unit
+        Shape := fun _ => $(ctx.Shapep)
+        Shape₀ := fun _ => $(ctx.Shapep)
+        sh₀ := fun s => s
+        B := fun _ s => $(ctx.Bp) s
+        idx := fun _ => ()))
     return
   let ShapeI ← ctx.atI ctx.Shapep
-  elabCommand (← `(inductive $(ctx.B):ident $[$pExp]* : ∀ $[$ixBExp]*, $ShapeI → Type _ where
+  let Shape₀I ← ctx.atI Shape₀p
+  elabCommand (← `(inductive $(ctx.B):ident $[$pExp₀]* : ∀ $[$ixBExp]*, $Shape₀I → Type _ where
     $[$bCtors:ctor]*))
   if ctx.packed then
-    let mut Ix := ctx.idx.back!.2
-    for m in [0:ctx.k - 1] do
-      let (x, ty) := ctx.idx[ctx.k - 2 - m]!
-      Ix ← `(PSigma fun ($x:ident : $ty) => $Ix)
-    elabCommand (← `(abbrev $(ctx.Ix):ident $[$pExp]* : Type _ := $Ix))
+    elabCommand (← `(abbrev $(ctx.Ix):ident $[$pExp₀]* : Type _ := $(← mkIxTerm ctx.idx)))
   let BIs ← appT ctx.Bp (ctx.iArgs ++ #[← `(s)])
   -- The shape is a discriminant too (with the pattern `_`), so that it is refined.
   let discrsB := ctx.discrs (← `(s)) |>.push (← `(b))
   let idxBody ← if idxAlts.isEmpty then `(nomatch b)
     else `(match $[$discrsB:term],* with $idxAlts:matchAlt*)
-  elabCommand (← `(def $(ctx.idxId):ident $[$pImp]* $[$ib]* {s : $ShapeI} (b : $BIs) :
+  elabCommand (← `(def $(ctx.idxId):ident $[$pImp₀]* $[$ib]* {s : $Shape₀I} (b : $BIs) :
       $(ctx.Ixp) := $idxBody))
   if ctx.packed then
     let iPat ← ctx.pack ctx.iArgs
-    elabCommand (← `(abbrev $(ctx.sig):ident $[$pExp]* : Codata.Signature where
+    -- The shapes on the packed index, named once so that `Shape` and `Shape₀` coincide.
+    elabCommand (← `(def $(ctx.ShapeP):ident $[$pExp]* (p : $(ctx.Ixp)) : Type _ :=
+      match p with | $iPat:term => $ShapeI))
+    if let some pinfo := ctx.param then
+      elabCommand (← `(def $(ctx.Shape₀P):ident $[$pExp₀]* (p : $(ctx.Ixp)) : Type _ :=
+        match p with | $iPat:term => $Shape₀I))
+      let PIs ← appT ctx.Pp (ctx.iArgs ++ #[← `(s)])
+      let (J, _) ← ctx.psigJ
+      let pidx ← if pinfo.J.isSome then
+          `(fun {p} {s} q => match p, s, q with | $iPat:term, s, q => $(ctx.pidxId) q)
+        else `(fun _ => ())
+      elabCommand (← `(abbrev $(ctx.psig):ident $[$pExp₀]* : Codata.PSignature where
+        I := $(ctx.Ixp)
+        J := $J
+        Shape₀ := $Shape₀Pp
+        P := fun {p} s => match p, s with | $iPat:term, s => $PIs
+        pidx := $pidx
+        B := fun p s => match p, s with | $iPat:term, s => $BIs
+        idx := fun {p} {s} b => match p, s, b with | $iPat:term, s, b => $(ctx.idxId) b))
+      let (S, e) ← ctx.sigSE
+      elabCommand (← `(abbrev $(ctx.sig):ident $[$pExp]* : Codata.Signature :=
+        Codata.PSignature.sig $(ctx.psigp) (X := $(← famX pinfo)) $S $e))
+    else
+      elabCommand (← `(abbrev $(ctx.sig):ident $[$pExp]* : Codata.Signature where
+        I := $(ctx.Ixp)
+        Shape := $(ctx.ShapePp)
+        Shape₀ := $(ctx.ShapePp)
+        sh₀ := fun s => s
+        B := fun p s => match p, s with | $iPat:term, s => $BIs
+        idx := fun {p} {s} b => match p, s, b with | $iPat:term, s, b => $(ctx.idxId) b))
+  else if let some pinfo := ctx.param then
+    let (J, pidx) ← ctx.psigJ
+    elabCommand (← `(abbrev $(ctx.psig):ident $[$pExp₀]* : Codata.PSignature where
       I := $(ctx.Ixp)
-      Shape := fun p => match p with | $iPat:term => $ShapeI
-      B := fun p s => match p, s with | $iPat:term, s => $BIs
-      idx := fun {p} {s} b => match p, s, b with | $iPat:term, s, b => $(ctx.idxId) b))
+      J := $J
+      Shape₀ := $Shape₀p
+      P := fun s => $(ctx.Pp) _ s
+      pidx := $pidx
+      B := $(ctx.Bp)
+      idx := fun b => $(ctx.idxId) b))
+    let (S, e) ← ctx.sigSE
+    elabCommand (← `(abbrev $(ctx.sig):ident $[$pExp]* : Codata.Signature :=
+      Codata.PSignature.sig $(ctx.psigp) (X := $(← famX pinfo)) $S $e))
   else
     elabCommand (← `(abbrev $(ctx.sig):ident $[$pExp]* : Codata.Signature where
       I := $(ctx.Ixp)
       Shape := $(ctx.Shapep)
+      Shape₀ := $(ctx.Shapep)
+      sh₀ := fun s => s
       B := $(ctx.Bp)
       idx := fun b => $(ctx.idxId) b))
+
+/-! ### The container instance, with a container parameter -/
+
+/-- For every type of the declaration, its shapes `T.Sh` (the erased trees), its positions
+`T.Pos` (a path to a node and a parameter position of its erased shape) and the instance
+`Container (fun α => T params α idx) T.Sh T.Pos`, from the generic `PSignature.container`
+(`cocontainer` for `codata`). -/
+def genContainer (ctx : Ctx) : CommandElabM Unit := do
+  let some pinfo := ctx.param | return
+  let a := pinfo.a
+  let aTy := pinfo.aTy
+  let pExp₀ := ctx.pExp₀
+  let pTerms₀ := ctx.pTerms₀
+  let ixBExp ← ctx.uIxBExp
+  let uIArgs := ctx.uIArgs
+  let (S, e) ← ctx.sigSE
+  let fam := ctx.sigId (if ctx.co then `Cotype else `Intype)
+  for m in [0:ctx.types.size] do
+    let pI ← ctx.pack (ctx.fullArgs m)
+    let Sh := ctx.tyId m "Sh"
+    let Pos := ctx.tyId m "Pos"
+    elabCommand (← `(abbrev $Sh:ident $[$pExp₀]* $[$ixBExp]* : Type _ :=
+      $fam (Codata.PSignature.sig₀ $(ctx.psigp)) $pI))
+    let Shp ← appT (← mkAppT Sh pTerms₀) uIArgs
+    elabCommand (← `(abbrev $Pos:ident $[$pExp₀]* $[$ixBExp]* (sh : $Shp) : Type _ :=
+      Codata.PSignature.Pos $(ctx.psigp) sh.1))
+    let Posp ← appT (← mkAppT Pos pTerms₀) uIArgs
+    let Tm ← ctx.tyAtU m
+    if let some J := pinfo.J then
+      let PosIdx := ctx.tyId m "posIdx"
+      elabCommand (← `(abbrev $PosIdx:ident $[$pExp₀]* $[$ixBExp]* (sh : $Shp) (x : $Posp sh) :
+        $J := Codata.PSignature.Pos.idx x))
+      let PosIdxp ← appT (← mkAppT PosIdx pTerms₀) uIArgs
+      let cont := ctx.topId (if ctx.co then `PSignature.icocontainer else `PSignature.icontainer)
+      elabCommand (← `(instance $[$pExp₀]* $[$ixBExp]* :
+          Codata.IContainer (fun ($a:ident : $aTy) => $Tm) $Shp $Posp $PosIdxp :=
+        $cont (ψ := $(ctx.psigp)) (fun ($a:ident : $aTy) => $S) (fun ($a:ident : $aTy) => $e) $pI))
+    else
+      let cont := ctx.topId (if ctx.co then `PSignature.cocontainer else `PSignature.container)
+      elabCommand (← `(instance $[$pExp₀]* $[$ixBExp]* :
+          Codata.Container (fun ($a:ident : $aTy) => $Tm) $Shp $Posp :=
+        $cont (ψ := $(ctx.psigp)) (fun ($a:ident : $aTy) => $S) (fun ($a:ident : $aTy) => $e) $pI))
 
 /-! ### The isomorphism `F X ≃ σ.Obj X` and its three laws
 
@@ -910,8 +1625,12 @@ def genIso (ctx : Ctx) : CommandElabM Unit := do
   let ObjY ← `($(ctx.sigId `Obj) $(ctx.sigp) Y $pI)
   let toCAlts : Array (TSyntax ``matchAlt) ← ctx.ctors.mapM fun c => do
     let lhs ← ctx.fPat c
-    let shape ← ctx.shapeVal c
+    -- The layers `Container.toC x` of the nested arguments are bound by a lambda, so that the
+    -- inner `match` is parametric in them and `toC_ofC` can rewrite them.
+    let zs : Array Ident ← c.nested.mapM fun n => freshId s!"z_{n.x.getId.toString}"
+    let shape ← ctx.shapeValWith c (← zs.mapM fun z => `($z:ident.1))
     let mut alts : Array (TSyntax ``matchAlt) := #[]
+    let mut k := 0
     for g in c.groups do
       match g.kind with
       | .data => pure ()
@@ -922,9 +1641,19 @@ def genIso (ctx : Ctx) : CommandElabM Unit := do
         let ys := teleIds tele
         for x in g.ids do
           alts := alts.push (← `(matchAltExpr| | $(ctx.bCtor c x):ident $ys* => $x:ident $ys*))
+      | .nest .. =>
+        for x in g.ids do
+          let z := zs[k]!
+          k := k + 1
+          alts := alts.push (← `(matchAltExpr| | $(ctx.bCtor c x):ident q => $z:ident.2 q))
     let child ← if alts.isEmpty then `(fun b => nomatch b)
       else `(fun b => match b with $alts:matchAlt*)
-    ctx.alt c #[lhs] (← `(⟨$shape, $child⟩))
+    let layer ← `(⟨$shape, $child⟩)
+    let rhs ← if zs.isEmpty then pure layer else do
+      let toCs ← c.nested.mapM fun n =>
+        `($(contId n.fam.isSome `toC) (G := $(ctx.nestG c n.G true)) $(n.x):ident)
+      `((fun $[$zs:ident]* => $layer) $toCs*)
+    ctx.alt c #[lhs] rhs
   let discrsA := ctx.discrs (← `(a))
   elabCommand (← `(def $(ctx.toC):ident $[$pImp]* $[$famBX]* $[$ib]* (a : $FXi) : $ObjX :=
     match $[$discrsA:term],* with $toCAlts:matchAlt*))
@@ -939,46 +1668,84 @@ def genIso (ctx : Ctx) : CommandElabM Unit := do
         | .fn tele _ =>
           let ys := teleIds tele
           args := args.push (← `(fun $[$ys:ident]* => ch ($(ctx.bCtor c x) $ys*)))
+        | .nest G _ _ fam _ =>
+          let xs := nestShapeId x
+          args := args.push (← `($(contId fam.isSome `ofC) (G := $(ctx.nestG c G true))
+            ⟨$xs, fun q => ch ($(ctx.bCtor c x) q)⟩))
     let rhs ← ctx.fApp c (← `(_)) args
     let pat ← if c.hasRec then `(⟨$shape, ch⟩) else `(⟨$shape, _⟩)
     ctx.alt c #[pat] rhs
   let discrsZ := ctx.discrs (← `(z))
   elabCommand (← `(def $(ctx.ofC):ident $[$pImp]* $[$famBX]* $[$ib]* (z : $ObjX) : $FXi :=
     match $[$discrsZ:term],* with $ofCAlts:matchAlt*))
+  -- With nested arguments the layers go through the container's isomorphism, and its laws
+  -- finish what `rfl` no longer can.
+  let nested := ctx.hasNest
+  let seq (tacs : Array (TSyntax `tactic)) : CommandElabM (TSyntax ``Parser.Tactic.tacticSeq) :=
+    `(tacticSeq| $[$tacs:tactic]*)
+  let ofC_toC_pf ← seq (#[← `(tactic| cases a)] ++ (← if nested then
+      return #[← `(tactic| all_goals first | rfl | simp only [$(ctx.toC):ident, $(ctx.ofC):ident, Codata.Container.ofC_toC', Codata.IContainer.ofC_toC'])]
+    else return #[← `(tactic| all_goals rfl)]))
   elabCommand (← `(theorem $(ctx.ofC_toC):ident $[$pImp]* $[$famBX]* $[$ib]* (a : $FXi) :
-      $(ctx.ofC) ($(ctx.toC) a) = a := by
-    cases a
-    all_goals rfl))
+      $(ctx.ofC) ($(ctx.toC) a) = a := by $ofC_toC_pf))
+  let toC_ofC_pf ← seq (#[← `(tactic| obtain ⟨s, ch⟩ := z), ← `(tactic| cases s)] ++
+    (← if nested then
+      -- The container's shape is in a dependent position (the type of the children), which
+      -- `simp` cannot rewrite; `rw` can, one nested argument at a time.
+      return #[← `(tactic| all_goals try simp only [$(ctx.toC):ident, $(ctx.ofC):ident]),
+        ← `(tactic| all_goals repeat rw [Codata.Container.toC_ofC]),
+        ← `(tactic| all_goals repeat rw [Codata.IContainer.toC_ofC])]
+    else return #[]) ++
+    #[← `(tactic| all_goals refine congrArg (Codata.Signature.Obj.mk _) (funext fun b => ?_)),
+      ← `(tactic| all_goals cases b), ← `(tactic| all_goals rfl)])
   elabCommand (← `(theorem $(ctx.toC_ofC):ident $[$pImp]* $[$famBX]* $[$ib]* (z : $ObjX) :
-      $(ctx.toC) ($(ctx.ofC) z) = z := by
-    obtain ⟨s, ch⟩ := z
-    cases s
-    all_goals refine congrArg (Codata.Signature.Obj.mk _) (funext fun b => ?_)
-    all_goals cases b
-    all_goals rfl))
+      $(ctx.toC) ($(ctx.ofC) z) = z := by $toC_ofC_pf))
   -- `f : ∀ q, X q → Y q` on the packed index, curried for `F.map`.
   let fTyP ← `(∀ q, X q → Y q)
   let fCur ← ctx.curryN (← `(f)) #[⟨(← `(x)).raw⟩]
+  let ofC_map_pf ← seq (#[← `(tactic| obtain ⟨s, ch⟩ := z), ← `(tactic| cases s)] ++
+    (← if nested then
+      return #[← `(tactic| all_goals first | rfl | simp only [$(ctx.ofC):ident, $(ctx.Fmap):ident, Codata.Signature.Obj.map, Codata.Container.map_ofC, Codata.IContainer.map_ofC])]
+    else return #[]) ++
+    #[← `(tactic| all_goals rfl)])
   elabCommand (← `(theorem $(ctx.ofC_map):ident $[$pImp]* $[$famB]* (f : $fTyP) $[$ib]*
       (z : $ObjX) : $(ctx.ofC) ($(ctx.sigId `Obj.map) f z) = $(ctx.Fmap) $fCur ($(ctx.ofC) z) := by
-    obtain ⟨s, ch⟩ := z
-    cases s
-    all_goals rfl))
+    $ofC_map_pf))
   if ctx.co then
     let relTyP ← `(∀ q, X q → Y q → Prop)
     let RCur ← ctx.curryN (← `(R)) #[]
+    -- After `cases h`, one goal per constructor remains, in order. With nested arguments the
+    -- hypothesis on a nested pair is turned into the equality of the shapes, substituted, and
+    -- the relation on the contents.
+    let common : Array (TSyntax `tactic) := #[← `(tactic| obtain ⟨s, ch⟩ := z),
+      ← `(tactic| obtain ⟨s', ch'⟩ := z'), ← `(tactic| cases s), ← `(tactic| all_goals cases s'),
+      ← `(tactic| all_goals try simp only [$(ctx.ofC):ident] at h), ← `(tactic| all_goals cases h)]
+    let tail : Array (TSyntax `tactic) := #[← `(tactic| refine ⟨_, _, _, rfl, rfl, fun b => ?_⟩),
+      ← `(tactic| cases b), ← `(tactic| all_goals solve_by_elim)]
+    let rel_ofC_pf ← if nested then do
+        let bullets ← ctx.ctors.mapM fun c => do
+          let recs := c.groups.foldl (init := #[]) fun acc g =>
+            if g.kind.isData then acc else acc ++ g.ids.map fun x => (x, g.kind)
+          let mut steps : Array (TSyntax `tactic) := #[]
+          if !recs.isEmpty then
+            let hs ← recs.mapM fun (x, _) => freshId s!"h_{x.getId.toString}"
+            steps := steps.push (← `(tactic| rename_i $[$hs:ident]*))
+            for (h, (_, kind)) in hs.zip recs do
+              if kind.isNest then
+                -- `rfl` must be the keyword pattern, not a hygienic name.
+                let rflPat := mkIdent `rfl
+                let relOfC := contId kind.isFam `rel_ofC
+                steps := steps.push
+                  (← `(tactic| obtain ⟨$rflPat:ident, $h:ident⟩ := $relOfC $h))
+          let all := steps ++ tail
+          `(tactic| · $[$all:tactic]*)
+        seq (common ++ bullets)
+      else
+        seq (common ++ #[← `(tactic| all_goals refine ⟨_, _, _, rfl, rfl, fun b => ?_⟩),
+          ← `(tactic| all_goals cases b), ← `(tactic| all_goals solve_by_elim)])
     elabCommand (← `(theorem $(ctx.rel_ofC):ident $[$pImp]* $[$famB]* (R : $relTyP) $[$ib]*
         (z : $ObjX) (z' : $ObjY) (h : $(ctx.Rel) $RCur ($(ctx.ofC) z) ($(ctx.ofC) z')) :
-        $(ctx.sigId `Obj.Rel) R z z' := by
-      obtain ⟨s, ch⟩ := z
-      obtain ⟨s', ch'⟩ := z'
-      cases s
-      all_goals cases s'
-      all_goals try simp only [$(ctx.ofC):ident] at h
-      all_goals cases h
-      all_goals refine ⟨_, _, _, rfl, rfl, fun b => ?_⟩
-      all_goals cases b
-      all_goals solve_by_elim))
+        $(ctx.sigId `Obj.Rel) R z z' := by $rel_ofC_pf))
 
 /-! ### The contract, and what is derived from it -/
 
@@ -1319,7 +2086,7 @@ def genAliases (ctx : Ctx) : CommandElabM Unit := do
 
 /-- The index telescope of a declared sort `(i₁ : I₁) → I₂ → … → Type u`: names (fresh when
 the arrow is not dependent) and types. -/
-private partial def readSort (t : Term) : CommandElabM (Array (Ident × Term)) := do
+partial def readSort (t : Term) : CommandElabM (Array (Ident × Term)) := do
   match t with
   | `($b:bracketedBinder → $cod) =>
     let (ids, ty, _) ← readBinder b
@@ -1376,11 +2143,40 @@ def mkCtx (co : Bool) (T : Ident) (paramsStx : Array (TSyntax ``bracketedBinder)
   -- Constructor names shared by several types of the block are qualified in `F`, `Shape`, `B`.
   let allNames := rawCtors.map fun cs => cs.map (·.1.getId)
   let clashes (n : Name) : Bool := (allNames.filter (·.contains n)).size ≥ 2
+  -- The container parameter: the last parameter, when it is a single type variable that the
+  -- constructors use only at parameter positions (`classifyParam`), which does not occur in
+  -- the indices, and which recursive arguments mention only as the parameter.
+  let paramCand : Option ParamInfo := match params.back? with
+    | some (#[a], ty) => (paramSort ty).map fun J => { a, aTy := ty, J }
+    | _ => none
+  let an : Option (Array Name) := paramCand.map fun pinfo => #[pinfo.a.getId]
+  let mentionsA (t : Term) : Bool := match an with
+    | some an => mentionsAny t.raw an
+    | none => false
+  let mut pOk := paramCand.isSome
+  if uidx.any fun (_, ty) => mentionsA ty then pOk := false
   let mut ctors : Array CtorInfo := #[]
   for m in [0:rawCtors.size] do
     for (name, raw, resTy, c) in rawCtors[m]! do
-      let groups ← raw.mapM fun (ids, ty, implicit) => do
-        return { ids, ty, kind := ← classify tNames pids pre ty, implicit : Group }
+      let mut groups : Array Group := #[]
+      -- The scope of a binder's type: the parameters and the earlier non-recursive binders
+      -- (the container of a nested argument may mention them).
+      let mut scope := pExp
+      for (ids, ty, implicit) in raw do
+        let kind ← classify tNames tName pids scope pre ty
+        if kind.isData then scope := scope.push (← mkBinder implicit ids ty)
+        let mut pk := PKind.none
+        if let some pinfo := paramCand then
+          match kind with
+          | .data =>
+            match ← classifyParam pinfo.a pinfo.J.isSome pExp ty with
+            | some k => pk := k
+            | none => pOk := false
+          | .pos idx => if idx.any mentionsA then pOk := false
+          | .fn tele idx =>
+            if idx.any mentionsA || tele.any (fun (_, d) => mentionsA d) then pOk := false
+          | .nest G _ _ _ idx => if mentionsA G || idx.any mentionsA then pOk := false
+        groups := groups.push { ids, ty, kind, implicit, pk }
       for g in groups do
         if g.implicit && !g.kind.isData then
           throwErrorAt g.ty "implicit binders must not be recursive"
@@ -1397,19 +2193,34 @@ def mkCtx (co : Bool) (T : Ident) (paramsStx : Array (TSyntax ``bracketedBinder)
             if cidx.size == uidx.size then pure (pre m ++ cidx)
             else throwErrorAt r "result type with the wrong number of indices"
           | none => throwErrorAt r "the result type must be the declared type applied to its parameters"
+      if cidx.any mentionsA then pOk := false
       let fname := if clashes name.getId then
           mkIdent (Name.mkSimple (tNames[m]!.getString! ++ "_" ++ name.getId.toString))
         else name
       ctors := ctors.push { name, groups, idx := cidx, owner := m, fname }
+  let param := if pOk then paramCand else none
+  unless pOk do
+    ctors := ctors.map fun c => { c with groups := c.groups.map fun g => { g with pk := .none } }
+  let params₀ := if param.isSome then params.pop else params
+  let pids₀ : Array Ident := params₀.foldl (fun acc (ids, _) => acc ++ ids) #[]
+  let pExp₀ ← params₀.mapM fun (ids, ty) => `(bracketedBinderF| ($ids* : $ty))
+  let pImp₀ ← params₀.mapM fun (ids, ty) => `(bracketedBinderF| {$ids* : $ty})
   let n (s : String) : Ident := mkIdent (.str tName s)
   let nF (s : String) : Ident := mkIdent (.str (.str tName "F") s)
   let pTerms := pids.map idT
+  let pTerms₀ := pids₀.map idT
   let jIds ← idx.mapIdxM fun m _ => freshId s!"j{Nat.toSubscriptString (m + 1)}"
-  let Ixp ← if nIdx ≥ 2 then mkAppT (n "Ix") pTerms
+  let Ixp ← if nIdx ≥ 2 then mkAppT (n "Ix") pTerms₀
     else if nIdx == 1 then pure idx[0]!.2 else `(Unit)
   return {
-    co, T, tName, types, which, pids, pExp, pImp, pTerms, ctors, idx, jIds, Ixp, motiveId, Sid
-    Ix := n "Ix", idxId := n "idx", F := n "F", Shape := n "Shape", B := n "B", sig := n "sig"
+    co, T, tName, types, which, pids, pExp, pImp, pTerms, param, pids₀, pExp₀, pImp₀, pTerms₀
+    ctors, idx, jIds, Ixp, motiveId, Sid
+    Ix := n "Ix", idxId := n "idx", F := n "F", Shape := n "Shape", ShapeP := n "ShapeP"
+    Shape₀ := n "Shape₀", Shape₀P := n "Shape₀P", P := n "P", shapeTo := n "shapeTo"
+    shapeOf := n "shapeOf", shapeOf_shapeTo := n "shapeOf_shapeTo"
+    shapeTo_shapeOf := n "shapeTo_shapeOf", shapeEquiv := n "shapeEquiv", pidxId := n "pidx"
+    psig := n "psig"
+    B := n "B", sig := n "sig"
     Fmap := nF "map", Rel := nF "Rel"
     Fmap_id := nF "map_id", Fmap_comp := nF "map_comp", Frel_map := nF "rel_map"
     toC := n "toC", ofC := n "ofC"
@@ -1422,7 +2233,11 @@ def mkCtx (co : Bool) (T : Ident) (paramsStx : Array (TSyntax ``bracketedBinder)
     fold := n "fold", fold_ctor := n "fold_ctor", fold_eq := n "fold_eq"
     fold_unique := n "fold_unique", recAux := n "recAux", recId := n "rec", rec_ctor := n "rec_ctor"
     Tp := ← mkAppT T pTerms, Fp := ← mkAppT (n "F") pTerms, Shapep := ← mkAppT (n "Shape") pTerms
-    Bp := ← mkAppT (n "B") pTerms, sigp := ← mkAppT (n "sig") pTerms }
+    ShapePp := ← mkAppT (n "ShapeP") pTerms, Shape₀p := ← mkAppT (n "Shape₀") pTerms₀
+    Shape₀Pp := ← mkAppT (n "Shape₀P") pTerms₀, Pp := ← mkAppT (n "P") pTerms₀
+    shapeEquivp := ← mkAppT (n "shapeEquiv") pTerms, psigp := ← mkAppT (n "psig") pTerms₀
+    Bp := ← mkAppT (n "B") pTerms₀
+    sigp := ← mkAppT (n "sig") pTerms }
 
 /-- The generators of `codata`, in order. The encoding decides equality of shapes classically:
 the type's corecursor and constructors are noncomputable. -/
@@ -1437,6 +2252,7 @@ def codataPipeline (ctx : Ctx) : CommandElabM Unit := do
   genCtors ctx
   genCases ctx
   genAliases ctx
+  genContainer ctx
   elabCommand (← `(end))
 
 @[command_elab codataCmd] def elabCodata : CommandElab := fun stx => do

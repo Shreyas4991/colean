@@ -108,6 +108,37 @@ implementations. Indexed families are read over `I → Type u` exactly as in the
 `fold : (∀ i, F S i → S i) → ∀ {i}, T i → S i` and `induction` for `motive : ∀ i, T i → Prop`,
 with the same universe remarks.
 
+Nested occurrences `G (T idx)` through a container `G` (`List`, `Option`, `A × ·`, or any type
+constructor with a `Codata.Container` instance, `G X ≅ Σ sh, Pos sh → X`) change nothing in the
+contracts: `F` keeps `G X` as a field, `F.map` acts inside `G` through the container
+(`Container.map`, which is `List.map` on lists), and the canonical `F.Rel` relates nested fields
+with the same shape and related contents (`Container.Rel`).
+
+Conversely a declared type is a container in its type parameter, when the last parameter `α` is
+used only at parameter positions (as the type of a field, under a function type, or through a
+container). Then `T.Shape α ≅ Σ s₀ : T.Shape₀, T.P s₀ → α` (`T.shapeEquiv`) with the erased
+shapes `T.Shape₀` and the parameter positions `T.P`, and the command provides
+`Codata.Container (fun α => T params α idx) T.Sh T.Pos`: the shapes `T.Sh` are the erased
+trees (the type at the signature `T.psig.sig₀`), a position is a path to a node together with a
+parameter position of its erased shape, and the instance is the generic
+`PSignature.container`/`cocontainer` (`Param.lean`). The same holds for a family parameter
+`X : J → Type u` (positions `X j`), with the indexed container class `Codata.IContainer`
+(`G X ≅ Σ sh, (q : Pos sh) → X (pidx sh q)`), of which `Container` is the case `J = Unit`.
+This is what lets a later declaration nest through `T` (`Forest (Tree α)` with a declared
+`Forest`).
+
+A mixed `mutual` block, with `data` and `codata` declarations, means the nested fixpoint with
+the inductive types inside the coinductive ones, and its contract is the composition of the two
+above: the inductive types are declared with the coinductive family as an extra parameter
+(`Forest α X`, a type `X` for one coinductive type without indices, a family `X : J → Type u`
+over the coinductive block's packed index otherwise), and the coinductive types are declared
+with the inductive ones applied to the coinductive family (`Tree.node : α → Forest α (Tree α)
+→ Tree α`, a nested occurrence). So `Forest.fold`, `Forest.rec` are those of the parameterised
+inductive type, `Tree.F α X` has the field `children : Forest α X`, and `Tree.corec`,
+`Tree.bisim` are those of a coinductive type nesting through a container, with
+`Container.Rel`/`IContainer.Rel` on the forests. The other nesting order is another type; it is
+written as two declarations in that order.
+
 Beyond the contract, the command generates the dependent recursor `T.rec` into any `Sort`, with
 one minor premise per constructor carrying an induction hypothesis for each recursive argument.
 It is not derivable from the contract, whose `induction` is in `Prop`; it comes from the

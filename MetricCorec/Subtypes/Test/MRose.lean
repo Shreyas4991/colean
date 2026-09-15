@@ -24,6 +24,9 @@ end
 #check @Forest.casesOn
 #check @Rose.fold_node
 #check @Forest.rec_cons
+-- Each type of the block is a container in the parameter.
+#synth Codata.Container Rose _ _
+#synth Codata.Container Forest _ _
 
 /-- One algebra for the block: the number of nodes. -/
 def sizeAlg {α : Type u} : ∀ m, Rose_Forest.F α (fun _ => Nat) m → Nat

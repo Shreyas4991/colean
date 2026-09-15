@@ -25,7 +25,7 @@ destructor (Lambek), uniqueness of `fold`, and the characterisation of `T` as th
 algebra of `F`.
 -/
 
-universe w u v u₁ u₂ u₃
+universe w u u₀ v u₁ u₂ u₃
 
 namespace Data
 
@@ -41,7 +41,7 @@ end Data
 
 namespace Codata.Signature
 
-variable {σ : Signature.{w, u, v}} {S : σ.I → Type u₃}
+variable {σ : Signature.{w, u, u₀, v}} {S : σ.I → Type u₃}
 
 /-! ### The predicate and the type -/
 
@@ -53,7 +53,7 @@ inductive_fixpoint
 theorem IsFin.isFix : σ.IsFix IsFin := fun i t => Iff.of_eq (IsFin.eq_def i t)
 
 /-- The inductive family of a signature. -/
-def Intype (σ : Signature.{w, u, v}) (i : σ.I) : Type (max w u v) :=
+def Intype (σ : Signature.{w, u, u₀, v}) (i : σ.I) : Type (max w u u₀ v) :=
   {t : Raw σ.Idx σ.Lbl // IsFin i t}
 
 /-- The least fixpoint is below the greatest: every well-founded tree is well-formed. -/
@@ -168,13 +168,13 @@ theorem rec_of_ctor {FT : σ.I → Type u₂} (toC : ∀ {i}, FT i → σ.Obj σ
 
 /-- Induction for `F`, with the canonical lifting `Data.All`. All families here live in the
 universe of `σ.Intype`, so the functor can be a bound variable. -/
-theorem induction_of {F : (σ.I → Type (max w u v)) → σ.I → Type (max w u v)}
-    (map : ∀ {X Y : σ.I → Type (max w u v)}, (∀ j, X j → Y j) → ∀ {i}, F X i → F Y i)
+theorem induction_of {F : (σ.I → Type (max w u u₀ v)) → σ.I → Type (max w u u₀ v)}
+    (map : ∀ {X Y : σ.I → Type (max w u u₀ v)}, (∀ j, X j → Y j) → ∀ {i}, F X i → F Y i)
     (toC : ∀ {i}, F σ.Intype i → σ.Obj σ.Intype i)
-    (ofC : ∀ {X : σ.I → Type (max w u v)} {i}, σ.Obj X i → F X i)
+    (ofC : ∀ {X : σ.I → Type (max w u u₀ v)} {i}, σ.Obj X i → F X i)
     (toC_ofC : ∀ {i} (z : σ.Obj σ.Intype i), toC (ofC z) = z)
     (ofC_toC : ∀ {i} (y : F σ.Intype i), ofC (toC y) = y)
-    (ofC_map : ∀ {X Y : σ.I → Type (max w u v)} (f : ∀ j, X j → Y j) {i} (z : σ.Obj X i),
+    (ofC_map : ∀ {X Y : σ.I → Type (max w u u₀ v)} (f : ∀ j, X j → Y j) {i} (z : σ.Obj X i),
       ofC (Obj.map f z) = map f (ofC z))
     (motive : ∀ i, σ.Intype i → Prop)
     (H : ∀ i (y : F σ.Intype i), Data.All map motive y → motive i (ctorI (toC y)))

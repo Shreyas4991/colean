@@ -69,6 +69,9 @@ mutual
   coinductive_fixpoint
   def Eventually (s : Stream) : Prop := Fair s ∨ (s 0 = true ∧ Eventually (tl s))
   inductive_fixpoint
+  -- inductive Eventually (s : Stream)
+  -- | fair (h : Fair s)
+  -- | next (h0 : s 0 = true) (h1 : Eventually (tl s))
 end
 
 /-! ### The intended reading as a nested fixpoint: coinductive outside. -/
@@ -104,16 +107,40 @@ theorem fair'_const : Fair' fun _ => false :=
   Fair'.coinduct (fun s => s = fun _ => false)
     (fun _ h => by subst h; exact ⟨rfl, by rw [EventuallyOf.eq_def]; exact Or.inl rfl⟩) _ rfl
 
-/-! ### The other nesting: inductive outside. Empty. -/
-
-/-- `μ Q. FairOf Q ∨ (s 0 = true ∧ Q (tl s))`, where `FairOf Q := ν P. (s 0 = false ∧ Q (tl s))`
-is just `s 0 = false ∧ Q (tl s)`, since that body does not mention `P`. Written inline. -/
-def Eventually' (s : Stream) : Prop :=
-  (s 0 = false ∧ Eventually' (tl s)) ∨ (s 0 = true ∧ Eventually' (tl s))
+def Eventually' (s : Stream) : Prop := Fair' s ∨ (s 0 = true ∧ Eventually' (tl s))
 inductive_fixpoint
 
-/-- Every derivation would have to be infinite. -/
-theorem eventually'_empty (s : Stream) : ¬ Eventually' s :=
-  Eventually'.induct (fun _ => False) (fun _ h => h.elim (·.2) (·.2)) s
+-- inductive Eventually (s : Stream)
+-- | fair (h : Fair s)
+-- | next (h0 : s 0 = true) (h1 : Eventually (tl s))
+
+#check Fair'.coinduct
+
+#check Eventually'.induct
+
+-- s := [1, 1, 0, 0, ..]
+-- pred := allZero
+
+
+-- s := [1, 0] :: s
+-- pred s := 0 ∈ s
+
+-- example :
+
+
+-- /-! ### The other nesting: inductive outside. Empty. -/
+
+-- /-- `μ Q. FairOf Q ∨ (s 0 = true ∧ Q (tl s))`, where `FairOf Q := ν P. (s 0 = false ∧ Q (tl s))`
+-- is just `s 0 = false ∧ Q (tl s)`, since that body does not mention `P`. Written inline. -/
+-- def Eventually' (s : Stream) : Prop :=
+--   (s 0 = false ∧ Eventually' (tl s)) ∨ (s 0 = true ∧ Eventually' (tl s))
+-- inductive_fixpoint
+
+
+-- #check Eventually'.induct
+
+-- /-- Every derivation would have to be infinite. -/
+-- theorem eventually'_empty (s : Stream) : ¬ Eventually' s :=
+--   Eventually'.induct (fun _ => False) (fun _ h => h.elim (·.2) (·.2)) s
 
 end MixedFail

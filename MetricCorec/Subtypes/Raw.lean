@@ -50,7 +50,7 @@ generic theory live next to this file.
   the subtype.
 -/
 
-universe u v w
+universe u v w v'
 
 /-- A path-indexed tree branching over `I`: an optional label at every path `List I`. The label
 of the root is `t.get []`, and `t.get (i :: p)` is the label at path `p` of the `i`-th child. -/
@@ -108,6 +108,26 @@ theorem empty_eq : (empty : Raw I L) = mk none fun _ => empty := (mk_root_child 
 
 theorem eq_empty_iff {t : Raw I L} : t = empty ↔ t.root = none ∧ ∀ i, t.child i = empty :=
   ⟨by rintro rfl; simp, fun ⟨hr, hc⟩ => ext_root_child (by simpa using hr) (by simpa using hc)⟩
+
+/-! ### Relabelling -/
+
+/-- Relabel a tree: the same paths, the labels mapped. -/
+def mapL {L' : Type v'} (f : L → L') (t : Raw I L) : Raw I L' := ⟨fun p => (t.get p).map f⟩
+
+@[simp] theorem get_mapL {L' : Type v'} (f : L → L') (t : Raw I L) (p : List I) :
+    (mapL f t).get p = (t.get p).map f := rfl
+
+@[simp] theorem root_mapL {L' : Type v'} (f : L → L') (t : Raw I L) :
+    (mapL f t).root = t.root.map f := rfl
+
+@[simp] theorem child_mapL {L' : Type v'} (f : L → L') (t : Raw I L) (i : I) :
+    (mapL f t).child i = mapL f (t.child i) := rfl
+
+@[simp] theorem mapL_empty {L' : Type v'} (f : L → L') : mapL f (empty : Raw I L) = empty := rfl
+
+theorem mapL_mk {L' : Type v'} (f : L → L') (r : Option L) (c : I → Raw I L) :
+    mapL f (mk r c) = mk (r.map f) fun i => mapL f (c i) :=
+  ext fun | [] => rfl | _ :: _ => rfl
 
 /-! ### Bisimulation
 
