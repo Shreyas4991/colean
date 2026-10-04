@@ -303,7 +303,6 @@ theorem fold_fold (hmap : ∀ {X Y : I → Type u} (f : ∀ j, X j → Y j) {i} 
     (fun _ t => K'.fold (fun _ y => K.ctor y) (K.fold (fun _ y => K'.ctor y) t)) ?_ t).trans
     (K.fold_ctor_self t)
   intro i y
-  dsimp only
   rw [K.fold_ctor, K'.fold_ctor, ← hmap, ← K.map_comp]
 
 end Contract

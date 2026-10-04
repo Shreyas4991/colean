@@ -99,11 +99,11 @@ noncomputable def encode (i : σ.I) (z : σ.Obj (fun _ => Raw σ.Idx σ.Lbl) i) 
 
 theorem child_encode_self (i : σ.I) (z : σ.Obj (fun _ => Raw σ.Idx σ.Lbl) i)
     (b : σ.B i z.shape) : (encode i z).child ⟨⟨i, z.shape⟩, b⟩ = z.child b :=
-  dif_pos rfl
+  dite_eq_left rfl
 
 theorem child_encode_of_ne (i : σ.I) (z : σ.Obj (fun _ => Raw σ.Idx σ.Lbl) i) {l : σ.Lbl}
     (h : l ≠ ⟨i, z.shape⟩) (b : σ.B l.1 l.2) : (encode i z).child ⟨l, b⟩ = Raw.empty :=
-  dif_neg h
+  dite_eq_right h
 
 /-! ### Predicates that are fixpoints of the one-layer operator
 
@@ -250,8 +250,8 @@ theorem corecRaw_eq (c : ∀ i, S i → σ.Obj S i) (i : σ.I) (s : S i) :
   by_cases h : l = ⟨i, (c i s).shape⟩
   · subst h
     rw [(child_encode_self i ⟨(c i s).shape, fun b => corecRaw c _ ((c i s).child b)⟩ b :)]
-    exact congrArg (Raw.corec (coalg c)) (dif_pos rfl)
-  · rw [dif_neg h, child_encode_of_ne _ _ h]
+    exact congrArg (Raw.corec (coalg c)) (dite_eq_left rfl)
+  · rw [dite_eq_right h, child_encode_of_ne _ _ h]
     exact corec_coalg_none c
 
 theorem isWf_corecRaw (c : ∀ i, S i → σ.Obj S i) (i : σ.I) (s : S i) : IsWf i (corecRaw c i s) := by
@@ -267,7 +267,8 @@ theorem dtorC_corecC (c : ∀ i, S i → σ.Obj S i) {i : σ.I} (s : S i) :
     dtorC (corecC c s) = Obj.map (fun _ s => corecC c s) (c i s) := by
   refine congrArg (Obj.mk (c i s).shape) (funext fun b => Subtype.ext ?_)
   show (corecRaw c i s).child ⟨⟨i, (c i s).shape⟩, b⟩ = corecRaw c _ ((c i s).child b)
-  rw [corecRaw_eq c i s, child_encode_self]
+  exact (congrArg (Raw.child · ⟨⟨i, (c i s).shape⟩, b⟩) (corecRaw_eq c i s)).trans
+    (child_encode_self i ⟨(c i s).shape, fun b => corecRaw c _ ((c i s).child b)⟩ b)
 
 /-! ### Bisimulation -/
 

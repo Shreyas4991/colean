@@ -70,7 +70,7 @@ theorem le_csup {c : Seq α → Prop} (hc : Lean.Order.chain c) {s : Seq α} (hs
     s ⊑ csup c := by
   intro n a ha
   have hex : ∃ a, ∃ s, c s ∧ s.get? n = some a := ⟨a, s, hs, ha⟩
-  rw [get?_csup, csupFun, dif_pos hex]
+  rw [get?_csup, csupFun, dite_eq_left hex]
   obtain ⟨t, ht, hta⟩ := hex.choose_spec
   rcases hc s t hs ht with h | h
   · rw [← hta, h n a ha]

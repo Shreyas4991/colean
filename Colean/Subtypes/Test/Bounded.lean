@@ -27,11 +27,11 @@ def Bounded.climb (n : Nat) (h : n ≤ 10) : Bounded n h :=
 
 @[simp] theorem Bounded.dtor_climb_of_lt (n : Nat) (h : n ≤ 10) (hn : n + 1 ≤ 10) :
     (Bounded.climb n h).dtor = .step (h := hn) (Bounded.climb (n + 1) hn) := by
-  simp only [Bounded.climb, Bounded.dtor_corec, dif_pos hn, Bounded.F.map_step]
+  simp only [Bounded.climb, Bounded.dtor_corec, dite_eq_left hn, Bounded.F.map_step]
 
 @[simp] theorem Bounded.dtor_climb_of_eq (h : 10 ≤ 10) :
     (Bounded.climb 10 h).dtor = .stay (Bounded.climb 10 h) := by
-  simp only [Bounded.climb, Bounded.dtor_corec, dif_neg (by omega : ¬ 10 + 1 ≤ 10),
+  simp only [Bounded.climb, Bounded.dtor_corec, dite_eq_right (by omega : ¬ 10 + 1 ≤ 10),
     Bounded.F.map_stay]
 
 /-- At the top, the only possible step is `stay`: case analysis with the index `10`. -/
