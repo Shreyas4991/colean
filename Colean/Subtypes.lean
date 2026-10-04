@@ -24,25 +24,9 @@ import Colean.Subtypes.Test.FinVec
 import Colean.Subtypes.Test.LeT
 import Colean.Subtypes.Test.Nat
 import Colean.Subtypes.Test.WType
--- import Colean.Subtypes.Sketch.CoList
--- import Colean.Subtypes.Sketch.CoListLemmas
--- import Colean.Subtypes.Sketch.FinList
--- import Colean.Subtypes.Sketch.FinTree
--- import Colean.Subtypes.Sketch.IdxCyc
--- import Colean.Subtypes.Sketch.IdxVec
--- import Colean.Subtypes.Sketch.ITree
--- import Colean.Subtypes.Sketch.ITreeLemmas
--- import Colean.Subtypes.Sketch.Mutual
--- import Colean.Subtypes.Sketch.StrArith
--- import Colean.Subtypes.Sketch.Str
--- import Colean.Subtypes.Sketch.StrLemmas
--- import Colean.Subtypes.Sketch.Tree
--- import Colean.Subtypes.Sketch.TreeLemmas
--- import Colean.Subtypes.Sketch.Vec
 
 /-!
 # (Co)inductive types as subtypes of one general type
 The generic theory (`Codata`, `Data`), the `codata` and `data` commands (`CodataCmd`,
-`DataCmd`), the tests (one type per file in `Test/`) and the hand-written sketches that preceded
-the commands (`Sketch/`).
+`DataCmd`) and the tests (one type per file in `Test/`).
 -/

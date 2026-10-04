@@ -82,7 +82,8 @@ type (which is 1. again, with the type name as the index). The generated `F` bec
 over the block, and `mutual_induct`-style principles come out of the indexed `bisim`.
 
 Mixed inductive/coinductive blocks are rejected by Lean's fixpoint machinery (the joint operator
-is not monotone in the mixed order); support them as nested fixpoints, as in `Sketch/Mutual.lean`:
+is not monotone in the mixed order); support them as nested fixpoints, as in the hand-written sketch `Sketch/Mutual.lean` on the
+`progress` branch:
 the inner predicate is parameterised by the outer one and needs a `@[partial_fixpoint_monotone]`
 lemma, which the command can generate uniformly.
 

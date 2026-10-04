@@ -29,25 +29,9 @@ convention is what makes `Raw.node` injective).
 
 ## Layout
 
-The hand-written experiments live in `Sketch/`; the `codata` and `data` commands and their
-generic theory live next to this file.
-
-* `CoList.lean`, `Tree.lean`, `Str.lean`: three coinductive types, each file containing only the
-  translation (raw constructors, the predicate by `coinductive_fixpoint`, the subtype, its
-  constructors) and the corecursor with its specification.
-* `CoListLemmas.lean`, `TreeLemmas.lean`, `StrLemmas.lean`: what else the types support —
-  destructors, case analysis, bisimulation, examples, isomorphisms with Mathlib's `Seq` and with
-  `ℕ → α`.
-* `FinList.lean`, `FinTree.lean`: the inductive types defined by the same operators with
-  `inductive_fixpoint` — induction, recursion into data, isomorphisms with the native inductives.
-* `ITree.lean`, `ITreeLemmas.lean`: branching over an arbitrary type `I`, e.g. `ℝ`, and the
-  isomorphism `ITree I α ≃ (List I → α)`.
-* `Vec.lean`: an indexed family, `Vec α n`; the index is an argument of the predicate.
-* `Mutual.lean`: mutual types (trees and forests) — both inductive, both coinductive, and the
-  mixed one as a nested fixpoint.
-* `StrArith.lean`: `Raw` carries the `CCPO` of `List I → Option L` for free, so
-  `partial_fixpoint` definitions live on the general type and coinduction brings them back into
-  the subtype.
+The generic theory lives in `Codata.lean` (coinductive) and `Data.lean` (inductive), the
+`codata` and `data` commands in `CodataCmd.lean` and `DataCmd.lean`, and one test per type in
+`Test/`.
 -/
 
 universe u v w
