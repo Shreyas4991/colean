@@ -1,9 +1,9 @@
-name = "MetricCorec"
+name = "Colean"
 version = "0.1.0"
-defaultTargets = ["MetricCorec"]
+defaultTargets = ["Colean"]
 
 [[lean_lib]]
-name = "MetricCorec"
+name = "Colean"
 
 [[require]]
 name = "mathlib"
