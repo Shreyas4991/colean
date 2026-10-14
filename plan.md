@@ -2,14 +2,14 @@
 
 ## Where we are
 
-`Subtypes/Codata.lean`: the generic theory, for indexed polynomial signatures (a plain type is
-a family over `Unit`), the contract (`contract.md`, plain and indexed sections), and the derived
-layer. `Subtypes/CodataCmd.lean`: the `codata` command. `Subtypes/Data.lean` and
-`Subtypes/DataCmd.lean`: the inductive dual. `Subtypes/MutualCmd.lean`: mutual blocks of
-either. `Subtypes/Container.lean`: containers for nested occurrences; `Subtypes/Param.lean`: a
-declared type as a container in its parameter. `Subtypes/Test/`: one test per type.
-`Subtypes.lean` imports everything and is the only import of the root module, so `lake build`
-checks it all. `todo.md` holds deferred items that are not features.
+The layout follows `architecture.md`: `Framework.lean` (the contracts and what follows from
+them), `Model/` (`Cotype`, `Intype`, `Occ`, `Param`: the fixpoints on `Raw`, occurrence
+structures, the structure in a parameter), `Cmd/` (the generators by step: `Analysis`,
+`Functor`, `Model`, `Framework`, `Extras`, `Surface`), `CodataCmd.lean`/`DataCmd.lean` (the
+pipelines and commands), `MutualCmd.lean` (blocks), `Test/` (one test per type), `Sketch/`
+(hand-written experiments, not built). `Subtypes.lean` imports everything and is the only import
+of the root module, so `lake build` checks it all. The contract is `contract.md`; `todo.md` holds
+deferred items that are not features.
 
 Design rules, fixed by discussion:
 
@@ -101,53 +101,51 @@ NOT DONE:
   `mutual` block is accepted with the fixed reading "codata outer" (`Test/Mixed.lean`); it will
   be rejected once `mixed_mutual` exists.
 
-## 4. Nested types — DONE
+## 4. Nested types — DONE, switched to occurrence structures (2026-09-17)
 
-`Subtypes/Container.lean`: the class `Container G Sh Pos` (`G X ≅ Σ sh, Pos sh → X`, shapes and
-positions independent of `X`), `Container.map`/`Container.Rel` between two universes with their
-laws, and the registry: instances for `List`, `Option`, `A × ·`. A nested argument
-`x : G (T idx)` contributes the container's shape as data and its positions as recursive
-positions; the generic theory is unchanged, the functor `F` keeps `G X`, and the isomorphism
-goes through the container's (`Test/Rose.lean`, `Test/FinRose.lean`).
-
-`Subtypes/Param.lean`: a declared type is itself a container in its type parameter. A signature
-with parameter positions (`PSignature`: erased shapes `Shape₀`, positions `P` of the parameter,
-recursive positions `B` over `Shape₀`) gives the ordinary signature at any parameter type `α`
-through an equivalence `Shape ≃ Σ s₀, P s₀ → α`; the erased trees are the shapes of the
-container, a path to a node with a parameter position of its erased shape is a position, and
-`PSignature.container`/`cocontainer` are the instances for `Intype`/`Cotype` (Mathlib's
-`MvPFunctor.wp`/`mp`, done pathwise on `Raw`: `erase`, `reattach`, `layer`).
+`Subtypes/Occ.lean`: the bundled structures `Occ Sh Pos G` (`G X ≃ Σ sh, Pos sh → X`) and
+`IOcc Sh Pos pidx G` (positions carry an index of the family), their laws (`toC`/`ofC`, `map`
+and `Rel` between two structures at different universes, `rel_map`, `rel_intro`, `rel_ofC`,
+`exists_map_of_rel`), the combinators `const`, `hole`, `prod`, `sum`, `pi`, `piP`, `sigma`,
+`comp` (and `IOcc.ofOcc`, `reidx`, `compC`, `compI`, `Occ.ofI`, `Occ.compI` across the two
+kinds), the leaves `Occ.list`, `Occ.option`, `Occ.array` with the registry classes
+`OccLeaf`/`IOccLeaf`, and the computation lemmas `map_prod`, `map_pi`, `map_comp`, `map_list`,
+…, `forall_toC_*`, `rel_hole_intro`, `rel_prod_intro`. The command (`occTreeOf`, `occTermOf`,
+`classify`) builds the structure of every nested argument by recursion on the syntax of its
+type, with instance search only at named type constructors; `Kind.occ`/`PKind.occ` carry the
+tree, the structure term, its shapes, positions and position index; everything else is as
+before (the shape of the argument is data of the constructor, its positions are recursive
+positions, `toC`/`ofC` go through the structure). The `Container`/`IContainer` classes, the
+whole-expression instance search and the composition instances are gone.
 
 DONE:
 
-* `List`, `Option`, `A × ·` in recursive positions, for `codata` and `data`, with `F.map` acting
-  through `Container.map` (simp lemmas back to `List.map`, `Option.map`), `F.Rel` through
-  `Container.Rel` (`rel_intro`), induction hypotheses at the positions of the container
-  (`mem_toC_list`, `toC_list_mem` for lists);
-* any type constructor with a `Container` instance written by hand;
-* the instance generated for every `data`/`codata` (and every type of a mutual block) whose
-  last parameter is a type `α` used only at parameter positions (`(a : α)`, `(f : A → α)`,
-  `(as : G α)` through a container `G`): `T.Shape₀`, `T.P`, `T.shapeEquiv`, `T.psig`,
-  `T.sig := T.psig.sig T.Shape T.shapeEquiv`, `T.Sh`, `T.Pos` and
-  `instance : Container (fun α => T params α idx) T.Sh T.Pos`; other uses of `α` (a negative
-  occurrence, an index) just skip the instance;
-* the same for a family parameter `X : J → Type u` (positions `X j`, `A → X j`, `G (X j)`),
-  with the positions' indices `T.pidx` and the indexed container class `IContainer`
-  (`Container.lean`), instance `IContainer (fun X => T params X idx) T.Sh T.Pos T.posIdx`;
-* nesting through declared types (`Forest (Tree α)` with a declared `Forest`, and
-  `Forest α (fun p => Blk α p.1 p.2)` through an indexed container), for `data` and `codata`:
-  the mixed inductive/coinductive block of section 3 (`Test/Param.lean`, `Test/Mixed.lean`).
+* nested arguments of any shape built from occurrences by `×`, `⊕`, `(a : A) → …` (constant
+  domain, a proposition allowed), `(a : A) × …`, and named constructors (`List`, `Option`,
+  `Array`, the declared types), at any depth: `T × T`, `A → List T`, `Option (T × T)`,
+  `T ⊕ A`, `(n : ℕ) × (Fin n → T)`, `0 < n → List T`, occurrences at several indices in one
+  argument (`Chain n × Chain (n + 1)`); for `codata` and `data` (`Test/OccNest.lean`,
+  `Test/Rose.lean`, `Test/FinRose.lean`);
+* any type constructor with an `OccLeaf`/`IOccLeaf` instance written by hand;
+* the structure generated for every `data`/`codata` (and every type of a mutual block, and the
+  block family) whose last parameter is a type `α` or a family `X : J → Type u` used only at
+  parameter positions, now including nested ones of any shape (`(p : α × α)`, `(as : List α)`):
+  `T.Shape₀`, `T.P`, `T.shapeEquiv`, `T.psig`, `T.Sh`, `T.Pos`, `T.occ`, `T.instOccLeaf` (and
+  `T.pidx`, `T.posIdx` for a family), the constructor-level lemmas `T.map_c`, `T.rel_c`;
+* nesting through declared types (`Forest (Tree α)`, `Forest α (fun p => Blk α p)`), for `data`
+  and `codata` (`Test/Param.lean`, `Test/Mixed.lean`).
 
 NOT DONE:
 
-* nesting under a telescope (`k : A → List (T i)`);
-* composed containers (`List (Option (T i))`), containers in several parameters and nested
-  occurrences with mixed positions: section 5, steps 2 and 3;
-* containers whose shapes depend on the argument's universe;
-* constructor-level lemmas for `Container.map` and `Container.Rel` on a declared type:
-  section 5, step 1.
+* a declared type with the recursive occurrence in several parameter positions at once
+  (`Pair X X` for a declared `Pair α β`): the multi-hole structure (parameters as holes,
+  erasure of all at once); this is also section 5, step 2;
+* an argument mixing the parameter and the recursive type (`List (α × T)`): the type is
+  declared, but it gets no structure in `α`;
+* `rel_*` characterisations of `Occ.Rel` through `prod`, `pi`, `comp` as iffs (only the
+  introductions exist), and user-facing `T.map`/`T.Rel` abbreviations.
 
-## 5. Mixed blocks: `mixed_mutual` — NOT DONE
+## 5. Mixed blocks: `mixed_mutual` — steps 1, 3 and 4 DONE, 2 NOT DONE
 
 A block with `data` and `codata` declarations is a nested fixpoint, and a cyclic system has
 several nested solutions (data outer and codata outer differ; the two orders of `Tree`/`Forest`
@@ -186,18 +184,32 @@ inductive step is a closed statement about the outer type. Users see the paramet
 types (`Forest α X`) and the closed outer ones (`Tree.node : α → Forest α (Tree α) → Tree α`).
 The universe of a family parameter is a `universe` variable declared in scope (holes drift).
 
-Steps, in order:
+Steps, in order (steps 1 and 3 were done on the `Container` classes; since the switch to
+occurrence structures, section 4, the same lemmas and compositions are stated with `Occ`:
+`Container.map f` ↦ `Occ.map T.occ T.occ f`, `Container.comp` ↦ `Occ.comp` built by the
+command, `genContainerLemmas` ↦ `genOccLemmas`, no instances passed):
 
-1. Constructor-level container lemmas, for every declared container (`data` and `codata`):
-   `T.map_c : Container.map f (T.c args) = T.c args'` (`f` at the parameter positions, `map f`
-   at recursive ones, `map (map f)` through nested containers) and `T.rel_c` (introduction:
-   `R` at parameter positions, `Rel R` at recursive ones ⇒ `Rel R (T.c …) (T.c …)`), plus
-   `map_nil`-style cases and the `IContainer` versions. Generic part in `Param.lean`: the
-   layer of `encode` (`erase_encode`, `reattach_encode`, `valAt` at the root and at
-   `Pos.cons`), `mapV_encode : mapV f (encode i z) = encode i (mapObj f z)`, and
-   `rel_ctorI_intro`; per-constructor proofs reduce to `cases b; rfl` (casts along `sh₀_symm`
-   K-reduce, as in `child_encode_castP`). Prerequisite for any bisimulation through a declared
-   container with different forests (`Test/Mixed.lean`'s `sorry`: the unfolding of `Tree.bin`).
+1. DONE (2026-09-16). Constructor-level container lemmas, for every declared container (`data`
+   and `codata`, type or family parameter): `T.map_c : Container.map f (T.c args) = T.c args'`
+   (`f` at the parameter positions, `map f` at recursive ones, `map (map f)` through nested
+   containers) and `T.rel_c` (`R` at parameter positions, `Rel R` at recursive ones ⇒
+   `Rel R (T.c …) (T.c …)`), the two copies of the parameter in independent universes
+   (`universe u'` declared in scope). Generic part: `Param.lean` `mapS`/`mapV`/`mapObj`,
+   `mapV_encode` (the map on the trees of one layer), `mapObj_eq` and `map_ctorI_of`,
+   `map_ctorC_of`, `cmap_ctorI_of`, `cmap_ctorC_of` (the map of a constructor application, with
+   the layer of the target shape and the children as hypotheses, the latter under any proof of
+   the erased-shape equation); `Codata.lean` `ctorC`, `ctor_eq_ctorC_of` (the derived codata
+   constructor is the one on the container, `T.ctor_eq_ctorC`); `Container.lean`
+   `toC_map`, `exists_map_of_rel'`/`exists_map_of_rel` (elimination of `Rel`),
+   `exists_fn_of_forall`. Per-constructor scripts (`genContainerLemmas`): `dsimp` of `toC`,
+   `shapeEquiv`, `shapeTo` everywhere, `toC_map` for the nested arguments, `cases`; for a
+   container in the parameter (`as : List α`) the erased shape changes with the argument and
+   the transport is reduced by one substitution lemma per recursive position (`key`).
+   `rel_c` is `rel_map` on the constructor over the related pairs, rewritten by `map_c`. The
+   generated instances are named `T.instContainer`/`T.instIContainer` and passed explicitly in
+   the lemmas (the instance search runs before the numerals of an index are elaborated inside
+   `fun α => T α (n + 1)`). Tests: `Test/Param.lean` (`Node`, `Vec`), `Test/Mixed.lean`
+   (`Tree.bin` unfolded).
 2. Containers in a suffix of the parameters, and nested occurrences with mixed positions:
    * the container parameter is a suffix `X₁ … Xₙ` of the parameters, one family over
      `J₁ ⊕ … ⊕ Jₙ` (`PSignature.J` is arbitrary already), one instance per suffix, the
@@ -218,22 +230,37 @@ Steps, in order:
      (`IContainer.map (fun p => match p with | inl _ => id | inr j => f j)`).
    Gives chain-shaped references between non-adjacent runs (`Trace → Proc` in
    `Proc ⊃ Menu ⊃ Trace`): without it `Menu` is no container in the processes, since its
-   shapes contain trace shapes that still hold processes.
-3. Composition, for a reference from a run to a run two levels inside (`Proc → Trace`, whose
-   family has the component `Menu α (Proc α)`): `IContainer.comp` in `Container.lean`
-   (`MvPFunctor.comp`: shapes `Σ sh, (q : Pos sh) → Sh_{pidx q}`, positions
-   `Σ q, Pos_{pidx q} …`, with the `map`/`Rel` laws), and `mixed_mutual` emitting a named
-   composite with its instance so that the occurrence has a single block-valued family; also
-   closes `List (Option (T i))` of section 4.
-4. The command: syntax; `readDecl` over the block; runs; inside-out elaboration generalising
-   `elabMixed` (parameters per referenced outer run, occurrence rewriting, `Which` of every run
-   generated first, `universe u_<Run>`); warning for a uniform block; `mutual` rejecting mixed
-   blocks. May land before steps 2 and 3 with a temporary error for references between
-   non-adjacent runs (a declaration mentioning a run other than its own and its two
-   neighbours), removed when they land. Tests: `Test/Mixed.lean` and `Test/MixedOrder.lean`
-   rewritten as `mixed_mutual` blocks in both orders, `Proc ⊃ Menu ⊃ Trace` with three runs,
-   the non-adjacent variants after steps 2 and 3, `Sketch/MixedFail.lean` kept as is. Docs:
-   `contract.md`, the `MutualCmd.lean` header, memory.
+   shapes contain trace shapes that still hold processes. Not started. A cheap alternative,
+   to be decided: `mixed_mutual` could add to the run before `Trace` a wrapper type
+   `ProcW α X | wrap (p : X)` (a constant functor, so the nested fixpoint is unchanged) and
+   rewrite `Trace`'s occurrences of `Proc` to it, one wrapper per run crossed; every reference
+   becomes adjacent with the current machinery, at the price of visible wrappers
+   (`Trace.tick m (ProcW.wrap p) next`).
+3. DONE (2026-09-16). Composition, for a reference from a run to a run further inside
+   (`Proc → Trace`, the occurrence `Trace α (Menu α (Proc α))`): the instances
+   `Container.comp`, `IContainer.comp`, `Container.compI`, `IContainer.compC` in
+   `Container.lean` (shapes `Σ sh, (q : Pos sh) → Sh'`, positions `Σ q, Pos' (z.2 q)`, the
+   equivalence by `Equiv` combinators, at low priority), found by instance search for the
+   composite `fun X => G (H X)`; `nestedOcc` abstracts the unique recursive occurrence
+   anywhere under type constructors (applications, products, lambdas; not arrows) into
+   `G := fun X => ty[occ := X]`, so `List (Option (T i))` of section 4 is closed too;
+   `mixed_mutual` applies an occurrence of a run further inside to the chain of families down
+   to the declaration's own run (`famOf`). Tests: `Test/Rose.lean`, `Test/FinRose.lean`
+   (`Rose₂`), `Test/MixedRuns.lean` (`Proc → Trace`, `Outer → Inner`). Since the switch to
+   occurrence structures (section 4) the composite is `Occ.comp` built by the command, no
+   instance search.
+4. DONE (2026-09-15), before steps 2 and 3. The command (`MutualCmd.lean`): syntax
+   `mixed_mutual (codata|data)+ end`; runs; inside-out elaboration (`elabRuns`: a family
+   parameter for the adjacent outer run if mentioned, occurrences rewritten by one pass of
+   `substOccs` with three substitutions, nesting through the adjacent inner run at the run's
+   own family, `Which` of every run generated first, `universe u_<Run>` declared in scope);
+   warning for a uniform block; `mutual` rejects mixed blocks; a temporary error for a
+   declaration mentioning a run other than its own and its two neighbours, to be removed by
+   steps 2 and 3. Tests: `Test/Mixed.lean` and `Test/MixedOrder.lean` as `mixed_mutual` blocks
+   (both orders), `Test/MixedRuns.lean` (`Proc ⊃ Menu ⊃ Trace`, the three rejected forms by
+   `#guard_msgs`); `Sketch/MixedFail.lean` kept. Docs: `contract.md` ("Mixed blocks"), the
+   `MutualCmd.lean` header, memory. References to runs further inside: step 3. NOT DONE: a
+   reference to a run further outside (step 2).
 
 ## 6. Surface — NOT DONE
 
@@ -253,5 +280,6 @@ Steps, in order:
 2. `data`: DONE (leftovers listed above).
 3. Mutual blocks: DONE (leftovers listed above).
 4. Nested types: DONE (leftovers listed above).
-5. Mixed blocks, `mixed_mutual`: NOT DONE, steps 1–4 in that order.
+5. Mixed blocks, `mixed_mutual`: steps 1, 3 and 4 DONE; step 2 NOT DONE (a reference to a run
+   further outside).
 6. Surface items, as they become blocking.

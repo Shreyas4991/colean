@@ -108,39 +108,83 @@ implementations. Indexed families are read over `I → Type u` exactly as in the
 `fold : (∀ i, F S i → S i) → ∀ {i}, T i → S i` and `induction` for `motive : ∀ i, T i → Prop`,
 with the same universe remarks.
 
-Nested occurrences `G (T idx)` through a container `G` (`List`, `Option`, `A × ·`, or any type
-constructor with a `Codata.Container` instance, `G X ≅ Σ sh, Pos sh → X`) change nothing in the
-contracts: `F` keeps `G X` as a field, `F.map` acts inside `G` through the container
-(`Container.map`, which is `List.map` on lists), and the canonical `F.Rel` relates nested fields
-with the same shape and related contents (`Container.Rel`).
+Nested occurrences change nothing in the contracts. A constructor argument whose type mentions
+`T` other than plainly or under arrows, `List (T idx)`, `T i × T j`, `A → List (T idx)`,
+`Option (T idx × T idx)`, `(n : ℕ) × (Fin n → T idx)`, …, has an *occurrence structure*: an
+equivalence `G X ≃ Σ sh, Pos sh → X` between the argument type as a function `G` of the
+occurrence and a shape with contents at its positions (`Codata.Occ`, `Codata.IOcc` when the
+positions carry an index of the family). It is built by recursion on the syntax of the type,
+from a constant, the occurrence, products, sums, functions and dependent pairs over constant
+types, and named type constructors, whose structures are leaves (`List`, `Option`, `Array`, the
+declared types, any type constructor registered with `Codata.OccLeaf`). `F` keeps the argument
+type as a field, `F.map` acts on it through the structure (`Occ.map`, which is `List.map` on
+lists, componentwise on pairs, …, by the simp lemmas `Occ.map_list`, `Occ.map_prod`, …), and the
+canonical `F.Rel` relates nested fields with the same shape and related contents (`Occ.Rel`).
 
-Conversely a declared type is a container in its type parameter, when the last parameter `α` is
-used only at parameter positions (as the type of a field, under a function type, or through a
-container). Then `T.Shape α ≅ Σ s₀ : T.Shape₀, T.P s₀ → α` (`T.shapeEquiv`) with the erased
+Conversely a declared type has an occurrence structure in its type parameter, when the last
+parameter `α` is used only at parameter positions (as the type of a field, under a function type,
+or nested). Then `T.Shape α ≅ Σ s₀ : T.Shape₀, T.P s₀ → α` (`T.shapeEquiv`) with the erased
 shapes `T.Shape₀` and the parameter positions `T.P`, and the command provides
-`Codata.Container (fun α => T params α idx) T.Sh T.Pos`: the shapes `T.Sh` are the erased
+`T.occ : Codata.Occ T.Sh T.Pos (fun α => T params α idx)`: the shapes `T.Sh` are the erased
 trees (the type at the signature `T.psig.sig₀`), a position is a path to a node together with a
-parameter position of its erased shape, and the instance is the generic
-`PSignature.container`/`cocontainer` (`Param.lean`). The same holds for a family parameter
-`X : J → Type u` (positions `X j`), with the indexed container class `Codata.IContainer`
-(`G X ≅ Σ sh, (q : Pos sh) → X (pidx sh q)`), of which `Container` is the case `J = Unit`.
-This is what lets a later declaration nest through `T` (`Forest (Tree α)` with a declared
-`Forest`).
+parameter position of its erased shape, and the structure is the generic `PSignature.occ`/`coocc`
+(`Param.lean`), registered as a leaf. The same holds for a family parameter `X : J → Type u`
+(positions `X j`), with the indexed structure `Codata.IOcc` (`G X ≅ Σ sh, (q : Pos sh) →
+X (pidx sh q)`), of which `Occ` is the case `J = Unit`. This is what lets a later declaration
+nest through `T` (`Forest (Tree α)` with a declared `Forest`). The structure is computed on the
+constructors: `T.map_c : Occ.map T.occ T.occ f (T.c …) = T.c …` with `f` at the parameter
+positions, `map f` at the recursive ones and `map (map f)` through nested arguments, and
+`T.rel_c : R … → Rel R … → Occ.Rel T.occ T.occ R (T.c …) (T.c …)`, the introduction of the
+relator from `R` at the parameter positions and `Rel R` at the recursive ones; the two copies of
+the parameter are in independent universes.
 
-A mixed `mutual` block, with `data` and `codata` declarations, means the nested fixpoint with
-the inductive types inside the coinductive ones, and its contract is the composition of the two
-above: the inductive types are declared with the coinductive family as an extra parameter
-(`Forest α X`, a type `X` for one coinductive type without indices, a family `X : J → Type u`
-over the coinductive block's packed index otherwise), and the coinductive types are declared
-with the inductive ones applied to the coinductive family (`Tree.node : α → Forest α (Tree α)
-→ Tree α`, a nested occurrence). So `Forest.fold`, `Forest.rec` are those of the parameterised
-inductive type, `Tree.F α X` has the field `children : Forest α X`, and `Tree.corec`,
-`Tree.bisim` are those of a coinductive type nesting through a container, with
-`Container.Rel`/`IContainer.Rel` on the forests. The other nesting order is another type; it is
-written as two declarations in that order.
+
+# Mixed blocks
+
+```
+mixed_mutual
+codata Tree (α : Type u)
+  | node (a : α) (children : Forest α)
+data Forest (α : Type u)
+  | nil
+  | cons (t : Tree α) (f : Forest α)
+end
+```
+
+A block with `data` and `codata` declarations is a nested fixpoint, and a cyclic system has
+several nested solutions (the trees outside the forests are the finitely branching infinite
+trees, the forests outside the trees the finite ones), so the block states the order: *the
+textual order is the nesting order, the first declaration outermost*. A `mutual` block may not
+mix the two kinds. A *run* is a maximal sequence of adjacent declarations of the same kind and
+is one uniform block with the contract above; runs `R₁ ⊃ R₂ ⊃ … ⊃ Rₖ` nest as follows.
+
+1. A run is declared with one extra parameter for the run outside it that it mentions, the
+   family `X` (a type `X : Type u_<R>` for a run of one type without indices, a family
+   `X : J → Type u_<R>` over the run's packed index `(m : Which) ×' idx` otherwise), every
+   occurrence of a type of that run replaced by `X` (at its packed index) and every occurrence
+   of its own types applied to `X`.
+2. Every occurrence of a type `E` of the run inside it is `E params (Rᵢ params X)` (or
+   `E params (fun p => Rᵢ params X p.1 …)`), a nested occurrence through the container that
+   `E` is in its family parameter.
+3. The outermost run has no extra parameter: its types are closed.
+
+So the user sees the parameterised inner types (`Forest α X`, `Forest.nil : Forest α X`,
+`Forest.fold`, `Forest.rec`) and the closed outer ones (`Tree.node : α → Forest α (Tree α) →
+Tree α`, `Tree.corec`, `Tree.bisim` with `Occ.Rel`/`IOcc.Rel` on the forests). The
+principles compose: coinduction on an outer run sees the inner runs through their relators, one
+finite layer per step (`Forest.rel_cons`, `Occ.rel_map`); induction on an inner run sees
+the outer runs as opaque parameters; an inner induction inside a coinductive step is parametric
+in the outer relation; a coinduction inside an inductive step is a closed statement about the
+outer type. All declarations of a block have the same parameters, the declarations of a run
+the same indices; the universe of a family parameter is a `universe` variable declared in
+scope. Any number of runs, in any order; a declaration may mention any run inside its own (an
+occurrence of a type of a run further inside is applied to the chain of families down to the
+declaration's own run, `Trace α (Menu α (Proc α))`, a nested occurrence through the composite of
+the declared structures); for now, among the runs outside its own, only the adjacent one.
 
 Beyond the contract, the command generates the dependent recursor `T.rec` into any `Sort`, with
 one minor premise per constructor carrying an induction hypothesis for each recursive argument.
-It is not derivable from the contract, whose `induction` is in `Prop`; it comes from the
-encoding, by well-founded recursion on the immediate-child relation, so its computation rules
-`T.rec_ctorᵢ` hold propositionally and not by `rfl`.
+It is derivable from the contract (a fold into `Σ t, motive t`, with `induction` showing the
+first component is the identity), but the command takes it from the encoding, by well-founded
+recursion on the immediate-child relation, so its computation rules `T.rec_ctorᵢ` hold
+propositionally and not by `rfl`.
