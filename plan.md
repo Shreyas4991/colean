@@ -7,8 +7,8 @@ them), `Model/` (`Cotype`, `Intype`, `Occ`, `Param`: the fixpoints on `Raw`, occ
 structures, the structure in a parameter), `Cmd/` (the generators by step: `Analysis`,
 `Functor`, `Model`, `Framework`, `Extras`, `Surface`), `CodataCmd.lean`/`DataCmd.lean` (the
 pipelines and commands), `MutualCmd.lean` (blocks), `Test/` (one test per type), `Sketch/`
-(hand-written experiments, not built). `Subtypes.lean` imports everything and is the only import
-of the root module, so `lake build` checks it all. The contract is `contract.md`; `todo.md` holds
+(hand-written experiments, not built), all directly under `Colean/`. The root module
+`Colean.lean` imports everything, so `lake build` checks it all. The contract is `contract.md`; `todo.md` holds
 deferred items that are not features.
 
 Design rules, fixed by discussion:
@@ -55,9 +55,9 @@ NOT DONE, and not planned:
 ## 2. `data`: the inductive dual — DONE
 
 Contract in `contract.md` (`ctor`, `fold`, `fold_ctor`, `induction` with `F.All` defined from
-`F.map`). `Subtypes/Data.lean`: the least fixpoint, the recursor by well-founded recursion on
+`F.map`). `Model/Intype.lean`: the least fixpoint, the recursor by well-founded recursion on
 the immediate-child relation, the transport theorems, `Data.Contract` and its derived layer.
-`Subtypes/DataCmd.lean`: the command, sharing the analysis and the generators of `F`, the
+`DataCmd.lean`: the command, sharing the analysis and the generators of `F`, the
 signature, the isomorphism, the constructors and `casesOn` with `codata`.
 
 DONE:
@@ -79,7 +79,7 @@ NOT DONE:
 
 ## 3. Mutual types — DONE
 
-`Subtypes/MutualCmd.lean`: Lean's own `mutual … end` syntax around `codata` or `data`
+`MutualCmd.lean`: Lean's own `mutual … end` syntax around `codata` or `data`
 declarations; the block is one family over the enumeration `Blk.Which` of its types, prepended
 to the index telescope, and elaborated by the single-type pipeline. Per type: the type, the
 constructors and their lemmas, `casesOn` as the `cases` eliminator, aliases `corec`, `bisim`,
@@ -103,7 +103,7 @@ NOT DONE:
 
 ## 4. Nested types — DONE, switched to occurrence structures (2026-09-17)
 
-`Subtypes/Occ.lean`: the bundled structures `Occ Sh Pos G` (`G X ≃ Σ sh, Pos sh → X`) and
+`Model/Occ.lean`: the bundled structures `Occ Sh Pos G` (`G X ≃ Σ sh, Pos sh → X`) and
 `IOcc Sh Pos pidx G` (positions carry an index of the family), their laws (`toC`/`ofC`, `map`
 and `Rel` between two structures at different universes, `rel_map`, `rel_intro`, `rel_ofC`,
 `exists_map_of_rel`), the combinators `const`, `hole`, `prod`, `sum`, `pi`, `piP`, `sigma`,

@@ -1,4 +1,4 @@
-# Architecture of `Subtypes/`
+# Architecture of `Colean/`
 
 A declaration `codata T … | …` or `data T … | …` is processed in steps with fixed boundaries.
 Each step sees only the outputs of the steps above it; each has one file of theory and one
