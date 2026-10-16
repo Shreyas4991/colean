@@ -5,8 +5,9 @@
 All under `Colean/`. `Codata.lean`: the generic theory, for indexed polynomial signatures (a
 plain type is a family over `Unit`), the contract (`contract.md`, plain and indexed sections),
 and the derived layer. `CodataCmd.lean`: the `codata` command. `Data.lean` and `DataCmd.lean`:
-the inductive dual. `Test/`: one test per type. The root module `Colean.lean` imports
-everything, so `lake build` checks it all. `todo.md` holds deferred items that are not features.
+the inductive dual. The tests are the separate library `ColeanTest/`, one test per type. The
+root modules `Colean.lean` and `ColeanTest.lean` import everything and are both default
+targets, so `lake build` checks it all. `todo.md` holds deferred items that are not features.
 
 Design rules, fixed by discussion:
 
@@ -27,12 +28,12 @@ codata Vec (α : Type u) : Nat → Type u
 
 DONE:
 
-* any number of indices, dependent telescopes, propositions as indices (`Test/Cyc.lean`,
-  `Test/Bounded.lean`);
+* any number of indices, dependent telescopes, propositions as indices (`ColeanTest/Cyc.lean`,
+  `ColeanTest/Bounded.lean`);
 * arbitrary index expressions in results and recursive arguments, including bare and repeated
-  binders (`Test/Diag.lean`);
+  binders (`ColeanTest/Diag.lean`);
 * recursive arguments under any telescope of arrows, dependent or curried, with the index
-  depending on the bound variables (`Test/Tele.lean`);
+  depending on the bound variables (`ColeanTest/Tele.lean`);
 * `casesOn` as the `cases` eliminator, refining the indices; injectivity and disjointness lemmas
   where they are well-typed; `motive` and `S` usable as named arguments.
 
@@ -59,8 +60,9 @@ signature, the isomorphism, the constructors and `casesOn` with `codata`.
 
 DONE:
 
-* the same syntax and scope as `codata`: parameters, indices, telescopes (`Test/FinList.lean`,
-  `Test/FinTree.lean`, `Test/Nat.lean`, `Test/FinVec.lean`, `Test/LeT.lean`, `Test/WType.lean`);
+* the same syntax and scope as `codata`: parameters, indices, telescopes
+  (`ColeanTest/FinList.lean`, `ColeanTest/FinTree.lean`, `ColeanTest/Nat.lean`,
+  `ColeanTest/FinVec.lean`, `ColeanTest/LeT.lean`, `ColeanTest/WType.lean`);
 * `T.fold` for families in any universe, `T.fold_ctor`, `T.fold_ctorᵢ`, `T.fold_eq`,
   `T.fold_unique`; derived `T.dtor` with `dtor_ctor`, `ctor_dtor`; constructors, injectivity,
   disjointness, `casesOn` as for `codata`;

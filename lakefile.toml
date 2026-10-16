@@ -1,9 +1,12 @@
 name = "Colean"
 version = "0.1.0"
-defaultTargets = ["Colean"]
+defaultTargets = ["Colean", "ColeanTest"]
 
 [[lean_lib]]
 name = "Colean"
+
+[[lean_lib]]
+name = "ColeanTest"
 
 [[require]]
 name = "mathlib"

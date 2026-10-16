@@ -30,8 +30,8 @@ convention is what makes `Raw.node` injective).
 ## Layout
 
 The generic theory lives in `Codata.lean` (coinductive) and `Data.lean` (inductive), the
-`codata` and `data` commands in `CodataCmd.lean` and `DataCmd.lean`, and one test per type in
-`Test/`.
+`codata` and `data` commands in `CodataCmd.lean` and `DataCmd.lean`; one test per type is in
+the separate library `ColeanTest`.
 -/
 
 universe u v w
