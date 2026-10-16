@@ -1,4 +1,4 @@
-import Colean.Subtypes.DataCmd
+import Colean.DataCmd
 
 /-! # Test: `data`, an indexed family -/
 

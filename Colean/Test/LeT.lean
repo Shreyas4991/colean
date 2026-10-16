@@ -1,4 +1,4 @@
-import Colean.Subtypes.DataCmd
+import Colean.DataCmd
 
 /-! # Test: `data` with two indices, bare and repeated (`Le n n`), and proofs by induction -/
 

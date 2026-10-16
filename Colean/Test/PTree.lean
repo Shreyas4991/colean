@@ -1,4 +1,4 @@
-import Colean.Subtypes.CodataCmd
+import Colean.CodataCmd
 
 /-! Trees with two type parameters: `mirror` is an involution, by bisimulation and `cases`. -/
 

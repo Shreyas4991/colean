@@ -1,5 +1,5 @@
 import Mathlib.Logic.Function.Basic
-import Colean.Subtypes.Raw
+import Colean.Raw
 
 /-!
 # Generic theory behind `codata`

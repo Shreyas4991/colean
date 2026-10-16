@@ -2,12 +2,11 @@
 
 ## Where we are
 
-`Subtypes/Codata.lean`: the generic theory, for indexed polynomial signatures (a plain type is
-a family over `Unit`), the contract (`contract.md`, plain and indexed sections), and the derived
-layer. `Subtypes/CodataCmd.lean`: the `codata` command. `Subtypes/Data.lean` and
-`Subtypes/DataCmd.lean`: the inductive dual. `Subtypes/Test/`: one test per type.
-`Subtypes.lean` imports everything and is the only import of the root module, so `lake build`
-checks it all. `todo.md` holds deferred items that are not features.
+All under `Colean/`. `Codata.lean`: the generic theory, for indexed polynomial signatures (a
+plain type is a family over `Unit`), the contract (`contract.md`, plain and indexed sections),
+and the derived layer. `CodataCmd.lean`: the `codata` command. `Data.lean` and `DataCmd.lean`:
+the inductive dual. `Test/`: one test per type. The root module `Colean.lean` imports
+everything, so `lake build` checks it all. `todo.md` holds deferred items that are not features.
 
 Design rules, fixed by discussion:
 
@@ -53,9 +52,9 @@ NOT DONE, and not planned:
 ## 2. `data`: the inductive dual — DONE
 
 Contract in `contract.md` (`ctor`, `fold`, `fold_ctor`, `induction` with `F.All` defined from
-`F.map`). `Subtypes/Data.lean`: the least fixpoint, the recursor by well-founded recursion on
+`F.map`). `Data.lean`: the least fixpoint, the recursor by well-founded recursion on
 the immediate-child relation, the transport theorems, `Data.Contract` and its derived layer.
-`Subtypes/DataCmd.lean`: the command, sharing the analysis and the generators of `F`, the
+`DataCmd.lean`: the command, sharing the analysis and the generators of `F`, the
 signature, the isomorphism, the constructors and `casesOn` with `codata`.
 
 DONE:

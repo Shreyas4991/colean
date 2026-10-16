@@ -1,5 +1,5 @@
 import Mathlib.Basic.Real.Basic
-import Colean.Subtypes.CodataCmd
+import Colean.CodataCmd
 
 /-! Trees branching over an arbitrary type: a recursive argument under a function type whose
 domain is a parameter. -/

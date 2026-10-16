@@ -1,5 +1,5 @@
 import Mathlib.Logic.Equiv.Defs
-import Colean.Subtypes.DataCmd
+import Colean.DataCmd
 
 /-! # Test: `data` with two recursive arguments, and the native inductive type -/
 

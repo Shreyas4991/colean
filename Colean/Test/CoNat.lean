@@ -1,5 +1,5 @@
 import Mathlib.Tactic.Conv
-import Colean.Subtypes.CodataCmd
+import Colean.CodataCmd
 
 /-! Conatural numbers: case analysis with the generated eliminator, and the simp lemmas. -/
 

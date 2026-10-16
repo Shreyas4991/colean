@@ -1,4 +1,4 @@
-import Colean.Subtypes.CodataCmd
+import Colean.CodataCmd
 
 /-! # Test: constructors whose indices are bare binders
 

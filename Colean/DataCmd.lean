@@ -1,5 +1,5 @@
-import Colean.Subtypes.Data
-import Colean.Subtypes.CodataCmd
+import Colean.Data
+import Colean.CodataCmd
 
 /-!
 # The `data` command

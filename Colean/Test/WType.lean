@@ -1,5 +1,5 @@
 import Mathlib.Data.W.Basic
-import Colean.Subtypes.DataCmd
+import Colean.DataCmd
 
 /-! # Test: `data` with a recursive argument under a dependent arrow, against Mathlib's `WType`
 

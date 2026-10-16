@@ -1,4 +1,4 @@
-import Colean.Subtypes.CodataCmd
+import Colean.CodataCmd
 
 /-! # Test: two indices, the second depending on the first
 

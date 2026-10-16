@@ -1,5 +1,5 @@
 import Mathlib.Logic.Equiv.Defs
-import Colean.Subtypes.DataCmd
+import Colean.DataCmd
 
 /-! # Test: `data` with no parameters, the naturals -/
 

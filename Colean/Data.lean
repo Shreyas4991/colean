@@ -1,4 +1,4 @@
-import Colean.Subtypes.Codata
+import Colean.Codata
 
 /-!
 # Generic theory behind `data`

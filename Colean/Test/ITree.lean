@@ -1,4 +1,4 @@
-import Colean.Subtypes.CodataCmd
+import Colean.CodataCmd
 
 /-! Interaction trees: implicit binders, and branching that depends on the constructor's data
 (`k : X → ITree E R` with `X` a field of `Vis`). The corecursor is noncomputable here. -/

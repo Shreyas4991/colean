@@ -1,4 +1,4 @@
-import Colean.Subtypes.CodataCmd
+import Colean.CodataCmd
 
 /-! Colists with a type parameter: corecursion across universes, and `map`. -/
 

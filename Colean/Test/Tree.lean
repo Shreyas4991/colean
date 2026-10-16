@@ -1,4 +1,4 @@
-import Colean.Subtypes.CodataCmd
+import Colean.CodataCmd
 
 /-! Trees of naturals with leaves: a constructor of arity two. -/
 

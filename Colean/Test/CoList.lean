@@ -1,4 +1,4 @@
-import Colean.Subtypes.CodataCmd
+import Colean.CodataCmd
 
 /-! Colists of naturals: a constructor of arity zero and one of arity one. -/
 
