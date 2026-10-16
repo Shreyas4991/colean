@@ -7,7 +7,7 @@ set_option backward.isDefEq.respectTransparency.types false
 
 /-! # Scratch: inductive types as coinductive families with sizes
 
-The observation from `Test/FinVec.lean`: when every recursive argument has a strictly smaller
+The observation from `ColeanTest/FinVec.lean`: when every recursive argument has a strictly smaller
 index, a `codata` family is finite, and `corec`/`bisim` are recursion and induction on the
 index in disguise. So an inductive type could be presented as a coinductive family indexed by
 a *size bound*: each constructor at `n + 1` with its recursive arguments at `n` (sized types).

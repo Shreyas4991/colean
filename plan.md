@@ -6,10 +6,11 @@ The layout follows `architecture.md`: `Framework.lean` (the contracts and what f
 them), `Model/` (`Cotype`, `Intype`, `Occ`, `Param`: the fixpoints on `Raw`, occurrence
 structures, the structure in a parameter), `Cmd/` (the generators by step: `Analysis`,
 `Functor`, `Model`, `Framework`, `Extras`, `Surface`), `CodataCmd.lean`/`DataCmd.lean` (the
-pipelines and commands), `MutualCmd.lean` (blocks), `Test/` (one test per type), `Sketch/`
-(hand-written experiments, not built), all directly under `Colean/`. The root module
-`Colean.lean` imports everything, so `lake build` checks it all. The contract is `contract.md`; `todo.md` holds
-deferred items that are not features.
+pipelines and commands), `MutualCmd.lean` (blocks), `Sketch/` (hand-written experiments, not
+built), all directly under `Colean/`; the tests are the separate library `ColeanTest/`, one
+test per type. The root modules `Colean.lean` and `ColeanTest.lean` import everything and are
+both default targets, so `lake build` checks it all. The contract is `contract.md`; `todo.md`
+holds deferred items that are not features.
 
 Design rules, fixed by discussion:
 
@@ -30,12 +31,12 @@ codata Vec (α : Type u) : Nat → Type u
 
 DONE:
 
-* any number of indices, dependent telescopes, propositions as indices (`Test/Cyc.lean`,
-  `Test/Bounded.lean`);
+* any number of indices, dependent telescopes, propositions as indices (`ColeanTest/Cyc.lean`,
+  `ColeanTest/Bounded.lean`);
 * arbitrary index expressions in results and recursive arguments, including bare and repeated
-  binders (`Test/Diag.lean`);
+  binders (`ColeanTest/Diag.lean`);
 * recursive arguments under any telescope of arrows, dependent or curried, with the index
-  depending on the bound variables (`Test/Tele.lean`);
+  depending on the bound variables (`ColeanTest/Tele.lean`);
 * `casesOn` as the `cases` eliminator, refining the indices; injectivity and disjointness lemmas
   where they are well-typed; `motive` and `S` usable as named arguments.
 
@@ -62,8 +63,9 @@ signature, the isomorphism, the constructors and `casesOn` with `codata`.
 
 DONE:
 
-* the same syntax and scope as `codata`: parameters, indices, telescopes (`Test/FinList.lean`,
-  `Test/FinTree.lean`, `Test/Nat.lean`, `Test/FinVec.lean`, `Test/LeT.lean`, `Test/WType.lean`);
+* the same syntax and scope as `codata`: parameters, indices, telescopes
+  (`ColeanTest/FinList.lean`, `ColeanTest/FinTree.lean`, `ColeanTest/Nat.lean`,
+  `ColeanTest/FinVec.lean`, `ColeanTest/LeT.lean`, `ColeanTest/WType.lean`);
 * `T.fold` for families in any universe, `T.fold_ctor`, `T.fold_ctorᵢ`, `T.fold_eq`,
   `T.fold_unique`; derived `T.dtor` with `dtor_ctor`, `ctor_dtor`; constructors, injectivity,
   disjointness, `casesOn` as for `codata`;
@@ -84,7 +86,7 @@ declarations; the block is one family over the enumeration `Blk.Which` of its ty
 to the index telescope, and elaborated by the single-type pipeline. Per type: the type, the
 constructors and their lemmas, `casesOn` as the `cases` eliminator, aliases `corec`, `bisim`,
 `fold`; block-level `corec`, `bisim`, `rec` with states, relations and motives over `Which`
-(`Test/MTree.lean`, `Test/MRose.lean`, `Test/EvenOdd.lean`).
+(`ColeanTest/MTree.lean`, `ColeanTest/MRose.lean`, `ColeanTest/EvenOdd.lean`).
 
 DONE:
 
@@ -98,8 +100,8 @@ NOT DONE:
 * types of one block with different index telescopes (Lean allows them): the block index would
   be a dependent pair `(m : Which) ×' Ix m`;
 * nothing else planned. Mixed inductive/coinductive blocks are section 5: today a mixed
-  `mutual` block is accepted with the fixed reading "codata outer" (`Test/Mixed.lean`); it will
-  be rejected once `mixed_mutual` exists.
+  `mutual` block is accepted with the fixed reading "codata outer" (`ColeanTest/Mixed.lean`); it
+  will be rejected once `mixed_mutual` exists.
 
 ## 4. Nested types — DONE, switched to occurrence structures (2026-09-17)
 
@@ -124,8 +126,8 @@ DONE:
   domain, a proposition allowed), `(a : A) × …`, and named constructors (`List`, `Option`,
   `Array`, the declared types), at any depth: `T × T`, `A → List T`, `Option (T × T)`,
   `T ⊕ A`, `(n : ℕ) × (Fin n → T)`, `0 < n → List T`, occurrences at several indices in one
-  argument (`Chain n × Chain (n + 1)`); for `codata` and `data` (`Test/OccNest.lean`,
-  `Test/Rose.lean`, `Test/FinRose.lean`);
+  argument (`Chain n × Chain (n + 1)`); for `codata` and `data` (`ColeanTest/OccNest.lean`,
+  `ColeanTest/Rose.lean`, `ColeanTest/FinRose.lean`);
 * any type constructor with an `OccLeaf`/`IOccLeaf` instance written by hand;
 * the structure generated for every `data`/`codata` (and every type of a mutual block, and the
   block family) whose last parameter is a type `α` or a family `X : J → Type u` used only at
@@ -133,7 +135,7 @@ DONE:
   `T.Shape₀`, `T.P`, `T.shapeEquiv`, `T.psig`, `T.Sh`, `T.Pos`, `T.occ`, `T.instOccLeaf` (and
   `T.pidx`, `T.posIdx` for a family), the constructor-level lemmas `T.map_c`, `T.rel_c`;
 * nesting through declared types (`Forest (Tree α)`, `Forest α (fun p => Blk α p)`), for `data`
-  and `codata` (`Test/Param.lean`, `Test/Mixed.lean`).
+  and `codata` (`ColeanTest/Param.lean`, `ColeanTest/Mixed.lean`).
 
 NOT DONE:
 
@@ -208,7 +210,7 @@ command, `genContainerLemmas` ↦ `genOccLemmas`, no instances passed):
    `rel_c` is `rel_map` on the constructor over the related pairs, rewritten by `map_c`. The
    generated instances are named `T.instContainer`/`T.instIContainer` and passed explicitly in
    the lemmas (the instance search runs before the numerals of an index are elaborated inside
-   `fun α => T α (n + 1)`). Tests: `Test/Param.lean` (`Node`, `Vec`), `Test/Mixed.lean`
+   `fun α => T α (n + 1)`). Tests: `ColeanTest/Param.lean` (`Node`, `Vec`), `ColeanTest/Mixed.lean`
    (`Tree.bin` unfolded).
 2. Containers in a suffix of the parameters, and nested occurrences with mixed positions:
    * the container parameter is a suffix `X₁ … Xₙ` of the parameters, one family over
@@ -245,8 +247,8 @@ command, `genContainerLemmas` ↦ `genOccLemmas`, no instances passed):
    anywhere under type constructors (applications, products, lambdas; not arrows) into
    `G := fun X => ty[occ := X]`, so `List (Option (T i))` of section 4 is closed too;
    `mixed_mutual` applies an occurrence of a run further inside to the chain of families down
-   to the declaration's own run (`famOf`). Tests: `Test/Rose.lean`, `Test/FinRose.lean`
-   (`Rose₂`), `Test/MixedRuns.lean` (`Proc → Trace`, `Outer → Inner`). Since the switch to
+   to the declaration's own run (`famOf`). Tests: `ColeanTest/Rose.lean`, `ColeanTest/FinRose.lean`
+   (`Rose₂`), `ColeanTest/MixedRuns.lean` (`Proc → Trace`, `Outer → Inner`). Since the switch to
    occurrence structures (section 4) the composite is `Occ.comp` built by the command, no
    instance search.
 4. DONE (2026-09-15), before steps 2 and 3. The command (`MutualCmd.lean`): syntax
@@ -256,8 +258,8 @@ command, `genContainerLemmas` ↦ `genOccLemmas`, no instances passed):
    own family, `Which` of every run generated first, `universe u_<Run>` declared in scope);
    warning for a uniform block; `mutual` rejects mixed blocks; a temporary error for a
    declaration mentioning a run other than its own and its two neighbours, to be removed by
-   steps 2 and 3. Tests: `Test/Mixed.lean` and `Test/MixedOrder.lean` as `mixed_mutual` blocks
-   (both orders), `Test/MixedRuns.lean` (`Proc ⊃ Menu ⊃ Trace`, the three rejected forms by
+   steps 2 and 3. Tests: `ColeanTest/Mixed.lean` and `ColeanTest/MixedOrder.lean` as
+   `mixed_mutual` blocks (both orders), `ColeanTest/MixedRuns.lean` (`Proc ⊃ Menu ⊃ Trace`, the three rejected forms by
    `#guard_msgs`); `Sketch/MixedFail.lean` kept. Docs: `contract.md` ("Mixed blocks"), the
    `MutualCmd.lean` header, memory. References to runs further inside: step 3. NOT DONE: a
    reference to a run further outside (step 2).

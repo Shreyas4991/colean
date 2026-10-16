@@ -9,7 +9,7 @@ codata Vec (α : Type u) : Nat → Type u
   | cons {n : Nat} (a : α) (v : Vec α n) : Vec α (n + 1)
 ```
 
-Kept as reference for `CodataCmd.lean`; `Test/Vec.lean` uses the command. Constructor
+Kept as reference for `CodataCmd.lean`; `ColeanTest/Vec.lean` uses the command. Constructor
 applications are written with all arguments explicit, as the command does.
 -/
 
