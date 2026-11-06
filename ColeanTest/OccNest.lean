@@ -6,10 +6,10 @@ The occurrence structure of an argument type is built by recursion on its syntax
 sums, functions and dependent pairs over constant types, and named type constructors (leaves).
 Here the shapes that no single container instance covered: `T × T`, `A → List T`,
 `Option (T × T)`, `T ⊕ A`, `(n : ℕ) × (Fin n → T)`, a function from a proposition, occurrences
-at different indices in one argument, and a declared type whose parameter occurs as `α × α`,
-nested through. -/
+at different indices in one argument, and a declared type nested through, by hand-written
+instances. -/
 
-universe u
+universe u v
 
 namespace OccTest
 
@@ -128,14 +128,39 @@ data Chain : Nat → Type
 #check @Chain.idx
 #check @Chain.rec
 
-/-! ### A declared type whose parameter occurs as a pair, nested through -/
+/-! ### Nesting through a declared type, with hand-written instances -/
 
 data Two (α : Type u)
   | mk (p : α × α)
 
-#check @Two.occ
-#check @Two.map_mk
-#check @Two.rel_mk
+/-- The action on functions. -/
+def Two.map {α : Type u} {β : Type v} (f : α → β) (t : Two α) : Two β :=
+  Two.casesOn (motive := fun _ => Two β) t fun p => .mk (f p.1, f p.2)
+
+@[simp] theorem Two.map_mk {α : Type u} {β : Type v} (f : α → β) (p : α × α) :
+    (Two.mk p).map f = .mk (f p.1, f p.2) := by
+  simp [Two.map]
+
+/-- The two components, as a function from `Bool`. -/
+def Two.get {α : Type u} (t : Two α) (b : Bool) : α :=
+  Two.casesOn (motive := fun _ => α) t fun p => if b then p.1 else p.2
+
+@[simp] theorem Two.get_mk {α : Type u} (p : α × α) (b : Bool) :
+    (Two.mk p).get b = if b then p.1 else p.2 := by
+  simp [Two.get]
+
+instance : Codata.PolyIso Two.{u} Unit (fun _ => Bool) where
+  equiv :=
+    { toFun := fun t => ⟨(), t.get⟩
+      invFun := fun z => .mk (z.2 true, z.2 false)
+      left_inv := fun t => by cases t with | mk p => simp
+      right_inv := fun ⟨_, c⟩ => congrArg (Sigma.mk ()) (funext fun b => by cases b <;> simp) }
+
+instance : Codata.PolyMap Two.{u} Two.{v} where
+  map := Two.map
+  equiv_map f t := by
+    cases t with
+    | mk p => exact congrArg (Sigma.mk ()) (funext fun b => by cases b <;> simp [Equiv.coe_fn_mk, Codata.PolyIso.equiv])
 
 data Tree
   | leaf
@@ -145,13 +170,13 @@ data Tree
 #check @Tree.rec
 
 def Tree.size (t : Tree) : Nat :=
-  Tree.fold (S := Nat) (fun | .leaf => 1 | .node c => Two.fold (fun | .mk p => p.1 + p.2) c + 1) t
+  Tree.fold (S := Nat) (fun | .leaf => 1 | .node c => c.get true + c.get false + 1) t
 
+/-- The map on the nested argument is `Two.map`: `Occ.map_ofIso`. -/
 theorem Tree.size_node (l r : Tree) : (Tree.node (Two.mk (l, r))).size = l.size + r.size + 1 := by
-  rw [Tree.size, Tree.fold_node, Two.map_mk]
-  simp only [Codata.Occ.map_prod, Codata.Occ.map_hole]
-  rw [Two.fold_mk]
-  rfl
+  rw [Tree.size, Tree.fold_node, Codata.Occ.map_ofIso]
+  change (Two.map _ (Two.mk (l, r))).get true + (Two.map _ (Two.mk (l, r))).get false + 1 = _
+  simp [Tree.size]
 
 end
 

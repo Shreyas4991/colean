@@ -1,4 +1,4 @@
-import Colean.Sketch.CoList
+import Sketch.CoList
 
 /-!
 # `Vec`: an indexed family

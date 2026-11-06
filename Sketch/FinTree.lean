@@ -1,5 +1,5 @@
 import Mathlib.Logic.Equiv.Defs
-import Colean.Sketch.TreeLemmas
+import Sketch.TreeLemmas
 
 /-!
 # `FinTree`: the inductive type defined by the operator of `Tree`

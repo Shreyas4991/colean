@@ -50,13 +50,12 @@ def dataPipeline (ctx : Ctx) : CommandElabM Unit := do
   -- Since Lean 4.34 implicit arguments and the types of assigned metavariables are compared
   -- without unfolding definitions; the generated proofs rely on unfolding the type to its model,
   -- so restore the old comparison for the generated declarations only.
-  elabCommand (← `(section))
+  elabCommand (← `(noncomputable section))
   elabCommand (← `(set_option backward.isDefEq.respectTransparency false))
   elabCommand (← `(set_option backward.isDefEq.respectTransparency.types false))
   genFunctor ctx
   genSignature ctx
   genIso ctx
-  elabCommand (← `(noncomputable section))
   genDataContract ctx
   genDataContractDef ctx
   genTypes ctx
@@ -66,9 +65,6 @@ def dataPipeline (ctx : Ctx) : CommandElabM Unit := do
   genRec ctx
   genRecLemmas ctx
   genDataAliases ctx
-  genOcc ctx
-  genOccLemmas ctx
-  elabCommand (← `(end))
   elabCommand (← `(end))
 
 @[command_elab dataCmd] def elabData : CommandElab := fun stx => do

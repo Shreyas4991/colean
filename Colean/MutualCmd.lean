@@ -62,8 +62,7 @@ and is one uniform block; runs `R₁ ⊃ R₂ ⊃ … ⊃ Rₖ` are elaborated f
   a type of `Rₖ` applied to `X`;
 * a run `Rᵢ` is declared likewise with a parameter for `Rᵢ₋₁`, and every occurrence of a type
   `E` of `Rᵢ₊₁` becomes `E params (Rᵢ params X)` (or `E params (fun p => Rᵢ params X p.1 p.2…)`),
-  a nested occurrence through the occurrence structure of `E` in its family parameter
-  (`Param.lean`);
+  a nested occurrence through `E` in its family parameter;
 * the outermost run has no extra parameter; its types are closed.
 
 So the user sees the parameterised inner types (`Forest α X`, with `Forest.nil : Forest α X`
@@ -80,6 +79,10 @@ composite of the declared structures (`Occ.comp`). For now a declaration may men
 the runs outside its own, only the adjacent one: a reference further outside needs a structure
 in several parameters (plan, section 5, step 2). A `mixed_mutual` block with a single
 kind is accepted with a warning suggesting `mutual`.
+
+The nesting through inner runs needs `PolyIso` instances for them, in their family parameter.
+These are not generated yet, and cannot be given by hand inside a block, so a block in which an
+outer run mentions an inner one stops at that declaration with the error for a missing instance.
 -/
 
 open Lean Elab Command Lean.Parser.Term

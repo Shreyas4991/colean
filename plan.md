@@ -3,12 +3,12 @@
 ## Where we are
 
 The layout follows `architecture.md`: `Framework.lean` (the contracts and what follows from
-them), `Model/` (`Cotype`, `Intype`, `Occ`, `Param`: the fixpoints on `Raw`, occurrence
-structures, the structure in a parameter), `Cmd/` (the generators by step: `Analysis`,
+them), `PolyIso.lean` (the user interface for nesting), `Model/` (`Cotype`, `Intype`, `Occ`: the
+fixpoints on `Raw`, occurrence structures), `Cmd/` (the generators by step: `Analysis`,
 `Functor`, `Model`, `Framework`, `Extras`, `Surface`), `CodataCmd.lean`/`DataCmd.lean` (the
-pipelines and commands), `MutualCmd.lean` (blocks), `Sketch/` (hand-written experiments, not
-built), all directly under `Colean/`; the tests are the separate library `ColeanTest/`, one
-test per type. The root modules `Colean.lean` and `ColeanTest.lean` import everything and are
+pipelines and commands), `MutualCmd.lean` (blocks), all directly under `Colean/`; the tests are
+the separate library `ColeanTest/`, one test per type; `Sketch/` holds hand-written experiments,
+a library outside the default build, which need not compile. The root modules `Colean.lean` and `ColeanTest.lean` import everything and are
 both default targets, so `lake build` checks it all. The contract is `contract.md`; `todo.md`
 holds deferred items that are not features.
 
@@ -103,51 +103,51 @@ NOT DONE:
   `mutual` block is accepted with the fixed reading "codata outer" (`ColeanTest/Mixed.lean`); it
   will be rejected once `mixed_mutual` exists.
 
-## 4. Nested types — DONE, switched to occurrence structures (2026-09-17)
+## 4. Nested types — DONE through user instances; instances for declared types NOT DONE
 
-`Model/Occ.lean`: the bundled structures `Occ Sh Pos G` (`G X ≃ Σ sh, Pos sh → X`) and
-`IOcc Sh Pos pidx G` (positions carry an index of the family), their laws (`toC`/`ofC`, `map`
-and `Rel` between two structures at different universes, `rel_map`, `rel_intro`, `rel_ofC`,
-`exists_map_of_rel`), the combinators `const`, `hole`, `prod`, `sum`, `pi`, `piP`, `sigma`,
-`comp` (and `IOcc.ofOcc`, `reidx`, `compC`, `compI`, `Occ.ofI`, `Occ.compI` across the two
-kinds), the leaves `Occ.list`, `Occ.option`, `Occ.array` with the registry classes
-`OccLeaf`/`IOccLeaf`, and the computation lemmas `map_prod`, `map_pi`, `map_comp`, `map_list`,
-…, `forall_toC_*`, `rel_hole_intro`, `rel_prod_intro`. The command (`occTreeOf`, `occTermOf`,
-`classify`) builds the structure of every nested argument by recursion on the syntax of its
-type, with instance search only at named type constructors; `Kind.occ`/`PKind.occ` carry the
-tree, the structure term, its shapes, positions and position index; everything else is as
-before (the shape of the argument is data of the constructor, its positions are recursive
-positions, `toC`/`ofC` go through the structure). The `Container`/`IContainer` classes, the
-whole-expression instance search and the composition instances are gone.
+`PolyIso.lean` is the interface: `PolyIso F Sh Pos` (`F X ≃ Σ sh, Pos sh → X`) and `PolyMap F F'`
+(the intended action between two instantiations, with naturality), together an isomorphism of
+functors, and `IPolyIso`, `IPolyMap` for functors on families. The command requires both at
+every named type constructor. `Model/Occ.lean` keeps the bundled structures `Occ`/`IOcc`,
+internal to the command, with the combinators `const`, `hole`, `prod`, `sum`, `pi`, `piP`,
+`sigma`, `comp` (and `IOcc.ofOcc`, `reidx`, `compC`, `compI`, `Occ.ofI`, `Occ.compI`), their
+laws, and the leaves `Occ.ofIso F`. The command builds the structure of every nested argument
+by recursion on the syntax of its type (`occTreeOf`, `occTermOf`, `classify`), with instance
+search only at named type constructors. `Signature` has no erased shapes.
+
+Defining a type and constructing its instance are decoupled (2026-11-06): the generated
+structures `T.occ`, `T.Sh`, `T.Pos`, the lemmas `T.map_c`, `T.rel_c`, the erased shapes, and
+`Model/Param.lean` are gone. The old version is in the git history.
 
 DONE:
 
 * nested arguments of any shape built from occurrences by `×`, `⊕`, `(a : A) → …` (constant
-  domain, a proposition allowed), `(a : A) × …`, and named constructors (`List`, `Option`,
-  `Array`, the declared types), at any depth: `T × T`, `A → List T`, `Option (T × T)`,
-  `T ⊕ A`, `(n : ℕ) × (Fin n → T)`, `0 < n → List T`, occurrences at several indices in one
-  argument (`Chain n × Chain (n + 1)`); for `codata` and `data` (`ColeanTest/OccNest.lean`,
-  `ColeanTest/Rose.lean`, `ColeanTest/FinRose.lean`);
-* any type constructor with an `OccLeaf`/`IOccLeaf` instance written by hand;
-* the structure generated for every `data`/`codata` (and every type of a mutual block, and the
-  block family) whose last parameter is a type `α` or a family `X : J → Type u` used only at
-  parameter positions, now including nested ones of any shape (`(p : α × α)`, `(as : List α)`):
-  `T.Shape₀`, `T.P`, `T.shapeEquiv`, `T.psig`, `T.Sh`, `T.Pos`, `T.occ`, `T.instOccLeaf` (and
-  `T.pidx`, `T.posIdx` for a family), the constructor-level lemmas `T.map_c`, `T.rel_c`;
-* nesting through declared types (`Forest (Tree α)`, `Forest α (fun p => Blk α p)`), for `data`
-  and `codata` (`ColeanTest/Param.lean`, `ColeanTest/Mixed.lean`).
+  domain, a proposition allowed), `(a : A) × …`, and named constructors, at any depth: `T × T`,
+  `A → List T`, `Option (T × T)`, `T ⊕ A`, `(n : ℕ) × (Fin n → T)`, `0 < n → List T`, occurrences
+  at several indices in one argument (`Chain n × Chain (n + 1)`); for `codata` and `data`
+  (`ColeanTest/OccNest.lean`, `ColeanTest/Rose.lean`, `ColeanTest/FinRose.lean`);
+* any type constructor with user instances, plain or on families, in `codata`, `data` and
+  mutual blocks, a declared type included (`ColeanTest/Nest.lean`, `ColeanTest/OccNest.lean`).
 
 NOT DONE:
 
-* a declared type with the recursive occurrence in several parameter positions at once
-  (`Pair X X` for a declared `Pair α β`): the multi-hole structure (parameters as holes,
-  erasure of all at once); this is also section 5, step 2;
-* an argument mixing the parameter and the recursive type (`List (α × T)`): the type is
-  declared, but it gets no structure in `α`;
+* **next step:** constructing `PolyIso`/`PolyMap` instances for declared types. Generic theory
+  over a split of the functor into two variables, not attached to the declaration: with several
+  parameters, which functor to present is a choice. `mixed_mutual` depends on this, and
+  `ColeanTest/Param.lean`, `Mixed.lean`, `MixedOrder.lean`, `MixedRuns.lean` are out of the build
+  until then;
+* a functor with the recursive occurrence in several parameters at once (`Pair X X` for a
+  declared `Pair α β`): this is also section 5, step 2;
 * `rel_*` characterisations of `Occ.Rel` through `prod`, `pi`, `comp` as iffs (only the
   introductions exist), and user-facing `T.map`/`T.Rel` abbreviations.
 
-## 5. Mixed blocks: `mixed_mutual` — steps 1, 3 and 4 DONE, 2 NOT DONE
+## 5. Mixed blocks: `mixed_mutual` — BLOCKED on instances for declared types
+
+The command is in place, but its nesting through inner runs relied on the generated structures
+removed in section 4. A block in which an outer run mentions an inner one now stops at a missing
+`PolyIso` instance. The notes below describe the state before that removal: the constructor-level
+lemmas of step 1 are gone with the structures.
+
 
 A block with `data` and `codata` declarations is a nested fixpoint, and a cyclic system has
 several nested solutions (data outer and codata outer differ; the two orders of `Tree`/`Forest`
@@ -281,7 +281,7 @@ command, `genContainerLemmas` ↦ `genOccLemmas`, no instances passed):
 1. Indices: DONE (front-end leftovers listed above).
 2. `data`: DONE (leftovers listed above).
 3. Mutual blocks: DONE (leftovers listed above).
-4. Nested types: DONE (leftovers listed above).
-5. Mixed blocks, `mixed_mutual`: steps 1, 3 and 4 DONE; step 2 NOT DONE (a reference to a run
-   further outside).
+4. Nested types: DONE through user instances; next, instances for declared types.
+5. Mixed blocks, `mixed_mutual`: BLOCKED on that; step 2 NOT DONE (a reference to a run further
+   outside).
 6. Surface items, as they become blocking.

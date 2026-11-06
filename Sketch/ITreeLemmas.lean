@@ -1,6 +1,6 @@
 import Mathlib.Data.Real.Basic
 import Mathlib.Logic.Equiv.Defs
-import Colean.Sketch.ITree
+import Sketch.ITree
 
 /-!
 # What `ITree` supports beyond its corecursor

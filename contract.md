@@ -115,28 +115,27 @@ equivalence `G X ≃ Σ sh, Pos sh → X` between the argument type as a functio
 occurrence and a shape with contents at its positions (`Codata.Occ`, `Codata.IOcc` when the
 positions carry an index of the family). It is built by recursion on the syntax of the type,
 from a constant, the occurrence, products, sums, functions and dependent pairs over constant
-types, and named type constructors, whose structures are leaves (`List`, `Option`, `Array`, the
-declared types, any type constructor registered with `Codata.OccLeaf`). `F` keeps the argument
-type as a field, `F.map` acts on it through the structure (`Occ.map`, which is `List.map` on
-lists, componentwise on pairs, …, by the simp lemmas `Occ.map_list`, `Occ.map_prod`, …), and the
-canonical `F.Rel` relates nested fields with the same shape and related contents (`Occ.Rel`).
+types, and named type constructors. `F` keeps the argument type as a field, `F.map` acts on it
+through the structure, and the canonical `F.Rel` relates nested fields with the same shape and
+related contents (`Occ.Rel`).
 
-Conversely a declared type has an occurrence structure in its type parameter, when the last
-parameter `α` is used only at parameter positions (as the type of a field, under a function type,
-or nested). Then `T.Shape α ≅ Σ s₀ : T.Shape₀, T.P s₀ → α` (`T.shapeEquiv`) with the erased
-shapes `T.Shape₀` and the parameter positions `T.P`, and the command provides
-`T.occ : Codata.Occ T.Sh T.Pos (fun α => T params α idx)`: the shapes `T.Sh` are the erased
-trees (the type at the signature `T.psig.sig₀`), a position is a path to a node together with a
-parameter position of its erased shape, and the structure is the generic `PSignature.occ`/`coocc`
-(`Param.lean`), registered as a leaf. The same holds for a family parameter `X : J → Type u`
-(positions `X j`), with the indexed structure `Codata.IOcc` (`G X ≅ Σ sh, (q : Pos sh) →
-X (pidx sh q)`), of which `Occ` is the case `J = Unit`. This is what lets a later declaration
-nest through `T` (`Forest (Tree α)` with a declared `Forest`). The structure is computed on the
-constructors: `T.map_c : Occ.map T.occ T.occ f (T.c …) = T.c …` with `f` at the parameter
-positions, `map f` at the recursive ones and `map (map f)` through nested arguments, and
-`T.rel_c : R … → Rel R … → Occ.Rel T.occ T.occ R (T.c …) (T.c …)`, the introduction of the
-relator from `R` at the parameter positions and `Rel R` at the recursive ones; the two copies of
-the parameter are in independent universes.
+A named type constructor `G` is the user's part of the contract (`PolyIso.lean`):
+
+1. `PolyIso G Sh Pos`: `G` is presented as a polynomial functor, `G X ≃ Σ sh : Sh, (Pos sh → X)`
+   for every `X`.
+2. `PolyMap G G'`: the intended action `G X → G' Y` on functions, between two instantiations of
+   `G`, with the naturality of the presentation.
+
+Together they are an isomorphism of functors. The action is a class on two instantiations
+because the state of `corec` lives in any universe, so `F.map` crosses universes, which Lean's
+`Functor` cannot state, and naturality in each universe separately does not determine the map
+between them. The command requires both instances. It follows that the map on such a field is
+the intended one (`Occ.map_ofIso`): `List.map` on lists (`Occ.map_list`), and componentwise on
+pairs and the other built-in forms (`Occ.map_prod`, …). For a functor on families the classes
+are `IPolyIso` and `IPolyMap`, with `G X ≃ Σ sh, (q : Pos sh) → X (pidx sh q)`.
+
+Declaring a type provides no such instances. A later declaration nests through a declared type
+once the user has given them (`ColeanTest/OccNest.lean`).
 
 
 # Mixed blocks
@@ -164,7 +163,7 @@ is one uniform block with the contract above; runs `R₁ ⊃ R₂ ⊃ … ⊃ R�
    occurrence of a type of that run replaced by `X` (at its packed index) and every occurrence
    of its own types applied to `X`.
 2. Every occurrence of a type `E` of the run inside it is `E params (Rᵢ params X)` (or
-   `E params (fun p => Rᵢ params X p.1 …)`), a nested occurrence through the container that
+   `E params (fun p => Rᵢ params X p.1 …)`), a nested occurrence through the functor that
    `E` is in its family parameter.
 3. The outermost run has no extra parameter: its types are closed.
 
@@ -175,7 +174,9 @@ principles compose: coinduction on an outer run sees the inner runs through thei
 finite layer per step (`Forest.rel_cons`, `Occ.rel_map`); induction on an inner run sees
 the outer runs as opaque parameters; an inner induction inside a coinductive step is parametric
 in the outer relation; a coinduction inside an inductive step is a closed statement about the
-outer type. All declarations of a block have the same parameters, the declarations of a run
+outer type. This nesting needs instances for the inner runs, which are not generated yet, so
+blocks in which an outer run mentions an inner one are not available at the moment. All
+declarations of a block have the same parameters, the declarations of a run
 the same indices; the universe of a family parameter is a `universe` variable declared in
 scope. Any number of runs, in any order; a declaration may mention any run inside its own (an
 occurrence of a type of a run further inside is applied to the chain of families down to the

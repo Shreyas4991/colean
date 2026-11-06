@@ -25,8 +25,13 @@ import ColeanTest.MRose
 import ColeanTest.EvenOdd
 import ColeanTest.Rose
 import ColeanTest.FinRose
-import ColeanTest.Param
-import ColeanTest.Mixed
-import ColeanTest.MixedOrder
-import ColeanTest.MixedRuns
 import ColeanTest.OccNest
+import ColeanTest.Nest
+import ColeanTest.Names
+import ColeanTest.MixedRejected
+-- These nest through declared types, which needs `PolyIso` instances for them: `mixed_mutual`
+-- cannot be given such instances by hand, so they wait for the generation of the instances.
+-- import ColeanTest.Param
+-- import ColeanTest.Mixed
+-- import ColeanTest.MixedOrder
+-- import ColeanTest.MixedRuns

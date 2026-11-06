@@ -5,8 +5,7 @@ import Colean.Cmd.Analysis
 
 *Spec.* Input: the context and `T.F` (step 1). Output: a model of the contract for `F`:
 
-* the signature `T.Shape`, `T.B`, `T.idx`, `T.Ix`, `T.sig` (and with a container parameter the
-  erased shapes `T.Shape₀`, `T.P`, `T.shapeEquiv`, `T.psig`), the fixed data format of
+* the signature `T.Shape`, `T.B`, `T.idx`, `T.Ix`, `T.sig`, the fixed data format of
   `Model/Cotype.lean`;
 * the isomorphism `T.toC`/`T.ofC` between `F X` and the signature's layers, with its laws
   `ofC_toC`, `toC_ofC`, `ofC_map` (and `rel_ofC` for codata). These are the second of the two
@@ -26,173 +25,11 @@ namespace Codata
 
 open Ctx
 
-/-! ### The signature: shapes, positions and their indices
-
-With a container parameter `α`, the signature is a parameterised one, `PSignature`: the erased
-shapes `Shape₀` (the data without the parameter positions), the parameter positions `P`, the
-recursive positions `B` and their indices over the erased shapes, and `sig = psig.sig Shape e`
-with the equivalence `e : Shape ≃ Σ s₀, P s₀ → α` (by `shapeTo`/`shapeOf`); the type is then
-a container in `α` by the generic `PSignature.container`. -/
-
-/-- The erased shapes `Shape₀`, the parameter positions `P`, and the equivalence
-`Shape ≃ Σ s₀, P s₀ → α` by `shapeTo`, `shapeOf` and their two laws (proved as `ofC_toC` and
-`toC_ofC` are). -/
-def genParamShapes (ctx : Ctx) : CommandElabM Unit := do
-  let some pinfo := ctx.param | return
-  let a := pinfo.a
-  let pExp := ctx.pExp
-  let pExp₀ := ctx.pExp₀
-  let pImp := ctx.pImp
-  let pImp₀ := ctx.pImp₀
-  let ib ← ctx.ixB
-  let ixBExp ← ctx.ixBExp
-  let shape₀Ctors ← ctx.ctors.mapM fun c => do
-    let bs := (← (c.groups.filter fun g => g.kind.isData && g.pk.isNone).mapM fun g =>
-        mkBinder g.implicit g.ids g.ty)
-      ++ (← nestShapeBinders c false) ++ (← pnestShapeBinders c false)
-    if ctx.idxed then
-      let res ← appT ctx.Shape₀p c.idx
-      `(Parser.Command.ctor| | $(c.fname):ident $[$bs]* : $res)
-    else
-      `(Parser.Command.ctor| | $(c.fname):ident $[$bs]*)
-  if ctx.idxed then
-    elabCommand (← `(inductive $(ctx.Shape₀):ident $[$pExp₀]* : ∀ $[$ixBExp]*, Type _ where
-      $[$shape₀Ctors:ctor]*))
-  else
-    elabCommand (← `(inductive $(ctx.Shape₀):ident $[$pExp₀]* where $[$shape₀Ctors:ctor]*))
-  -- The parameter positions, one constructor per argument at one.
-  let mut pCtors : Array (TSyntax ``Parser.Command.ctor) := #[]
-  for c in ctx.ctors do
-    let dbs ← dataBindersImplicit c
-    let res ← appT ctx.Pp (c.idx ++ #[← ctx.shape₀App c])
-    for (x, pk) in c.ppos do
-      match pk with
-      | .none => pure ()
-      | .val _ =>
-        pCtors := pCtors.push (← `(Parser.Command.ctor| | $(posCtorName c x):ident $[$dbs]* : $res))
-      | .fn tele _ =>
-        let tbs ← teleBinders tele
-        pCtors := pCtors.push (← `(Parser.Command.ctor|
-          | $(posCtorName c x):ident $[$dbs]* $[$tbs]* : $res))
-      | .occ info =>
-        let xs := nestShapeId x
-        let Pos := info.Pos
-        pCtors := pCtors.push (← `(Parser.Command.ctor|
-          | $(posCtorName c x):ident $[$dbs]* (q : $Pos $xs) : $res))
-  let Shape₀I ← ctx.atI ctx.Shape₀p
-  if ctx.idxed then
-    elabCommand (← `(inductive $(ctx.P):ident $[$pExp₀]* : ∀ $[$ixBExp]*, $Shape₀I → Type _ where
-      $[$pCtors:ctor]*))
-  else
-    elabCommand (← `(inductive $(ctx.P):ident $[$pExp₀]* : $Shape₀I → Type _ where
-      $[$pCtors:ctor]*))
-  let ShapeI ← ctx.atI ctx.Shapep
-  let PI ← ctx.atI ctx.Pp
-  -- For a family: the index of every parameter position.
-  if let some J := pinfo.J then
-    let mut pAlts : Array (TSyntax ``matchAlt) := #[]
-    for c in ctx.ctors do
-      for (x, pk) in c.ppos do
-        match pk with
-        | .none => pure ()
-        | .val j =>
-          pAlts := pAlts.push (← ctx.alt c #[← `(_), ← ctx.pPat c x #[]] (ctx.substBare c j))
-        | .fn tele j =>
-          let ys := (teleIds tele).map idT
-          pAlts := pAlts.push (← ctx.alt c #[← `(_), ← ctx.pPat c x ys] (ctx.substBare c j))
-        | .occ info =>
-          let xs := nestShapeId x
-          let pidx := ctx.substBare c info.pidx
-          pAlts := pAlts.push
-            (← ctx.alt c #[← `(_), ← ctx.pPat c x #[← `(q)]] (← `($pidx $xs q)))
-    let discrsP := ctx.discrs (← `(s₀)) |>.push (← `(p))
-    let body ← if pAlts.isEmpty then `(nomatch p)
-      else `(match $[$discrsP:term],* with $pAlts:matchAlt*)
-    elabCommand (← `(def $(ctx.pidxId):ident $[$pImp₀]* $[$ib]* {s₀ : $Shape₀I} (p : $PI s₀) :
-        $J := $body))
-  -- The equivalence: a shape is its erased shape with the values at the parameter positions.
-  let sigmaTy ← if pinfo.J.isSome then `(Σ s₀ : $Shape₀I, (p : $PI s₀) → $a ($(ctx.pidxId) p))
-    else `(Σ s₀ : $Shape₀I, $PI s₀ → $a)
-  let pId ← freshId "p"
-  let vId ← freshId "v"
-  let toAlts : Array (TSyntax ``matchAlt) ← ctx.ctors.mapM fun c => do
-    let lhs ← ctx.shapePat c
-    -- The layers of the containers in the parameter are bound by a lambda, as in `toC`.
-    let zs : Array Ident ← c.pnested.mapM fun (x, _) => freshId s!"z_{x.getId.toString}"
-    let shape₀ ← ctx.shape₀ValWith c (← zs.mapM fun z => `($z:ident.1))
-    let mut alts : Array (TSyntax ``matchAlt) := #[]
-    let mut k := 0
-    for (x, pk) in c.ppos do
-      match pk with
-      | .none => pure ()
-      | .val _ => alts := alts.push (← `(matchAltExpr| | $(ctx.pCtor c x):ident => $x:ident))
-      | .fn tele _ =>
-        let ys := teleIds tele
-        alts := alts.push (← `(matchAltExpr| | $(ctx.pCtor c x):ident $ys* => $x:ident $ys*))
-      | .occ .. =>
-        let z := zs[k]!
-        k := k + 1
-        alts := alts.push (← `(matchAltExpr| | $(ctx.pCtor c x):ident q => $z:ident.2 q))
-    let vals ← if alts.isEmpty then `(fun $pId:ident => nomatch $pId:ident)
-      else `(fun $pId:ident => match $pId:ident with $alts:matchAlt*)
-    let layer ← `(⟨$shape₀, $vals⟩)
-    let rhs ← if zs.isEmpty then pure layer else do
-      let toCs ← c.pnested.mapM fun (x, info) =>
-        `($(occId info.indexed `toC) $(ctx.substBare c info.o) $x:ident)
-      `((fun $[$zs:ident]* => $layer) $toCs*)
-    ctx.alt c #[lhs] rhs
-  let discrsS := ctx.discrs (← `(s))
-  elabCommand (← `(def $(ctx.shapeTo):ident $[$pImp]* $[$ib]* (s : $ShapeI) : $sigmaTy :=
-    match $[$discrsS:term],* with $toAlts:matchAlt*))
-  let ofAlts : Array (TSyntax ``matchAlt) ← ctx.ctors.mapM fun c => do
-    let shape₀ ← ctx.shape₀Pat c
-    let mut args : Array Term := #[]
-    for g in c.groups do
-      if g.kind.isData then
-        for x in g.ids do
-          match g.pk with
-          | .none => args := args.push (idT ((ctx.bareIdx c x.getId).getD x))
-          | .val _ => args := args.push (← `($vId $(ctx.pCtor c x)))
-          | .fn tele _ =>
-            let ys := teleIds tele
-            args := args.push (← `(fun $[$ys:ident]* => $vId ($(ctx.pCtor c x) $ys*)))
-          | .occ info =>
-            let xs := nestShapeId x
-            args := args.push
-              (← `($(occId info.indexed `ofC) $(ctx.substBare c info.o) ⟨$xs, fun q => $vId ($(ctx.pCtor c x) q)⟩))
-    let pTerms := ctx.pTerms
-    let ns := nestShapeIds c
-    let rhs ← `(@$(ctx.shapeCtor c):ident $pTerms* $args* $ns*)
-    let pat ← if c.ppos.isEmpty then `(⟨$shape₀, _⟩) else `(⟨$shape₀, $vId⟩)
-    ctx.alt c #[pat] rhs
-  let discrsZ := ctx.discrs (← `(z))
-  elabCommand (← `(def $(ctx.shapeOf):ident $[$pImp]* $[$ib]* (z : $sigmaTy) : $ShapeI :=
-    match $[$discrsZ:term],* with $ofAlts:matchAlt*))
-  let pnest := ctx.ctors.any fun c => !c.pnested.isEmpty
-  let seq (tacs : Array (TSyntax `tactic)) : CommandElabM (TSyntax ``Parser.Tactic.tacticSeq) :=
-    `(tacticSeq| $[$tacs:tactic]*)
-  let pf₁ ← seq (#[← `(tactic| cases s)] ++ (← if pnest then
-      pure #[← `(tactic| all_goals first | rfl | simp only [$(ctx.shapeTo):ident, $(ctx.shapeOf):ident, Codata.Occ.ofC_toC', Codata.IOcc.ofC_toC'])]
-    else pure #[← `(tactic| all_goals rfl)]))
-  elabCommand (← `(theorem $(ctx.shapeOf_shapeTo):ident $[$pImp]* $[$ib]* (s : $ShapeI) :
-      $(ctx.shapeOf) ($(ctx.shapeTo) s) = s := by $pf₁))
-  let pf₂ ← seq (#[← `(tactic| obtain ⟨s, v⟩ := z), ← `(tactic| cases s)] ++
-    (← if pnest then
-      pure #[← `(tactic| all_goals try simp only [$(ctx.shapeTo):ident, $(ctx.shapeOf):ident]),
-        ← `(tactic| all_goals repeat rw [Codata.Occ.toC_ofC]),
-        ← `(tactic| all_goals repeat rw [Codata.IOcc.toC_ofC])]
-    else pure #[]) ++
-    #[← `(tactic| all_goals refine congrArg (Sigma.mk _) (funext fun p => ?_)),
-      ← `(tactic| all_goals cases p), ← `(tactic| all_goals rfl)])
-  elabCommand (← `(theorem $(ctx.shapeTo_shapeOf):ident $[$pImp]* $[$ib]* (z : $sigmaTy) :
-      $(ctx.shapeTo) ($(ctx.shapeOf) z) = z := by $pf₂))
-  elabCommand (← `(def $(ctx.shapeEquiv):ident $[$pExp]* $[$ixBExp]* : $ShapeI ≃ $sigmaTy :=
-    ⟨$(ctx.shapeTo), $(ctx.shapeOf), $(ctx.shapeOf_shapeTo), $(ctx.shapeTo_shapeOf)⟩))
+/-! ### The signature: shapes, positions and their indices -/
 
 def genSignature (ctx : Ctx) : CommandElabM Unit := do
   let pExp := ctx.pExp
-  let pExp₀ := ctx.pExp₀
-  let pImp₀ := ctx.pImp₀
+  let pImp := ctx.pImp
   let shapeCtors ← ctx.ctors.mapM fun c => do
     let bs := (← (c.groups.filter (·.kind.isData)).mapM fun g => mkBinder g.implicit g.ids g.ty)
       ++ (← nestShapeBinders c false)
@@ -208,17 +45,12 @@ def genSignature (ctx : Ctx) : CommandElabM Unit := do
       $[$shapeCtors:ctor]*))
   else
     elabCommand (← `(inductive $(ctx.Shape):ident $[$pExp]* where $[$shapeCtors:ctor]*))
-  genParamShapes ctx
-  -- The positions are over the erased shapes when there is a container parameter.
-  let Shape₀p := if ctx.hasParam then ctx.Shape₀p else ctx.Shapep
-  let Shape₀Pp := if ctx.hasParam then ctx.Shape₀Pp else ctx.ShapePp
   -- The positions, one constructor per recursive argument; and (indexed) their indices.
   let mut bCtors : Array (TSyntax ``Parser.Command.ctor) := #[]
   let mut idxAlts : Array (TSyntax ``matchAlt) := #[]
   for c in ctx.ctors do
     let dbs ← dataBindersImplicit c
-    let shape ← if ctx.hasParam then ctx.shape₀App c else ctx.shapeApp c
-    let res ← appT ctx.Bp (c.idx ++ #[shape])
+    let res ← appT ctx.Bp (c.idx ++ #[← ctx.shapeApp c])
     for g in c.groups do
       match g.kind with
       | .data => pure ()
@@ -249,94 +81,40 @@ def genSignature (ctx : Ctx) : CommandElabM Unit := do
             idxAlts := idxAlts.push (← ctx.alt c #[← `(_), ← ctx.bPat c x #[← `(q)]] packed)
   if !ctx.idxed then
     -- A plain type is a family over `Unit`.
-    elabCommand (← `(inductive $(ctx.B):ident $[$pExp₀]* : $Shape₀p → Type _ where
+    elabCommand (← `(inductive $(ctx.B):ident $[$pExp]* : $(ctx.Shapep) → Type _ where
       $[$bCtors:ctor]*))
-    if let some pinfo := ctx.param then
-      let (J, pidx) ← ctx.psigJ
-      elabCommand (← `(abbrev $(ctx.psig):ident $[$pExp₀]* : Codata.PSignature where
-        I := Unit
-        J := $J
-        Shape₀ := fun _ => $Shape₀p
-        P := fun s => $(ctx.Pp) s
-        pidx := $pidx
-        B := fun _ s => $(ctx.Bp) s
-        idx := fun _ => ()))
-      let (S, e) ← ctx.sigSE
-      elabCommand (← `(abbrev $(ctx.sig):ident $[$pExp]* : Codata.Signature :=
-        Codata.PSignature.sig $(ctx.psigp) (X := $(← famX pinfo)) $S $e))
-    else
-      elabCommand (← `(abbrev $(ctx.sig):ident $[$pExp]* : Codata.Signature where
-        I := Unit
-        Shape := fun _ => $(ctx.Shapep)
-        Shape₀ := fun _ => $(ctx.Shapep)
-        sh₀ := fun s => s
-        B := fun _ s => $(ctx.Bp) s
-        idx := fun _ => ()))
+    elabCommand (← `(abbrev $(ctx.sig):ident $[$pExp]* : Codata.Signature where
+      I := Unit
+      Shape := fun _ => $(ctx.Shapep)
+      B := fun _ s => $(ctx.Bp) s
+      idx := fun _ => ()))
     return
   let ShapeI ← ctx.atI ctx.Shapep
-  let Shape₀I ← ctx.atI Shape₀p
-  elabCommand (← `(inductive $(ctx.B):ident $[$pExp₀]* : ∀ $[$ixBExp]*, $Shape₀I → Type _ where
+  elabCommand (← `(inductive $(ctx.B):ident $[$pExp]* : ∀ $[$ixBExp]*, $ShapeI → Type _ where
     $[$bCtors:ctor]*))
   if ctx.packed then
-    elabCommand (← `(abbrev $(ctx.Ix):ident $[$pExp₀]* : Type _ := $(← mkIxTerm ctx.idx)))
+    elabCommand (← `(abbrev $(ctx.Ix):ident $[$pExp]* : Type _ := $(← mkIxTerm ctx.idx)))
   let BIs ← appT ctx.Bp (ctx.iArgs ++ #[← `(s)])
   -- The shape is a discriminant too (with the pattern `_`), so that it is refined.
   let discrsB := ctx.discrs (← `(s)) |>.push (← `(b))
   let idxBody ← if idxAlts.isEmpty then `(nomatch b)
     else `(match $[$discrsB:term],* with $idxAlts:matchAlt*)
-  elabCommand (← `(def $(ctx.idxId):ident $[$pImp₀]* $[$ib]* {s : $Shape₀I} (b : $BIs) :
+  elabCommand (← `(def $(ctx.idxId):ident $[$pImp]* $[$ib]* {s : $ShapeI} (b : $BIs) :
       $(ctx.Ixp) := $idxBody))
   if ctx.packed then
     let iPat ← ctx.pack ctx.iArgs
-    -- The shapes on the packed index, named once so that `Shape` and `Shape₀` coincide.
+    -- The shapes on the packed index.
     elabCommand (← `(def $(ctx.ShapeP):ident $[$pExp]* (p : $(ctx.Ixp)) : Type _ :=
       match p with | $iPat:term => $ShapeI))
-    if let some pinfo := ctx.param then
-      elabCommand (← `(def $(ctx.Shape₀P):ident $[$pExp₀]* (p : $(ctx.Ixp)) : Type _ :=
-        match p with | $iPat:term => $Shape₀I))
-      let PIs ← appT ctx.Pp (ctx.iArgs ++ #[← `(s)])
-      let (J, _) ← ctx.psigJ
-      let pidx ← if pinfo.J.isSome then
-          `(fun {p} {s} q => match p, s, q with | $iPat:term, s, q => $(ctx.pidxId) q)
-        else `(fun _ => ())
-      elabCommand (← `(abbrev $(ctx.psig):ident $[$pExp₀]* : Codata.PSignature where
-        I := $(ctx.Ixp)
-        J := $J
-        Shape₀ := $Shape₀Pp
-        P := fun {p} s => match p, s with | $iPat:term, s => $PIs
-        pidx := $pidx
-        B := fun p s => match p, s with | $iPat:term, s => $BIs
-        idx := fun {p} {s} b => match p, s, b with | $iPat:term, s, b => $(ctx.idxId) b))
-      let (S, e) ← ctx.sigSE
-      elabCommand (← `(abbrev $(ctx.sig):ident $[$pExp]* : Codata.Signature :=
-        Codata.PSignature.sig $(ctx.psigp) (X := $(← famX pinfo)) $S $e))
-    else
-      elabCommand (← `(abbrev $(ctx.sig):ident $[$pExp]* : Codata.Signature where
-        I := $(ctx.Ixp)
-        Shape := $(ctx.ShapePp)
-        Shape₀ := $(ctx.ShapePp)
-        sh₀ := fun s => s
-        B := fun p s => match p, s with | $iPat:term, s => $BIs
-        idx := fun {p} {s} b => match p, s, b with | $iPat:term, s, b => $(ctx.idxId) b))
-  else if let some pinfo := ctx.param then
-    let (J, pidx) ← ctx.psigJ
-    elabCommand (← `(abbrev $(ctx.psig):ident $[$pExp₀]* : Codata.PSignature where
+    elabCommand (← `(abbrev $(ctx.sig):ident $[$pExp]* : Codata.Signature where
       I := $(ctx.Ixp)
-      J := $J
-      Shape₀ := $Shape₀p
-      P := fun s => $(ctx.Pp) _ s
-      pidx := $pidx
-      B := $(ctx.Bp)
-      idx := fun b => $(ctx.idxId) b))
-    let (S, e) ← ctx.sigSE
-    elabCommand (← `(abbrev $(ctx.sig):ident $[$pExp]* : Codata.Signature :=
-      Codata.PSignature.sig $(ctx.psigp) (X := $(← famX pinfo)) $S $e))
+      Shape := $(ctx.ShapePp)
+      B := fun p s => match p, s with | $iPat:term, s => $BIs
+      idx := fun {p} {s} b => match p, s, b with | $iPat:term, s, b => $(ctx.idxId) b))
   else
     elabCommand (← `(abbrev $(ctx.sig):ident $[$pExp]* : Codata.Signature where
       I := $(ctx.Ixp)
       Shape := $(ctx.Shapep)
-      Shape₀ := $(ctx.Shapep)
-      sh₀ := fun s => s
       B := $(ctx.Bp)
       idx := fun b => $(ctx.idxId) b))
 

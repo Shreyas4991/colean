@@ -8,7 +8,7 @@ generator file.
 |---|---|---|---|
 | 1. Functor | the declaration | `T.F`, `T.F.map`, `map_id`, `map_comp` | tactic, per declaration |
 | 2. Model | `T.F` | `T.contract : Contract T F` (a signature, an isomorphism `F X ≃ σ.Obj X`, the fixpoint on `Raw`) | the isomorphism's laws by tactic; the rest instantiated |
-| 2b. Model extras | the model | polymorphic `fold`/`corec`, `T.rec`, `T.occ`, `T.map_c`, `T.rel_c` | instantiated, some tactic |
+| 2b. Model extras | the model | polymorphic `fold`/`corec`, `T.rec` | instantiated, some tactic |
 | 3. Framework | `T.contract` only | `ctor`, `dtor_ctor`, `ctor_dtor`, `ctor_injective`, `corec_eq`, `corec_unique` and the data duals | none: instantiation of generic theorems |
 | 4. Surface | the constructor list and steps 2–3 | `T.cᵢ` with their lemmas, `casesOn`, `rec_cᵢ`, `fold_cᵢ`, the characterisation `T.F.Rel`, per-type names of a block | term assembly |
 
@@ -17,11 +17,11 @@ generator file.
 Theory, in dependency order:
 
 - `Raw.lean`: the general type `Raw I L := List I → Option L` (the model's carrier).
+- `PolyIso.lean`: the user interface for nesting: `PolyIso` and `PolyMap` (and `IPolyIso`, `IPolyMap` for functors on families) say that a functor is isomorphic to a polynomial functor. Instances for `List`, `Option`, `Array`. Depends on Mathlib only.
 - `Framework.lean`: `Codata.Rel`, `Codata.Contract`, `Data.All`, `Data.Contract` and every theorem that follows from a contract alone. Depends on Mathlib only.
 - `Model/Cotype.lean`: signatures, the container functor `Obj`, the encoding, the greatest fixpoint `IsWf`, `Cotype`, its contract pieces and the transport theorems to a functor `F ≃ Obj`.
 - `Model/Intype.lean`: the least fixpoint `IsFin`, `Intype`, the dependent recursor by well-founded recursion, fold, and the transports.
-- `Model/Occ.lean`: occurrence structures `Occ`/`IOcc`, their combinators, laws and computation lemmas.
-- `Model/Param.lean`: a fixpoint's occurrence structure in its parameter (erasure on `Raw`), and the computation of its map on a layer.
+- `Model/Occ.lean`: occurrence structures `Occ`/`IOcc`, internal to the command: their combinators, laws and computation lemmas; the leaves are `Occ.ofIso F`, from the `PolyIso` instances.
 
 Generators, in dependency order:
 
@@ -29,7 +29,7 @@ Generators, in dependency order:
 - `Cmd/Functor.lean`: step 1.
 - `Cmd/Model.lean`: step 2, ending with `genContractDef`/`genDataContractDef`.
 - `Cmd/Framework.lean`: step 3.
-- `Cmd/Extras.lean`: step 2b (`genOcc`, `genCtorEqCtorC`, `genOccLemmas`, `genRec`).
+- `Cmd/Extras.lean`: step 2b (`genRec`).
 - `Cmd/Surface.lean`: step 4 (`genRel`, `genCtors`, `genCases`, `genTypes`, `genAliases`, `genRecLemmas`, `genDataAliases`).
 - `CodataCmd.lean`, `DataCmd.lean`: the pipelines and the commands. `MutualCmd.lean`: `mutual` and `mixed_mutual` blocks, which only rewrite syntax and call the pipelines.
 
@@ -43,5 +43,7 @@ Generators, in dependency order:
 
 - `T.corec`, `T.fold` (universe-polymorphic in the state) and `T.rec` come from the model, because `Contract` fixes one universe for `F`. Fix: a universe-polymorphic framework interface, after which `T.rec` derives from `fold` and `induction`.
 - `T.F.Rel` (surface) is generated before the model, because `rel_ofC` and the contract's `bisim` are stated with it. Fix: state `bisim` with the canonical `Rel`, derive the inductive characterisation in step 4 by term-level introduction and elimination lemmas.
-- `T.map_c`, `T.rel_c` are per-constructor lemmas proved by tactic on the encoding (step 2b). Fix: one generic theorem about erasure, or generation on first use by a nesting declaration.
-- `genCtorEqCtorC` (step 2b) relates the framework's `ctor` to the model's `ctorC`; it exists only for the previous item.
+
+## Nesting and declared types
+
+Defining a type and presenting it as a polynomial functor are separate. A declaration produces no instance of `PolyIso`; with several parameters, the functor to present is not even determined by the declaration. So nesting through a declared type needs hand-written instances, and `mixed_mutual`, which nests through its inner runs, is blocked until instances can be constructed for declared types. The tests of that step are not built (`ColeanTest.lean`).

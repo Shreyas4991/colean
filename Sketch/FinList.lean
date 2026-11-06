@@ -1,5 +1,5 @@
 import Mathlib.Logic.Equiv.Defs
-import Colean.Sketch.CoListLemmas
+import Sketch.CoListLemmas
 
 /-!
 # `FinList`: the inductive type defined by the operator of `CoList`

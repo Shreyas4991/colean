@@ -1,5 +1,5 @@
 import Mathlib.Logic.Equiv.Defs
-import Colean.Sketch.Str
+import Sketch.Str
 
 /-!
 # What `Str` supports beyond its corecursor

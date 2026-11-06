@@ -1,5 +1,5 @@
 import Init.Internal.Order.Basic
-import Colean.Sketch.StrLemmas
+import Sketch.StrLemmas
 
 /-!
 # `partial_fixpoint` on the general type, coinduction on the subtype

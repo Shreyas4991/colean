@@ -1,6 +1,6 @@
 import Mathlib.Data.Seq.Defs
 import Mathlib.Logic.Equiv.Defs
-import Colean.Sketch.CoList
+import Sketch.CoList
 
 -- Lean 4.34 compares implicit arguments and metavariable types without unfolding definitions.
 set_option backward.isDefEq.respectTransparency false

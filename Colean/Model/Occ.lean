@@ -1,5 +1,5 @@
-import Mathlib.Data.List.OfFn
 import Mathlib.Data.List.Forall2
+import Colean.PolyIso
 
 /-!
 # The model, nested occurrences: occurrence structures
@@ -25,9 +25,9 @@ syntax of the argument type with the combinators below, one per way the occurren
 a constant (`const`), the occurrence itself (`hole`), a product (`prod`), a sum (`sum`), a
 function from a constant type (`pi`, `piP` for a proposition), a dependent pair over a constant
 type (`sigma`), and a named type constructor applied to an expression with occurrences (`comp`),
-where the structure of the named constructor is a *leaf*: `Occ.list`, `Occ.option`, the
-structure `T.occ` of every type declared by `data`/`codata` in its type parameter (`Param.lean`),
-or any structure registered with the class `OccLeaf`. Instance search happens at leaves only.
+where the structure of the named constructor is a *leaf*: `Occ.ofIso F`, the structure of a
+functor with a `PolyIso` instance (`PolyIso.lean`), which is what users provide. Instance search
+happens at leaves only.
 
 `map` and `Rel` go between two structures with the same shapes and positions, for `G` at one
 universe and `G'` at another (`List.{u}` and `List.{v}`): this is what keeps the state of `corec`
@@ -38,10 +38,10 @@ components, for induction hypotheses.
 
 The indexed version `IOcc` is for occurrences of a *family*: every position carries an index,
 `G X ≃ Σ sh, (q : Pos sh) → X (pidx sh q)`, so that occurrences at different indices may live
-in one argument (`T i × T j`), and a declared type with a family parameter is an indexed leaf
-(`T.iocc`). `Occ` is the case of a single index; `IOcc.ofOcc` puts a plain structure at a fixed
-index, `IOcc.reidx` and `Occ.ofI` reindex a family leaf, and `compC`, `compI`, `Occ.compI` are
-the compositions across the two kinds.
+in one argument (`T i × T j`), and a functor on families with an `IPolyIso` instance is an
+indexed leaf (`IOcc.ofIso`). `Occ` is the case of a single index; `IOcc.ofOcc` puts a plain
+structure at a fixed index, `IOcc.reidx` and `Occ.ofI` reindex a family leaf, and `compC`,
+`compI`, `Occ.compI` are the compositions across the two kinds.
 -/
 
 universe u u' u'' v v' v'' w w' s s' p p' j k a
@@ -247,36 +247,47 @@ abbrev idx (_ : IOcc Sh Pos pidx G) (sh : Sh) (q : Pos sh) : J := pidx sh q
 
 end IOcc
 
-/-! ### The leaves: `List`, `Option`, `Array`, and the registry -/
+/-! ### The leaves: the structures of `PolyIso` -/
 
-/-- A named type constructor with an occurrence structure: the leaves of the structures the
-command builds. Every type declared by `data`/`codata` with a type parameter is registered
-(`T.occ`); users may register their own. -/
-class OccLeaf (G : Type u → Type v) (Sh : outParam (Type s)) (Pos : outParam (Sh → Type p)) where
-  occ : Occ Sh Pos G
+/-- The structure of a functor with a `PolyIso` instance: the leaf of the structures the command
+builds. -/
+def Occ.ofIso (F : Type u → Type v) {Sh : Type s} {Pos : Sh → Type p} [h : PolyIso F Sh Pos] :
+    Occ Sh Pos F := ⟨h.equiv⟩
 
-/-- A named functor of families with an occurrence structure. -/
-class IOccLeaf {J : Type j} (G : (J → Type u) → Type v) (Sh : outParam (Type s))
-    (Pos : outParam (Sh → Type p)) (pidx : outParam ((sh : Sh) → Pos sh → J)) where
-  occ : IOcc Sh Pos pidx G
+/-- The structure of a functor on families with an `IPolyIso` instance. -/
+def IOcc.ofIso {J : Type j} (G : (J → Type u) → Type v) {Sh : Type s} {Pos : Sh → Type p}
+    {pidx : (sh : Sh) → Pos sh → J} [h : IPolyIso G Sh Pos pidx] : IOcc Sh Pos pidx G := ⟨h.equiv⟩
+
+/-- The map of a family leaf is the intended one. -/
+theorem IOcc.map_ofIso {J : Type j} {G : (J → Type u) → Type v}
+    {G' : (J → Type u') → Type v'} {Sh : Type s} {Pos : Sh → Type p}
+    {pidx : (sh : Sh) → Pos sh → J} [hG : IPolyIso G Sh Pos pidx] [hG' : IPolyIso G' Sh Pos pidx]
+    [IPolyMap G G'] {X : J → Type u} {Y : J → Type u'} (f : ∀ j, X j → Y j) (x : G X) :
+    map (ofIso G) (ofIso G') f x = @IPolyMap.map _ _ _ _ _ _ hG hG' _ _ _ f x := by
+  refine (hG'.equiv.symm_apply_eq.mpr ?_)
+  exact (@IPolyMap.equiv_map _ _ _ _ _ _ hG hG' _ _ _ f x).symm
 
 namespace Occ
 
 variable {X : Type u} {Y : Type u'}
 
-/-- Lists: the shape is the length, the positions its indices. -/
-def list : Occ Nat Fin List.{u} := ⟨List.equivSigmaTuple⟩
+/-- The map of a leaf is the intended one: this is what `PolyMap` is for. -/
+theorem map_ofIso {F : Type u → Type v} {F' : Type u' → Type v'} {Sh : Type s}
+    {Pos : Sh → Type p} [hF : PolyIso F Sh Pos] [hF' : PolyIso F' Sh Pos] [PolyMap F F']
+    (f : X → Y) (x : F X) :
+    map (ofIso F) (ofIso F') f x = @PolyMap.map _ _ _ _ hF hF' _ _ _ f x := by
+  refine (hF'.equiv.symm_apply_eq.mpr ?_)
+  exact (@PolyMap.equiv_map _ _ _ _ hF hF' _ _ _ f x).symm
 
-instance : OccLeaf List Nat Fin := ⟨list⟩
+/-- Lists. -/
+abbrev list : Occ Nat Fin List.{u} := ofIso List
 
 @[simp] theorem toC_list (l : List X) : list.toC l = ⟨l.length, l.get⟩ := rfl
 
 @[simp] theorem ofC_list {n : Nat} (f : Fin n → X) : list.ofC ⟨n, f⟩ = List.ofFn f := rfl
 
 @[simp] theorem map_list (f : X → Y) (l : List X) : map list list f l = l.map f :=
-  calc map list list f l = List.ofFn (f ∘ l.get) := rfl
-    _ = List.map f (List.ofFn l.get) := List.map_ofFn.symm
-    _ = l.map f := by rw [List.ofFn_get]
+  map_ofIso f l
 
 /-- The element at a position of a list is a member. -/
 theorem toC_list_mem (l : List X) (q : Fin (list.toC l).1) : (list.toC l).2 q ∈ l :=
@@ -292,42 +303,18 @@ theorem forall_toC_list {P : X → Prop} (l : List X) :
   ⟨fun h x hx => by obtain ⟨q, rfl⟩ := mem_toC_list hx; exact h q,
     fun h q => h _ (toC_list_mem l q)⟩
 
-/-- The positions of `Option`: one when the shape is `true`, none when it is `false`. -/
-inductive OptionPos : Bool → Type
-  | unit : OptionPos true
-
-/-- Options: the shape says whether there is a value. -/
-def option : Occ Bool OptionPos Option.{u} where
-  equiv := {
-    toFun
-      | none => ⟨false, fun q => nomatch q⟩
-      | some x => ⟨true, fun _ => x⟩
-    invFun
-      | ⟨false, _⟩ => none
-      | ⟨true, f⟩ => some (f .unit)
-    left_inv := by
-      intro x
-      cases x <;> rfl
-    right_inv := by
-      rintro ⟨_ | _, f⟩
-      · exact congrArg (Sigma.mk false) (funext fun q => nomatch q)
-      · exact congrArg (Sigma.mk true) (funext fun q => match q with | .unit => rfl) }
-
-instance : OccLeaf Option Bool OptionPos := ⟨option⟩
+/-- Options. -/
+abbrev option : Occ Bool OptionPos Option.{u} := ofIso Option
 
 theorem toC_option_none : option.toC (none : Option X) = ⟨false, fun q => nomatch q⟩ := rfl
 
 theorem toC_option_some (x : X) : option.toC (some x) = ⟨true, fun _ => x⟩ := rfl
 
-@[simp] theorem map_option (f : X → Y) (x : Option X) : map option option f x = x.map f := by
-  cases x <;> rfl
+@[simp] theorem map_option (f : X → Y) (x : Option X) : map option option f x = x.map f :=
+  map_ofIso f x
 
-/-- Arrays, through their lists. -/
-def array : Occ Nat Fin Array.{u} :=
-  ⟨(Equiv.mk Array.toList List.toArray (fun _ => by simp) (fun _ => by simp)).trans
-    List.equivSigmaTuple⟩
-
-instance : OccLeaf Array Nat Fin := ⟨array⟩
+/-- Arrays. -/
+abbrev array : Occ Nat Fin Array.{u} := ofIso Array
 
 /-! ### The combinators, plain
 

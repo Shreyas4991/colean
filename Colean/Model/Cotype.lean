@@ -41,41 +41,32 @@ turn them into the contract for a functor `F` isomorphic to `σ.Obj`. Nothing he
 to a declaration.
 -/
 
-universe w u u₀ v u₁ u₂ u₃
+universe w u v u₁ u₂ u₃
 
 namespace Codata
 
 /-- An indexed signature: an index type, the data of the constructors producing each index,
-their positions for recursive arguments, and the index of the argument at each position. The
-positions depend on the shape only through `sh₀`, into the *erased* shapes `Shape₀`: with a type
-parameter, `Shape₀` is the data without the parameter's values, so that the encoding indexes
-children by data independent of the parameter, and the type is a container in it
-(`Param.lean`). Without parameters `Shape₀ = Shape` and `sh₀` is the identity. -/
+their positions for recursive arguments, and the index of the argument at each position. -/
 structure Signature where
   I : Type w
   Shape : I → Type u
-  Shape₀ : I → Type u₀
-  sh₀ : ∀ {i : I}, Shape i → Shape₀ i
-  B : (i : I) → Shape₀ i → Type v
-  idx : ∀ {i : I} {s : Shape₀ i}, B i s → I
+  B : (i : I) → Shape i → Type v
+  idx : ∀ {i : I} {s : Shape i}, B i s → I
 
 namespace Signature
 
-variable (σ : Signature.{w, u, u₀, v})
+variable (σ : Signature.{w, u, v})
 
 /-- The labels of nodes: an index and a shape producing it. -/
 abbrev Lbl : Type (max w u) := Σ i : σ.I, σ.Shape i
 
-/-- The erased labels, which index the children: an index and an erased shape. -/
-abbrev Lbl₀ : Type (max w u₀) := Σ i : σ.I, σ.Shape₀ i
-
-/-- The indices of children in the encoding: an erased label and one of its positions. -/
-abbrev Idx : Type (max w u₀ v) := Σ l : σ.Lbl₀, σ.B l.1 l.2
+/-- The indices of children in the encoding: a label and one of its positions. -/
+abbrev Idx : Type (max w u v) := Σ l : σ.Lbl, σ.B l.1 l.2
 
 /-- The container functor of a signature, on indexed families. -/
 structure Obj (X : σ.I → Type u₁) (i : σ.I) : Type (max w u v u₁) where
   shape : σ.Shape i
-  child : (b : σ.B i (σ.sh₀ shape)) → X (σ.idx b)
+  child : (b : σ.B i shape) → X (σ.idx b)
 
 variable {σ} {X : σ.I → Type u₁} {Y : σ.I → Type u₂} {S : σ.I → Type u₃}
 
@@ -87,32 +78,32 @@ def map (f : ∀ j, X j → Y j) {i : σ.I} (z : σ.Obj X i) : σ.Obj Y i :=
 
 /-- The lifting to relations: same constructor and data, related recursive arguments. -/
 abbrev Rel (R : ∀ j, X j → Y j → Prop) {i : σ.I} (z : σ.Obj X i) (z' : σ.Obj Y i) : Prop :=
-  ∃ (s : σ.Shape i) (c : (b : σ.B i (σ.sh₀ s)) → X (σ.idx b))
-    (c' : (b : σ.B i (σ.sh₀ s)) → Y (σ.idx b)),
+  ∃ (s : σ.Shape i) (c : (b : σ.B i s) → X (σ.idx b))
+    (c' : (b : σ.B i s) → Y (σ.idx b)),
     z = ⟨s, c⟩ ∧ z' = ⟨s, c'⟩ ∧ ∀ b, R _ (c b) (c' b)
 
 end Obj
 
 /-! ### Encoding one layer into `Raw` -/
 
-/-- Transport a position along an equality of erased labels. -/
-def castB {l l' : σ.Lbl₀} (h : l = l') (b : σ.B l.1 l.2) : σ.B l'.1 l'.2 := h ▸ b
+/-- Transport a position along an equality of labels. -/
+def castB {l l' : σ.Lbl} (h : l = l') (b : σ.B l.1 l.2) : σ.B l'.1 l'.2 := h ▸ b
 
 open Classical in
 /-- One layer of a tree at index `i`. -/
 noncomputable def encode (i : σ.I) (z : σ.Obj (fun _ => Raw σ.Idx σ.Lbl) i) : Raw σ.Idx σ.Lbl :=
   Raw.mk (some ⟨i, z.shape⟩) fun p =>
-    if h : p.1 = ⟨i, σ.sh₀ z.shape⟩ then z.child (castB h p.2) else Raw.empty
+    if h : p.1 = ⟨i, z.shape⟩ then z.child (castB h p.2) else Raw.empty
 
 @[simp] theorem root_encode (i : σ.I) (z : σ.Obj (fun _ => Raw σ.Idx σ.Lbl) i) :
     (encode i z).root = some ⟨i, z.shape⟩ := rfl
 
 theorem child_encode_self (i : σ.I) (z : σ.Obj (fun _ => Raw σ.Idx σ.Lbl) i)
-    (b : σ.B i (σ.sh₀ z.shape)) : (encode i z).child ⟨⟨i, σ.sh₀ z.shape⟩, b⟩ = z.child b :=
+    (b : σ.B i (z.shape)) : (encode i z).child ⟨⟨i, z.shape⟩, b⟩ = z.child b :=
   dite_eq_left rfl
 
-theorem child_encode_of_ne (i : σ.I) (z : σ.Obj (fun _ => Raw σ.Idx σ.Lbl) i) {l : σ.Lbl₀}
-    (h : l ≠ ⟨i, σ.sh₀ z.shape⟩) (b : σ.B l.1 l.2) : (encode i z).child ⟨l, b⟩ = Raw.empty :=
+theorem child_encode_of_ne (i : σ.I) (z : σ.Obj (fun _ => Raw σ.Idx σ.Lbl) i) {l : σ.Lbl}
+    (h : l ≠ ⟨i, z.shape⟩) (b : σ.B l.1 l.2) : (encode i z).child ⟨l, b⟩ = Raw.empty :=
   dite_eq_right h
 
 /-! ### Predicates that are fixpoints of the one-layer operator
@@ -143,15 +134,15 @@ theorem root_idx {i : σ.I} {t : Raw σ.Idx σ.Lbl} (h : P i t) {l : σ.Lbl}
   rfl
 
 theorem child {i : σ.I} {t : Raw σ.Idx σ.Lbl} (h : P i t) {s : σ.Shape i}
-    (hs : t.root = some ⟨i, s⟩) (b : σ.B i (σ.sh₀ s)) :
-    P (σ.idx b) (t.child ⟨⟨i, σ.sh₀ s⟩, b⟩) := by
+    (hs : t.root = some ⟨i, s⟩) (b : σ.B i s) :
+    P (σ.idx b) (t.child ⟨⟨i, s⟩, b⟩) := by
   obtain ⟨z, rfl, hz⟩ := (hP i t).1 h
   obtain rfl : s = z.shape := (eq_of_heq (Sigma.mk.inj (Option.some.inj hs)).2).symm
   rw [child_encode_self]
   exact hz b
 
 theorem child_eq_empty {i : σ.I} {t : Raw σ.Idx σ.Lbl} (h : P i t) {s : σ.Shape i}
-    (hs : t.root = some ⟨i, s⟩) {l' : σ.Lbl₀} (hne : l' ≠ ⟨i, σ.sh₀ s⟩) (b : σ.B l'.1 l'.2) :
+    (hs : t.root = some ⟨i, s⟩) {l' : σ.Lbl} (hne : l' ≠ ⟨i, s⟩) (b : σ.B l'.1 l'.2) :
     t.child ⟨l', b⟩ = Raw.empty := by
   obtain ⟨z, rfl, -⟩ := (hP i t).1 h
   obtain rfl : s = z.shape := (eq_of_heq (Sigma.mk.inj (Option.some.inj hs)).2).symm
@@ -159,11 +150,11 @@ theorem child_eq_empty {i : σ.I} {t : Raw σ.Idx σ.Lbl} (h : P i t) {s : σ.Sh
 
 /-- A tree satisfying `P` is the layer made of its root and its children. -/
 theorem eq_encode {i : σ.I} {t : Raw σ.Idx σ.Lbl} (h : P i t) {s : σ.Shape i}
-    (hs : t.root = some ⟨i, s⟩) : t = encode i ⟨s, fun b => t.child ⟨⟨i, σ.sh₀ s⟩, b⟩⟩ := by
+    (hs : t.root = some ⟨i, s⟩) : t = encode i ⟨s, fun b => t.child ⟨⟨i, s⟩, b⟩⟩ := by
   refine Raw.ext_root_child hs fun ⟨l', b⟩ => ?_
-  by_cases hl : l' = ⟨i, σ.sh₀ s⟩
+  by_cases hl : l' = ⟨i, s⟩
   · subst hl
-    exact (child_encode_self i ⟨s, fun b => t.child ⟨⟨i, σ.sh₀ s⟩, b⟩⟩ b).symm
+    exact (child_encode_self i ⟨s, fun b => t.child ⟨⟨i, s⟩, b⟩⟩ b).symm
   · rw [child_encode_of_ne _ _ hl, hP.child_eq_empty h hs hl]
 
 /-- The shape at the root, which `P` guarantees to exist and to produce the index. -/
@@ -185,7 +176,7 @@ theorem root_eq {i : σ.I} (t : {t // P i t}) : t.1.root = some ⟨i, hP.rootSha
 /-- The destructor of the subtype, on the container. -/
 def dtor {i : σ.I} (t : {t // P i t}) : σ.Obj (fun j => {t // P j t}) i :=
   ⟨hP.rootShape t, fun b =>
-    ⟨t.1.child ⟨⟨i, σ.sh₀ (hP.rootShape t)⟩, b⟩, hP.child t.2 (hP.root_eq t) b⟩⟩
+    ⟨t.1.child ⟨⟨i, hP.rootShape t⟩, b⟩, hP.child t.2 (hP.root_eq t) b⟩⟩
 
 /-- The tree is the layer of its destructor. -/
 theorem val_eq_encode_dtor {i : σ.I} (t : {t // P i t}) :
@@ -217,7 +208,7 @@ coinductive_fixpoint
 theorem IsWf.isFix : σ.IsFix IsWf := fun i t => Iff.of_eq (IsWf.eq_def i t)
 
 /-- The coinductive family of a signature. -/
-def Cotype (σ : Signature.{w, u, u₀, v}) (i : σ.I) : Type (max w u u₀ v) :=
+def Cotype (σ : Signature.{w, u, v}) (i : σ.I) : Type (max w u v) :=
   {t : Raw σ.Idx σ.Lbl // IsWf i t}
 
 /-! ### The destructor -/
@@ -230,26 +221,6 @@ theorem val_eq_encode_dtorC {i : σ.I} (t : σ.Cotype i) :
     t.1 = encode i (Obj.map (fun _ => Subtype.val) (dtorC t)) :=
   IsWf.isFix.val_eq_encode_dtor t
 
-/-- The constructor on the container: encode one layer. The command derives its constructor
-from the contract instead (`Contract.ctor`, by corecursion) and relates the two by
-`ctor_eq_ctorC_of`. -/
-noncomputable def ctorC {i : σ.I} (z : σ.Obj σ.Cotype i) : σ.Cotype i := IsWf.isFix.ctor z
-
-theorem dtorC_ctorC {i : σ.I} (z : σ.Obj σ.Cotype i) : dtorC (ctorC z) = z :=
-  IsWf.isFix.dtor_ctor z
-
-theorem ctorC_dtorC {i : σ.I} (t : σ.Cotype i) : ctorC (dtorC t) = t :=
-  IsWf.isFix.ctor_dtor t
-
-/-- A constructor that is a left inverse of the destructor is the constructor on the container,
-through the isomorphism. -/
-theorem ctor_eq_ctorC_of {FT : σ.I → Type u₂} (ofCT : ∀ {i}, σ.Obj σ.Cotype i → FT i)
-    (toC : ∀ {i}, FT i → σ.Obj σ.Cotype i) (ofC_toC : ∀ {i} (y : FT i), ofCT (toC y) = y)
-    (ctor : ∀ {i}, FT i → σ.Cotype i)
-    (ctor_dtor : ∀ {i} (t : σ.Cotype i), ctor (ofCT (dtorC t)) = t) {i : σ.I} (y : FT i) :
-    ctor y = ctorC (toC y) := by
-  rw [← ctor_dtor (ctorC (toC y)), dtorC_ctorC, ofC_toC]
-
 /-! ### The corecursor -/
 
 open Classical in
@@ -260,7 +231,7 @@ noncomputable def coalg (c : ∀ i, S i → σ.Obj S i) :
   | none => (none, fun _ => none)
   | some ⟨i, s⟩ =>
     (some ⟨i, (c i s).shape⟩, fun p =>
-      if h : p.1 = ⟨i, σ.sh₀ (c i s).shape⟩ then some ⟨_, (c i s).child (castB h p.2)⟩
+      if h : p.1 = ⟨i, (c i s).shape⟩ then some ⟨_, (c i s).child (castB h p.2)⟩
       else none)
 
 /-- Unfolding a coalgebra into `Raw`. -/
@@ -279,8 +250,8 @@ theorem corecRaw_eq (c : ∀ i, S i → σ.Obj S i) (i : σ.I) (s : S i) :
     corecRaw c i s = encode i ⟨(c i s).shape, fun b => corecRaw c _ ((c i s).child b)⟩ := by
   refine Raw.ext_root_child rfl fun ⟨l, b⟩ => ?_
   show Raw.corec (coalg c)
-    (if h : l = ⟨i, σ.sh₀ (c i s).shape⟩ then some ⟨_, (c i s).child (castB h b)⟩ else none) = _
-  by_cases h : l = ⟨i, σ.sh₀ (c i s).shape⟩
+    (if h : l = ⟨i, (c i s).shape⟩ then some ⟨_, (c i s).child (castB h b)⟩ else none) = _
+  by_cases h : l = ⟨i, (c i s).shape⟩
   · subst h
     rw [(child_encode_self i ⟨(c i s).shape, fun b => corecRaw c _ ((c i s).child b)⟩ b :)]
     exact congrArg (Raw.corec (coalg c)) (dite_eq_left rfl)
@@ -299,8 +270,8 @@ noncomputable def corecC (c : ∀ i, S i → σ.Obj S i) {i : σ.I} (s : S i) : 
 theorem dtorC_corecC (c : ∀ i, S i → σ.Obj S i) {i : σ.I} (s : S i) :
     dtorC (corecC c s) = Obj.map (fun _ s => corecC c s) (c i s) := by
   refine congrArg (Obj.mk (c i s).shape) (funext fun b => Subtype.ext ?_)
-  show (corecRaw c i s).child ⟨⟨i, σ.sh₀ (c i s).shape⟩, b⟩ = corecRaw c _ ((c i s).child b)
-  exact (congrArg (Raw.child · ⟨⟨i, σ.sh₀ (c i s).shape⟩, b⟩) (corecRaw_eq c i s)).trans
+  show (corecRaw c i s).child ⟨⟨i, (c i s).shape⟩, b⟩ = corecRaw c _ ((c i s).child b)
+  exact (congrArg (Raw.child · ⟨⟨i, (c i s).shape⟩, b⟩) (corecRaw_eq c i s)).trans
     (child_encode_self i ⟨(c i s).shape, fun b => corecRaw c _ ((c i s).child b)⟩ b)
 
 /-! ### Bisimulation -/
@@ -316,7 +287,7 @@ theorem bisimC (R : ∀ i, σ.Cotype i → σ.Cotype i → Prop)
   obtain ⟨s, c, c', hz, hz', hR⟩ := H i x y h
   rw [val_eq_encode_dtorC x, val_eq_encode_dtorC y, hz, hz']
   refine ⟨rfl, fun ⟨l', b⟩ => ?_⟩
-  by_cases hl : (⟨i, σ.sh₀ s⟩ : σ.Lbl₀) = l'
+  by_cases hl : (⟨i, s⟩ : σ.Lbl) = l'
   · subst hl
     exact Or.inr ⟨_, c b, c' b,
       child_encode_self i (Obj.map (fun _ => Subtype.val) (⟨s, c⟩ : σ.Obj σ.Cotype i)) b,

@@ -1,4 +1,5 @@
-import Colean.Model.Param
+import Colean.Model.Occ
+import Colean.Model.Intype
 
 /-!
 # The command, analysis
@@ -6,12 +7,12 @@ import Colean.Model.Param
 *Spec.* Input: the syntax of a `codata`/`data` declaration (or the declarations of a block).
 Output: the context `Ctx`, everything the generators need: the constructors analysed into
 binder groups with their kinds (`Kind`: data, plain recursive, under a telescope, nested with
-its occurrence structure `OccInfo`; `PKind`: how a data binder uses the container parameter),
-the index telescope, and the names of every generated declaration. The occurrence structure of
-a nested argument is built here by recursion on the syntax of its type (`occTreeOf`,
-`occTermOf`), with instance search only at named type constructors (`leafOcc?`); this is the
-only place the command elaborates terms during the analysis. No declaration is generated here
-except through `mkCtx`'s callers.
+its occurrence structure `OccInfo`), the index telescope, and the names of every generated
+declaration. The occurrence structure of a nested argument is built here by recursion on the
+syntax of its type (`occTreeOf`, `occTermOf`), with instance search only at named type
+constructors, which must have `PolyIso` and `PolyMap` instances (`checkLeaf`); this is the only
+place the command elaborates terms during the analysis. No declaration is generated here except
+through `mkCtx`'s callers.
 -/
 
 open Lean Elab Command Lean.Parser.Term
@@ -33,7 +34,7 @@ syntax (name := dataCmd) "data " ident (ppSpace bracketedBinder)* (" : " term)?
   codataCtor* : command
 
 /-- The occurrence tree of an argument type: how the occurrences of a *hole* (the types being
-defined, or the container parameter) sit in it. Built by `occTreeOf` by recursion on the syntax
+defined) sit in it. Built by `occTreeOf` by recursion on the syntax
 of the type, and turned into a structure term by `occTermOf` (`Occ.lean`). -/
 inductive OccTree where
   | const (ty : Term)
@@ -46,10 +47,10 @@ inductive OccTree where
   /-- `(a : A) × body`, with `A` constant. -/
   | sigma (a : Ident) (A : Term) (body : OccTree)
   /-- `G arg` for a named type constructor `G` (a lambda over the hole-containing argument, or a
-  partial application) with the structure `occ` of its `OccLeaf` instance. -/
+  partial application) with its structure `occ`, from its `PolyIso` instance. -/
   | leaf (G : Term) (occ : Term) (arg : OccTree)
-  /-- `G (fun p => arg)` for a named functor of families `G`, with the structure `occ` of its
-  `IOccLeaf` instance. -/
+  /-- `G (fun p => arg)` for a named functor of families `G`, with its structure `occ`, from its
+  `IPolyIso` instance. -/
   | ileaf (G : Term) (occ : Term) (p : Ident) (arg : OccTree)
   deriving Inhabited
 
@@ -84,31 +85,12 @@ inductive Kind where
   its occurrence structure (`List (T params idx)`, `T i × T j`, `A → List (T i)`, …). -/
   | occ (info : OccInfo)
 
-/-- How a non-recursive argument uses the container parameter (the last parameter, when it is
-a type variable `α`): not at all, as its type `α`, under a telescope `(y₁ : B₁) → … → α`, or
-nested, through its occurrence structure (`List α`, `α × α`, …). When every argument uses `α`
-in one of these ways, the declared type has an occurrence structure in `α`: its erased shapes
-`Shape₀` are the non-recursive data without these arguments (plus the shapes of the nested
-ones), and its parameter positions `P` are these arguments, one constructor each. -/
-inductive PKind where
-  | none
-  /-- `X j` (`j` is `()` for a type parameter). -/
-  | val (j : Term)
-  | fn (tele : Array (Ident × Term)) (j : Term)
-  | occ (info : OccInfo)
-
-def PKind.isNone : PKind → Bool
-  | .none => true
-  | _ => false
-
 /-- A binder group of a constructor. -/
 structure Group where
   ids : Array Ident
   ty : Term
   kind : Kind
   implicit : Bool
-  /-- How the group uses the container parameter (`.none` for recursive groups). -/
-  pk : PKind := .none
 
 /-- A constructor, analysed: its name, binder groups, and the index arguments of its result type
 (none without indices; in a mutual block, the first index is the type's constructor of `Which`).
@@ -162,15 +144,6 @@ def CtorInfo.allIds (c : CtorInfo) : Array Ident := c.groups.foldl (fun acc g =>
 /-- All non-recursive binder identifiers, implicit ones included. -/
 def CtorInfo.allDataIds (c : CtorInfo) : Array Ident :=
   c.groups.foldl (fun acc g => if g.kind.isData then acc ++ g.ids else acc) #[]
-
-/-- The non-recursive binder identifiers that do not use the container parameter: the data of
-the erased shapes. -/
-def CtorInfo.allDataIds₀ (c : CtorInfo) : Array Ident :=
-  c.groups.foldl (fun acc g => if g.kind.isData && g.pk.isNone then acc ++ g.ids else acc) #[]
-
-/-- The arguments at parameter positions, with how they use the parameter. -/
-def CtorInfo.ppos (c : CtorInfo) : Array (Ident × PKind) :=
-  c.groups.foldl (fun acc g => if g.pk.isNone then acc else acc ++ g.ids.map (·, g.pk)) #[]
 
 def CtorInfo.hasRec (c : CtorInfo) : Bool := c.groups.any fun g => !g.kind.isData
 
@@ -272,25 +245,37 @@ def stripParen (t : Term) : Term :=
   | `(($t')) => t'
   | _ => t
 
-/-- The structure of a leaf: a named type constructor `G`, as a lambda over the hole-containing
-argument (or a partial application), from its `OccLeaf` instance (`IOccLeaf` for a family
-argument), found by instance search in the scope; the structure term is the instance's field,
-unfolded and delaborated, so that generated declarations mention the structure itself
-(`Codata.Occ.list`, `Forest.occ α`) and never the search. -/
-def leafOcc? (scope : Array (TSyntax ``bracketedBinderF)) (G : Term) (fam : Bool) :
-    CommandElabM (Option Term) :=
+/-- Does `stx` elaborate in the scope, instances included? -/
+private def elaborates (scope : Array (TSyntax ``bracketedBinderF)) (stx : Term) :
+    CommandElabM Bool :=
   liftTermElabM do
     Term.elabBinders scope fun _ => Term.withoutErrToSorry do
-      let stx ← if fam then `(@Codata.IOccLeaf.occ _ $G _ _ _ _) else `(@Codata.OccLeaf.occ $G _ _ _)
-      let e? ← try
-          let e ← Term.elabTerm stx none
-          Term.synthesizeSyntheticMVarsNoPostponing
-          pure (some (← instantiateMVars e))
-        catch _ => pure none
-      let some e := e? | return none
-      let e ← (Meta.unfoldProjInst? e) >>= fun | some e' => pure e' | none => pure e
-      let e ← Meta.whnfCore e
-      return some (← PrettyPrinter.delab e)
+      try
+        discard <| Term.elabTerm stx none
+        Term.synthesizeSyntheticMVarsNoPostponing
+        return true
+      catch _ => return false
+
+/-- The structure of a leaf: a named type constructor `G`, as a lambda over the hole-containing
+argument (or a partial application), with `PolyIso` and `PolyMap` instances in the scope
+(`IPolyIso` and `IPolyMap` for a family argument). The instances are the user's interface
+(`PolyIso.lean`); `PolyMap` is not used by the generated declarations, it is required because it
+is what makes the map they use the intended one. -/
+private def checkLeaf (scope : Array (TSyntax ``bracketedBinderF)) (ty G : Term) (fam : Bool) :
+    CommandElabM Term := do
+  let occ ← if fam then `(Codata.IOcc.ofIso $G) else `(Codata.Occ.ofIso $G)
+  let iso := if fam then "IPolyIso" else "PolyIso"
+  let mapName := if fam then "IPolyMap" else "PolyMap"
+  unless ← elaborates scope occ do
+    throwErrorAt ty "no `Codata.{iso}` instance for `{G}`; to nest through a type constructor, \
+      give it `Codata.{iso}` and `Codata.{mapName}` instances (`Colean/PolyIso.lean`); products, \
+      sums, functions and dependent pairs over constant types need none"
+  let map ← if fam then `((inferInstance : Codata.IPolyMap $G $G))
+    else `((inferInstance : Codata.PolyMap $G $G))
+  unless ← elaborates scope map do
+    throwErrorAt ty "no `Codata.{mapName}` instance for `{G}`: the `Codata.{iso}` instance needs \
+      the intended action on functions, and its naturality"
+  return occ
 
 /-- The shapes, positions and (indexed) position index of a structure term, from its type,
 elaborated in the scope. -/
@@ -320,7 +305,8 @@ def isPropTy (scope : Array (TSyntax ``bracketedBinderF)) (ty : Term) : CommandE
 /-- The occurrence tree of `ty`, for the hole recognised by `holeOf` (an occurrence with its
 index arguments) among the names `names`: products, sums, functions and dependent pairs over
 constant types, and named type constructors applied to one hole-containing argument (a family
-`fun p => …` for a functor of families), whose structures come from the registry. -/
+`fun p => …` for a functor of families), whose structures come from their `PolyIso` instances.
+-/
 partial def occTreeOf (holeOf : Term → Option (Array Term)) (names : Array Name)
     (scope : Array (TSyntax ``bracketedBinderF)) (ty : Term) : CommandElabM OccTree := do
   let ty := stripParen ty
@@ -373,18 +359,9 @@ partial def occTreeOf (holeOf : Term → Option (Array Term)) (names : Array Nam
       | _ => none
     match famBody? with
     | some (p, body) =>
-      let some occ ← leafOcc? scope G true
-        | throwErrorAt ty "no `Codata.IOccLeaf` instance for the functor of families `{G}`; \
-            nested occurrences of a family go through the types declared by `data` and \
-            `codata` with a family parameter, and any functor with such an instance"
-      return .ileaf G occ p (← go body)
+      return .ileaf G (← checkLeaf scope ty G true) p (← go body)
     | none =>
-      let some occ ← leafOcc? scope G false
-        | throwErrorAt ty "no `Codata.OccLeaf` instance for the type constructor `{G}`; \
-            nested occurrences are supported through products, sums, functions and dependent \
-            pairs over constant types, `List`, `Option`, `Array`, the types declared by `data` \
-            and `codata` with a type parameter, and any type constructor with such an instance"
-      return .leaf G occ (← go arg)
+      return .leaf G (← checkLeaf scope ty G false) (← go arg)
   | _ =>
     throwErrorAt ty "recursive occurrence not recognised: expected a type being defined \
       applied to its parameters (and indices), possibly under arrows, products, sums, \
@@ -456,16 +433,6 @@ partial def OccTree.firstIdx? : OccTree → Option (Array Term)
   | .prod l r | .sum l r => l.firstIdx? <|> r.firstIdx?
   | .pi _ _ _ body | .sigma _ _ body | .leaf _ _ body | .ileaf _ _ _ body => body.firstIdx?
 
-/-- Does the tree mention one of the names outside its holes: in a constant, the domain of a
-function or a dependent pair, the head of a leaf, or the index of a hole? -/
-partial def OccTree.mentionsOutside (names : Array Name) : OccTree → Bool
-  | .const t => mentionsAny t.raw names
-  | .hole idx => idx.any (mentionsAny ·.raw names)
-  | .prod l r | .sum l r => l.mentionsOutside names || r.mentionsOutside names
-  | .pi _ A _ body | .sigma _ A body => mentionsAny A.raw names || body.mentionsOutside names
-  | .leaf G _ arg => mentionsAny G.raw names || arg.mentionsOutside names
-  | .ileaf G _ _ arg => mentionsAny G.raw names || arg.mentionsOutside names
-
 /-- Classify the type of a constructor argument: a plain recursive argument `T params idx`, a
 recursive argument under a telescope of arrows ending in one, a nested one (any other type
 mentioning the types being defined, through its occurrence structure), or non-recursive data,
@@ -499,61 +466,6 @@ private partial def classify (tNames : Array Name) (blk : Name) (params : Array 
   let (Sh, Pos, pidx?) ← occShapes scope o idxed
   return .occ { tree, o, Sh, Pos, indexed := idxed, pidx := pidx?.getD Pos }
 
-/-- Is `ty` the sort `Type`, `Type u` or `Type _`? -/
-private def isTypeSort (ty : Term) : Bool := ty.raw.isOfKind ``Parser.Term.type
-
-/-- The sort of a container parameter: `some none` for a type `Type u`, `some (some J)` for a
-family `J → Type u` (or `(j : J) → Type u`), `none` otherwise. -/
-private def paramSort (ty : Term) : Option (Option Term) :=
-  if isTypeSort ty then some none
-  else match ty with
-    | `($J → $cod) => if isTypeSort cod then some (some J) else none
-    | `(($_:ident : $J) → $cod) => if isTypeSort cod then some (some J) else none
-    | _ => none
-
-/-- How the type `ty` of a non-recursive argument uses the parameter `a` (a family over `J` when
-`J` is given): `.none` when it does not occur, `.val j`, `.fn tele j` for the recognised forms
-`a j`, `(y₁ : B₁) → … → a j` (just `a` for a type parameter, with `j := ()`), `.occ` for any
-other type with an occurrence structure in `a`, and no result otherwise. -/
-private partial def classifyParam (a : Ident) (J : Option Term)
-    (scope : Array (TSyntax ``bracketedBinderF)) (ty : Term) : CommandElabM (Option PKind) := do
-  let an := #[a.getId]
-  let ty := stripParen ty
-  unless mentionsAny ty.raw an do return some .none
-  let fam := J.isSome
-  let isA (t : Term) : Bool := t.raw.isIdent && t.raw.getId == a.getId
-  let unit ← `(())
-  -- `a j` (or `a`): the index.
-  let occA (t : Term) : Option Term :=
-    let t := stripParen t
-    if fam then
-      match t with
-      | `($f:ident $j:term) => if isA f && !mentionsAny j.raw an then some j else none
-      | _ => none
-    else if isA t then some unit else none
-  if let some j := occA ty then return some (.val j)
-  let rec go (t : Term) (acc : Array (Ident × Term)) : CommandElabM (Option PKind) := do
-    match t with
-    | `($b:bracketedBinder → $cod) =>
-      let (ids, dom, _) ← readBinder b
-      if mentionsAny dom.raw an then return none
-      go cod (acc ++ ids.map (·, dom))
-    | `($dom → $cod) =>
-      if mentionsAny dom.raw an then return none
-      go cod (acc.push (← freshId s!"y{Nat.toSubscriptString (acc.size + 1)}", dom))
-    | _ => return if acc.isEmpty then none else (occA t).map (.fn acc)
-  if let some k ← go ty #[] then return some k
-  -- Otherwise the occurrence structure of the type in `a`: a type parameter is a plain hole, a
-  -- family parameter a hole at its index.
-  let holeOf (t : Term) : Option (Array Term) := (occA t).map fun j => if fam then #[j] else #[]
-  let tree? ← try some <$> occTreeOf holeOf an scope ty catch _ => pure none
-  let some tree := tree? | return none
-  let Jt := J.getD unit
-  let o ← occTermOf fam Jt (fun idx => pure idx[0]!) tree
-  let res ← try some <$> occShapes scope o fam catch _ => pure none
-  let some (Sh, Pos, pidx?) := res | return none
-  return some (.occ { tree, o, Sh, Pos, indexed := fam, pidx := pidx?.getD Pos })
-
 /-- The binders `(y₁ : B₁) … (yₙ : Bₙ)` of a telescope. -/
 def teleBinders (tele : Array (Ident × Term)) : CommandElabM (Array (TSyntax ``bracketedBinderF)) :=
   tele.mapM fun (y, B) => `(bracketedBinderF| ($y:ident : $B))
@@ -569,11 +481,10 @@ def mkBinder (implicit : Bool) (ids : Array Ident) (ty : Term) :
     CommandElabM (TSyntax ``bracketedBinderF) :=
   if implicit then `(bracketedBinderF| {$ids* : $ty}) else `(bracketedBinderF| ($ids* : $ty))
 
-/-- The container parameter: its name, its sort, and the index type `J` of a family. -/
-structure ParamInfo where
-  a : Ident
-  aTy : Term
-  J : Option Term
+/-- The generated declaration `T.s`. Inside its own namespace `T.T` would shadow the type `T`, so
+a generated name equal to the type's name is primed (`B.B'` for `codata B`). -/
+def genName (tName : Name) (s : String) : Name :=
+  .str tName (if tName.getString! == s then s ++ "'" else s)
 
 /-- Everything the generators need: the analysed declaration, the index telescope if any, the
 namespaces of the generic theory to instantiate, and the names of the generated declarations
@@ -592,15 +503,6 @@ structure Ctx where
   pExp : Array (TSyntax ``bracketedBinderF)
   pImp : Array (TSyntax ``bracketedBinderF)
   pTerms : Array Term
-  /-- The container parameter: the last parameter, when it is a type variable, or a family
-  `J → Type u`, that the constructors use only at parameter positions. Then the type is a
-  container in it, and the declarations that do not depend on it (`Shape₀`, `P`, `B`, `Ix`,
-  `psig`, `Sh`, `Pos`) take the parameters without it, `pids₀` (all of them otherwise). -/
-  param : Option ParamInfo
-  pids₀ : Array Ident
-  pExp₀ : Array (TSyntax ``bracketedBinderF)
-  pImp₀ : Array (TSyntax ``bracketedBinderF)
-  pTerms₀ : Array Term
   ctors : Array CtorInfo
   /-- The index binders, with the names the user gave them (or fresh ones) and their types,
   which may mention the earlier names. Empty for a plain type. -/
@@ -620,19 +522,6 @@ structure Ctx where
   Shape : Ident
   /-- The shapes on the packed index (several indices only). -/
   ShapeP : Ident
-  /-- With a container parameter: the erased shapes, the parameter positions, the equivalence
-  `Shape ≃ Σ s₀, P s₀ → α` and the parameterised signature. -/
-  Shape₀ : Ident
-  Shape₀P : Ident
-  P : Ident
-  shapeTo : Ident
-  shapeOf : Ident
-  shapeOf_shapeTo : Ident
-  shapeTo_shapeOf : Ident
-  shapeEquiv : Ident
-  /-- The index of a parameter position, for a family parameter. -/
-  pidxId : Ident
-  psig : Ident
   B : Ident
   sig : Ident
   Fmap : Ident
@@ -672,11 +561,6 @@ structure Ctx where
   Fp : Term
   Shapep : Term
   ShapePp : Term
-  Shape₀p : Term
-  Shape₀Pp : Term
-  Pp : Term
-  shapeEquivp : Term
-  psigp : Term
   Bp : Term
   sigp : Term
 
@@ -721,24 +605,11 @@ def nestShapeBinders (c : CtorInfo) (implicit : Bool) :
     CommandElabM (Array (TSyntax ``bracketedBinderF)) :=
   c.nested.mapM fun (x, info) => mkBinder implicit #[nestShapeId x] info.Sh
 
-/-- The arguments nested in the parameter, with their structures. -/
-def CtorInfo.pnested (c : CtorInfo) : Array (Ident × OccInfo) :=
-  c.groups.foldl (init := #[]) fun acc g => match g.pk with
-    | .occ info => acc ++ g.ids.map (·, info)
-    | _ => acc
-
-/-- The shape binders `(x_s : Sh)` of the arguments nested in the parameter. -/
-def pnestShapeBinders (c : CtorInfo) (implicit : Bool) :
-    CommandElabM (Array (TSyntax ``bracketedBinderF)) :=
-  c.pnested.mapM fun (x, info) => mkBinder implicit #[nestShapeId x] info.Sh
-
-/-- The data binders of a constructor without the parameter positions, and the shapes of its
-nested arguments and of its containers in the parameter, all implicit (for the constructors of
-`B` and `P`, where they are determined by the erased shape). -/
+/-- The data binders of a constructor and the shapes of its nested arguments, all implicit (for
+the constructors of `B`, where they are determined by the shape). -/
 def dataBindersImplicit (c : CtorInfo) : CommandElabM (Array (TSyntax ``bracketedBinderF)) := do
-  return (← (c.groups.filter fun g => g.kind.isData && g.pk.isNone).mapM fun g =>
-      mkBinder true g.ids g.ty) ++
-    (← nestShapeBinders c true) ++ (← pnestShapeBinders c true)
+  return (← (c.groups.filter (·.kind.isData)).mapM fun g => mkBinder true g.ids g.ty) ++
+    (← nestShapeBinders c true)
 
 namespace Ctx
 
@@ -747,11 +618,6 @@ variable (ctx : Ctx)
 def fCtor (c : CtorInfo) : Ident := mkIdent (ctx.F.getId ++ c.fname.getId)
 def shapeCtor (c : CtorInfo) : Ident := mkIdent (ctx.Shape.getId ++ c.fname.getId)
 def bCtor (c : CtorInfo) (x : Ident) : Ident := mkIdent (ctx.B.getId ++ (posCtorName c x).getId)
-def shape₀Ctor (c : CtorInfo) : Ident := mkIdent (ctx.Shape₀.getId ++ c.fname.getId)
-def pCtor (c : CtorInfo) (x : Ident) : Ident := mkIdent (ctx.P.getId ++ (posCtorName c x).getId)
-
-/-- Does the declaration have a container parameter? -/
-def hasParam : Bool := ctx.param.isSome
 
 /-! In a mutual block, the user-facing declarations of a constructor live under its own type. -/
 
@@ -764,12 +630,12 @@ def tyId (m : Nat) (s : String) : Ident := mkIdent (.str (ctx.tyName m) s)
 def tCtor (c : CtorInfo) : Ident := mkIdent (ctx.tyName c.owner ++ c.name.getId)
 def tName' (c : CtorInfo) (pre post : String) : Ident :=
   mkIdent (ctx.tyName c.owner ++ Name.mkSimple (pre ++ c.name.getId.toString ++ post))
-def nF (s : String) : Ident := mkIdent (.str (.str ctx.tName "F") s)
+def nF (s : String) : Ident := mkIdent (.str (genName ctx.tName "F") s)
 
 def isMutual : Bool := ctx.which.isSome
 
 /-- `T.s`, for the family being defined. -/
-def nm (s : String) : Ident := mkIdent (.str ctx.tName s)
+def nm (s : String) : Ident := mkIdent (genName ctx.tName s)
 
 /-- The number of leading indices that are not the user's: one in a mutual block. -/
 def off : Nat := if ctx.isMutual then 1 else 0
@@ -901,9 +767,6 @@ argument cannot be inferred by unification, since any two proofs are definitiona
 /-- `_` for every parameter. -/
 def pHoles : CommandElabM (Array Term) := ctx.pids.mapM fun _ => `(_)
 
-/-- `_` for every parameter but the container parameter. -/
-def pHoles₀ : CommandElabM (Array Term) := ctx.pids₀.mapM fun _ => `(_)
-
 /-- If the constructor's binder `x` is one of the indices of its result type, that index
 binder. In a `match` whose discriminant has the index binders as indices, the pattern variable
 `x` is eliminated in favour of the index binder, so right-hand sides refer to the latter. -/
@@ -920,9 +783,6 @@ def valIds (c : CtorInfo) : Array Ident :=
 
 def valDataIds (c : CtorInfo) : Array Ident :=
   c.allDataIds.map fun x => (ctx.bareIdx c x.getId).getD x
-
-def valDataIds₀ (c : CtorInfo) : Array Ident :=
-  c.allDataIds₀.map fun x => (ctx.bareIdx c x.getId).getD x
 
 def valArgs (c : CtorInfo) : Array Ident :=
   c.args.map fun x => (ctx.bareIdx c x.getId).getD x
@@ -988,26 +848,6 @@ def tyAt (c : CtorInfo) : CommandElabM Term := do appT (← ctx.tyP c.owner) (ct
 /-- The full index arguments of the `m`-th type at the user's index binders: its block index,
 then the user's binders. -/
 def fullArgs (m : Nat) : Array Term := ctx.pre m ++ ctx.uIArgs
-
-/-- The user-facing type at a full index (the block index first in a mutual block): the type
-whose constructor of `Which` is the first index, at the remaining ones; the block family when
-the first index is another term. -/
-def recTyOf (idx : Array Term) : CommandElabM Term := do
-  if ctx.isMutual then
-    for m in [0:ctx.types.size] do
-      if idx.size > 0 && idx[0]!.raw.structEq (ctx.whichCtor m).raw then
-        return ← appT (← ctx.tyP m) (idx.extract 1 idx.size)
-  appT ctx.Tp idx
-
-/-- The occurrence structure in the parameter of the user-facing type at a full index, applied
-to its parameters and indices (`T.occ params₀ idx`); the block family's (`Blk.occ`) when the
-first index is not a constructor of `Which`. -/
-def recOccOf (idx : Array Term) : CommandElabM Term := do
-  if ctx.isMutual then
-    for m in [0:ctx.types.size] do
-      if idx.size > 0 && idx[0]!.raw.structEq (ctx.whichCtor m).raw then
-        return ← mkAppT (ctx.tyId m "occ") (ctx.pTerms₀ ++ idx.extract 1 idx.size)
-  mkAppT (ctx.nm "occ") (ctx.pTerms₀ ++ idx)
 
 /-- The patterns for the user's indices. -/
 def uIdxPats (c : CtorInfo) : CommandElabM (Array Term) :=
@@ -1083,75 +923,18 @@ def shapePat (c : CtorInfo) : CommandElabM Term := do
   let ids := (← ctx.patIds c c.allDataIds) ++ nestShapeIds c
   `(@$(ctx.shapeCtor c):ident $hs* $ids*)
 
-/-- The shapes of the arguments nested in the parameter, as values: `(Occ.toC o x).1`. -/
-def pnestShapeVals (c : CtorInfo) : CommandElabM (Array Term) :=
-  c.pnested.mapM fun (x, info) => `(($(occId info.indexed `toC) $(info.o) $x).1)
-
-/-- The shapes of the arguments nested in the parameter as their binders `x_s`. -/
-def pnestShapeIds (c : CtorInfo) : Array Term := c.pnested.map fun (x, _) => idT (nestShapeId x)
-
-/-- `@Shape₀.c params₀ data₀… x_s…`, as a term, with the constructor's binders in scope. -/
-def shape₀App (c : CtorInfo) : CommandElabM Term := do
-  let pTerms₀ := ctx.pTerms₀
-  let ids := c.allDataIds₀.map idT ++ nestShapeIds c ++ pnestShapeIds c
-  `(@$(ctx.shape₀Ctor c):ident $pTerms₀* $ids*)
-
-/-- `@Shape₀.c params₀ data₀… x_s… sh…`, as a term on the right-hand side of a `match` on
-`Shape`, with the given shapes of the containers in the parameter. -/
-def shape₀ValWith (c : CtorInfo) (pnestVals : Array Term) : CommandElabM Term := do
-  let pTerms₀ := ctx.pTerms₀
-  let ids := (ctx.valDataIds₀ c).map idT ++ nestShapeIds c ++ pnestVals
-  `(@$(ctx.shape₀Ctor c):ident $pTerms₀* $ids*)
-
-/-- `@Shape₀.c _ data₀… x_s…`, as a pattern. -/
-def shape₀Pat (c : CtorInfo) : CommandElabM Term := do
-  let hs ← ctx.pHoles₀
-  let ids := (← ctx.patIds c c.allDataIds₀) ++ nestShapeIds c ++ pnestShapeIds c
-  `(@$(ctx.shape₀Ctor c):ident $hs* $ids*)
-
-/-- `@B.c_x params₀ data₀… (toC x).1… extra…`, as a term after a `match` on `F` (the shapes of
-the nested arguments and of the containers in the parameter are computed from the arguments).
--/
+/-- `@B.c_x params data… (toC x).1… extra…`, as a term after a `match` on `F` (the shapes of the
+nested arguments are computed from the arguments). -/
 def bApp (c : CtorInfo) (x : Ident) (extra : Array Term) : CommandElabM Term := do
-  let pTerms₀ := ctx.pTerms₀
-  let ids := (ctx.valDataIds₀ c).map idT ++ (← ctx.nestShapeVals c) ++ (← pnestShapeVals c)
-  `(@$(ctx.bCtor c x):ident $pTerms₀* $ids* $extra*)
+  let pTerms := ctx.pTerms
+  let ids := (ctx.valDataIds c).map idT ++ (← ctx.nestShapeVals c)
+  `(@$(ctx.bCtor c x):ident $pTerms* $ids* $extra*)
 
-/-- `@B.c_x _ data₀… x_s… extra…`, as a pattern. -/
+/-- `@B.c_x _ data… x_s… extra…`, as a pattern. -/
 def bPat (c : CtorInfo) (x : Ident) (extra : Array Term) : CommandElabM Term := do
-  let hs ← ctx.pHoles₀
-  let ids := (← ctx.patIds c c.allDataIds₀) ++ nestShapeIds c ++ pnestShapeIds c
+  let hs ← ctx.pHoles
+  let ids := (← ctx.patIds c c.allDataIds) ++ nestShapeIds c
   `(@$(ctx.bCtor c x):ident $hs* $ids* $extra*)
-
-/-- `@P.c_x _ data₀… x_s… extra…`, as a pattern. -/
-def pPat (c : CtorInfo) (x : Ident) (extra : Array Term) : CommandElabM Term := do
-  let hs ← ctx.pHoles₀
-  let ids := (← ctx.patIds c c.allDataIds₀) ++ nestShapeIds c ++ pnestShapeIds c
-  `(@$(ctx.pCtor c x):ident $hs* $ids* $extra*)
-
-/-- The shapes `S` and the equivalence `e` of the parameterised signature, `sig = psig.sig S e`
-(with the container parameter free): the shapes (on the packed index) and `shapeEquiv` at
-every index. -/
-def sigSE : CommandElabM (Term × Term) := do
-  if !ctx.idxed then return (← `(fun _ => $(ctx.Shapep)), ← `(fun {_} => $(ctx.shapeEquivp)))
-  if ctx.packed then
-    let iPat ← ctx.pack ctx.iArgs
-    let iArgs := ctx.iArgs
-    return (ctx.ShapePp,
-      ← `(fun {p} => match p with | $iPat:term => $(ctx.shapeEquivp) $iArgs*))
-  let i := ctx.iIds[0]!
-  return (ctx.Shapep, ← `(fun {$i:ident} => $(ctx.shapeEquivp) $i:ident))
-
-/-- The index type `J` and the position index of the parameterised signature (`Unit` and
-`fun _ => ()` for a type parameter; the plain and single-index forms). -/
-def psigJ : CommandElabM (Term × Term) := do
-  match ctx.param with
-  | some { J := some J, .. } => return (J, ← `(fun p => $(ctx.pidxId) p))
-  | _ => return (← `(Unit), ← `(fun _ => ()))
-
-/-- The parameter as a family: itself, or `fun _ => α` for a type parameter. -/
-def famX (pinfo : ParamInfo) : CommandElabM Term :=
-  if pinfo.J.isSome then pure (idT pinfo.a) else `(fun _ => $(pinfo.a))
 
 /-- Does the declaration have nested arguments? Then the proofs of the `F`-lemmas go through
 the laws of the occurrence structures. -/
@@ -1263,19 +1046,7 @@ def mkCtx (co : Bool) (T : Ident) (paramsStx : Array (TSyntax ``bracketedBinder)
   -- Constructor names shared by several types of the block are qualified in `F`, `Shape`, `B`.
   let allNames := rawCtors.map fun cs => cs.map (·.1.getId)
   let clashes (n : Name) : Bool := (allNames.filter (·.contains n)).size ≥ 2
-  -- The container parameter: the last parameter, when it is a single type variable that the
-  -- constructors use only at parameter positions (`classifyParam`), which does not occur in
-  -- the indices, and which recursive arguments mention only as the parameter.
-  let paramCand : Option ParamInfo := match params.back? with
-    | some (#[a], ty) => (paramSort ty).map fun J => { a, aTy := ty, J }
-    | _ => none
-  let an : Option (Array Name) := paramCand.map fun pinfo => #[pinfo.a.getId]
-  let mentionsA (t : Term) : Bool := match an with
-    | some an => mentionsAny t.raw an
-    | none => false
-  let mut pOk := paramCand.isSome
-  if uidx.any fun (_, ty) => mentionsA ty then pOk := false
-  let n (s : String) : Ident := mkIdent (.str tName s)
+  let n (s : String) : Ident := mkIdent (genName tName s)
   -- The packed index type, written out: `T.Ix` is declared with the signature, after the
   -- analysis.
   let IxpB ← if nIdx ≥ 2 then mkIxTerm idx else if nIdx == 1 then pure idx[0]!.2 else `(Unit)
@@ -1286,23 +1057,12 @@ def mkCtx (co : Bool) (T : Ident) (paramsStx : Array (TSyntax ``bracketedBinder)
     for (name, raw, resTy, c) in rawCtors[m]! do
       let mut groups : Array Group := #[]
       -- The scope of a binder's type: the parameters and the earlier non-recursive binders
-      -- (the container of a nested argument may mention them).
+      -- (the structure of a nested argument may mention them).
       let mut scope := pExp
       for (ids, ty, implicit) in raw do
         let kind ← classify tNames tName pids scope pre (nIdx > 0) IxpB pack ty
         if kind.isData then scope := scope.push (← mkBinder implicit ids ty)
-        let mut pk := PKind.none
-        if let some pinfo := paramCand then
-          match kind with
-          | .data =>
-            match ← classifyParam pinfo.a pinfo.J scope ty with
-            | some k => pk := k
-            | none => pOk := false
-          | .pos idx => if idx.any mentionsA then pOk := false
-          | .fn tele idx =>
-            if idx.any mentionsA || tele.any (fun (_, d) => mentionsA d) then pOk := false
-          | .occ info => if info.tree.mentionsOutside (an.getD #[]) then pOk := false
-        groups := groups.push { ids, ty, kind, implicit, pk }
+        groups := groups.push { ids, ty, kind, implicit }
       for g in groups do
         if g.implicit && !g.kind.isData then
           throwErrorAt g.ty "implicit binders must not be recursive"
@@ -1319,32 +1079,19 @@ def mkCtx (co : Bool) (T : Ident) (paramsStx : Array (TSyntax ``bracketedBinder)
             if cidx.size == uidx.size then pure (pre m ++ cidx)
             else throwErrorAt r "result type with the wrong number of indices"
           | none => throwErrorAt r "the result type must be the declared type applied to its parameters"
-      if cidx.any mentionsA then pOk := false
       let fname := if clashes name.getId then
           mkIdent (Name.mkSimple (tNames[m]!.getString! ++ "_" ++ name.getId.toString))
         else name
       ctors := ctors.push { name, groups, idx := cidx, owner := m, fname }
-  let param := if pOk then paramCand else none
-  unless pOk do
-    ctors := ctors.map fun c => { c with groups := c.groups.map fun g => { g with pk := .none } }
-  let params₀ := if param.isSome then params.pop else params
-  let pids₀ : Array Ident := params₀.foldl (fun acc (ids, _) => acc ++ ids) #[]
-  let pExp₀ ← params₀.mapM fun (ids, ty) => `(bracketedBinderF| ($ids* : $ty))
-  let pImp₀ ← params₀.mapM fun (ids, ty) => `(bracketedBinderF| {$ids* : $ty})
-  let nF (s : String) : Ident := mkIdent (.str (.str tName "F") s)
+  let nF (s : String) : Ident := mkIdent (.str (genName tName "F") s)
   let pTerms := pids.map idT
-  let pTerms₀ := pids₀.map idT
   let jIds ← idx.mapIdxM fun m _ => freshId s!"j{Nat.toSubscriptString (m + 1)}"
-  let Ixp ← if nIdx ≥ 2 then mkAppT (n "Ix") pTerms₀
+  let Ixp ← if nIdx ≥ 2 then mkAppT (n "Ix") pTerms
     else if nIdx == 1 then pure idx[0]!.2 else `(Unit)
   return {
-    co, T, tName, types, which, pids, pExp, pImp, pTerms, param, pids₀, pExp₀, pImp₀, pTerms₀
+    co, T, tName, types, which, pids, pExp, pImp, pTerms
     ctors, idx, jIds, Ixp, motiveId, Sid
     Ix := n "Ix", idxId := n "idx", F := n "F", Shape := n "Shape", ShapeP := n "ShapeP"
-    Shape₀ := n "Shape₀", Shape₀P := n "Shape₀P", P := n "P", shapeTo := n "shapeTo"
-    shapeOf := n "shapeOf", shapeOf_shapeTo := n "shapeOf_shapeTo"
-    shapeTo_shapeOf := n "shapeTo_shapeOf", shapeEquiv := n "shapeEquiv", pidxId := n "pidx"
-    psig := n "psig"
     B := n "B", sig := n "sig"
     Fmap := nF "map", Rel := nF "Rel"
     Fmap_id := nF "map_id", Fmap_comp := nF "map_comp", Frel_map := nF "rel_map"
@@ -1358,10 +1105,8 @@ def mkCtx (co : Bool) (T : Ident) (paramsStx : Array (TSyntax ``bracketedBinder)
     fold := n "fold", fold_ctor := n "fold_ctor", fold_eq := n "fold_eq"
     fold_unique := n "fold_unique", recAux := n "recAux", recId := n "rec", rec_ctor := n "rec_ctor"
     Tp := ← mkAppT T pTerms, Fp := ← mkAppT (n "F") pTerms, Shapep := ← mkAppT (n "Shape") pTerms
-    ShapePp := ← mkAppT (n "ShapeP") pTerms, Shape₀p := ← mkAppT (n "Shape₀") pTerms₀
-    Shape₀Pp := ← mkAppT (n "Shape₀P") pTerms₀, Pp := ← mkAppT (n "P") pTerms₀
-    shapeEquivp := ← mkAppT (n "shapeEquiv") pTerms, psigp := ← mkAppT (n "psig") pTerms₀
-    Bp := ← mkAppT (n "B") pTerms₀
+    ShapePp := ← mkAppT (n "ShapeP") pTerms
+    Bp := ← mkAppT (n "B") pTerms
     sigp := ← mkAppT (n "sig") pTerms }
 
 end Codata

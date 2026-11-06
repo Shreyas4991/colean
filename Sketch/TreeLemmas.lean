@@ -1,4 +1,4 @@
-import Colean.Sketch.Tree
+import Sketch.Tree
 
 /-!
 # What `Tree` supports beyond its corecursor

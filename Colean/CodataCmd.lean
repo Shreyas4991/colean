@@ -9,19 +9,13 @@ binders may be explicit or implicit; recursive arguments may be plain (`t : T pa
 under a telescope of arrows (`f : (y₁ : B₁) → … → Bₙ → T params idx`), dependent or not, where
 the domains may depend on the constructor's own data and the index on the bound variables, or
 *nested*: any other type mentioning `T`, built from occurrences by products, sums, functions
-and dependent pairs over constant types, and named type constructors with an occurrence
-structure (`List`, `Option`, `Array`, the declared types; see `Occ.lean`):
+and dependent pairs over constant types, and named type constructors with `PolyIso` and
+`PolyMap` instances (`List`, `Option`, `Array`, and the user's; see `PolyIso.lean`):
 `children : List (T params idx)`, `p : T params i × T params j`, `k : A → List (T params idx)`,
 `c : Option (T params idx × T params idx)`, `List (Option (T params idx))`, …. The structure of
 the argument type is built by recursion on its syntax (`occTreeOf`, `occTermOf`), with instance
-search only at the named constructors. A data binder may not mention `T`. When the last
-parameter is a type `α`, or a family `X : J → Type u`, used only at parameter positions
-(`(a : α)`, `(f : A → α)`, or nested, `(as : List α)`, `(p : α × α)`; `(t : X j)`, …), the type
-itself has an occurrence structure in it (see `Param.lean`), registered as a leaf, so that later
-declarations may nest through it: `children : Forest (T params idx)` through a declared
-`Forest`, or `children : Forest (fun p => T params (idx p))` through a declared `Forest` with a
-family parameter (an indexed structure, `IOcc`), which is what mixed `mutual` blocks elaborate
-to (`MutualCmd.lean`).
+search only at the named constructors. A data binder may not mention `T`. Declaring a type gives
+it no such instances: a later declaration can nest through it once the user has provided them.
 
 ```
 codata ITree (E : Type → Type) (R : Type)
@@ -45,19 +39,6 @@ types `T`, `T.F`, `T.Shape`, `T.B`, `T.sig`, implicit elsewhere):
   arguments, one nullary constructor `ctorᵢ_t` per plain argument `t`, one unary constructor
   `ctorᵢ_f (p : A)` per function argument `f : A → T` and one `ctorᵢ_x (q : Pos x_s)` per nested
   argument (positions of its structure); bundled as `T.sig`;
-* with a container parameter `α`: the erased shapes `T.Shape₀` (the shapes without the
-  arguments at parameter positions, plus the shape of each argument nested in `α`), the
-  parameter positions `T.P : T.Shape₀ → Type`, one constructor `ctorᵢ_a` per argument `(a : α)`,
-  `ctorᵢ_f (y : A)` per `(f : A → α)` and `ctorᵢ_as (q : Pos as_s)` per nested `as`, the
-  equivalence `T.shapeEquiv : T.Shape α ≃ Σ s₀, T.P s₀ → α` (by `T.shapeTo`/`T.shapeOf`), the
-  parameterised signature `T.psig` (`T.B` is then over `T.Shape₀`, `T.sig := T.psig.sig …`),
-  and after the type the structure `T.Sh`, `T.Pos` and
-  `T.occ : Occ T.Sh T.Pos (fun α => T params α idx)` with its registration `T.instOccLeaf`; for
-  a family parameter `X : J → Type u`, also the positions' indices `T.pidx : T.P s₀ → J`,
-  `T.posIdx` and `T.occ : IOcc T.Sh T.Pos T.posIdx (fun X => T params X idx)`; and the
-  constructor-level lemmas `T.map_ctorᵢ` (`Occ.map T.occ T.occ f` on a constructor application)
-  and `T.rel_ctorᵢ` (`Occ.Rel T.occ T.occ R` on two constructor applications from `R` and
-  `Rel R` on their arguments), see `genOccLemmas`;
 * `T.toC`, `T.ofC` with the four laws `T.ofC_toC`, `T.toC_ofC`, `T.ofC_map`, `T.rel_ofC`;
 * the contract: `T`, `T.dtor`, `T.corec`, `T.dtor_corec`, `T.bisim`, transported from the
   generic `Signature` theorems; `T.corec` accepts a state in any universe;
@@ -92,8 +73,8 @@ Only the seven lemmas about the generated inductive `T.F` (`map_id`, `map_comp`,
 `ofC_toC`, `toC_ofC`, `ofC_map`, `rel_ofC`) are proved by tactic scripts, and those are `cases`
 followed by `rfl` or `solve_by_elim`, with the laws of `Occ.lean` for nested arguments;
 everything else instantiates a theorem of `Codata.lean`.
-The declarations from `T` on are generated in a `noncomputable section`, since the encoding
-decides equality of shapes classically.
+All declarations are generated in a `noncomputable section`: the encoding decides equality of
+shapes classically, and a `PolyIso` instance may be noncomputable too.
 
 The analysis of the declaration (`mkCtx`) and the generators of `T.F`, the signature, the
 isomorphism, the constructors and `casesOn` are shared with the `data` command
@@ -118,14 +99,13 @@ def codataPipeline (ctx : Ctx) : CommandElabM Unit := do
   -- Since Lean 4.34 implicit arguments and the types of assigned metavariables are compared
   -- without unfolding definitions; the generated proofs rely on unfolding the type to its model,
   -- so restore the old comparison for the generated declarations only.
-  elabCommand (← `(section))
+  elabCommand (← `(noncomputable section))
   elabCommand (← `(set_option backward.isDefEq.respectTransparency false))
   elabCommand (← `(set_option backward.isDefEq.respectTransparency.types false))
   genFunctor ctx
   if ctx.co then genRel ctx
   genSignature ctx
   genIso ctx
-  elabCommand (← `(noncomputable section))
   genContract ctx
   genContractDef ctx
   genTypes ctx
@@ -133,10 +113,6 @@ def codataPipeline (ctx : Ctx) : CommandElabM Unit := do
   genCtors ctx
   genCases ctx
   genAliases ctx
-  genOcc ctx
-  genCtorEqCtorC ctx
-  genOccLemmas ctx
-  elabCommand (← `(end))
   elabCommand (← `(end))
 
 @[command_elab codataCmd] def elabCodata : CommandElab := fun stx => do
