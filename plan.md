@@ -82,28 +82,29 @@ NOT DONE:
 ## 3. Mutual types — DONE
 
 `MutualCmd.lean`: Lean's own `mutual … end` syntax around `codata` or `data`
-declarations; the block is one family over the enumeration `Blk.Which` of its types, prepended
-to the index telescope, and elaborated by the single-type pipeline. Per type: the type, the
+declarations; the block is one family over the inductive `Blk.Ix`, with a constructor per type
+whose arguments are the indices of that type, and is elaborated by the single-type pipeline, as a
+family with one index. Per type: the type, the
 constructors and their lemmas, `casesOn` as the `cases` eliminator, aliases `corec`, `bisim`,
-`fold`; block-level `corec`, `bisim`, `rec` with states, relations and motives over `Which`
-(`ColeanTest/MTree.lean`, `ColeanTest/MRose.lean`, `ColeanTest/EvenOdd.lean`).
+`fold`; block-level `corec`, `bisim`, `rec` with states, relations and motives over `Ix`
+(`ColeanTest/MTree.lean`, `ColeanTest/MRose.lean`, `ColeanTest/EvenOdd.lean`,
+`ColeanTest/MutualIx.lean`).
 
 DONE:
 
 * uniform blocks, `codata` or `data`, with parameters and indices, and constructor names shared
   by several types (qualified in the block-level inductives only);
+* types of one block with different indices, as Lean allows;
 * induction over a block by `induction x` for `x : Blk m i`, with per-constructor alternatives;
   Lean's `induction` tactic refuses mutual inductives, so this is not less than `inductive`.
 
 NOT DONE:
 
-* types of one block with different index telescopes (Lean allows them): the block index would
-  be a dependent pair `(m : Which) ×' Ix m`;
 * nothing else planned. Mixed inductive/coinductive blocks are section 5: today a mixed
   `mutual` block is accepted with the fixed reading "codata outer" (`ColeanTest/Mixed.lean`); it
   will be rejected once `mixed_mutual` exists.
 
-## 4. Nested types — DONE through user instances; instances for declared types NOT DONE
+## 4. Nested types — DONE; instances for declared types DONE for a single type without indices
 
 `PolyIso.lean` is the interface: `PolyIso F Sh Pos` (`F X ≃ Σ sh, Pos sh → X`) and `PolyMap F F'`
 (the intended action between two instantiations, with naturality), together an isomorphism of
@@ -117,7 +118,9 @@ search only at named type constructors. `Signature` has no erased shapes.
 
 Defining a type and constructing its instance are decoupled (2026-11-06): the generated
 structures `T.occ`, `T.Sh`, `T.Pos`, the lemmas `T.map_c`, `T.rel_c`, the erased shapes, and
-`Model/Param.lean` are gone. The old version is in the git history.
+`Model/Param.lean` are gone. The old version is in the git history. Instances are generated
+after the type, in a separate step that cannot fail the declaration (`Cmd/Derive.lean`), from
+the contract, by the generic theorems of `Model/Poly.lean`.
 
 DONE:
 
@@ -127,17 +130,23 @@ DONE:
   at several indices in one argument (`Chain n × Chain (n + 1)`); for `codata` and `data`
   (`ColeanTest/OccNest.lean`, `ColeanTest/Rose.lean`, `ColeanTest/FinRose.lean`);
 * any type constructor with user instances, plain or on families, in `codata`, `data` and
-  mutual blocks, a declared type included (`ColeanTest/Nest.lean`, `ColeanTest/OccNest.lean`).
+  mutual blocks, a declared type included (`ColeanTest/Nest.lean`, `ColeanTest/OccNest.lean`);
+* generated instances for a single `data` or `codata` without indices, over all parameters that
+  may vary, composed with constants and with the identity, so `E (List T) (Option T)`, `E Nat T`
+  and `E T T` come from one instance, and a named constructor may take the hole in several
+  arguments (`ColeanTest/Derive.lean`); `data` nests through `codata` and the other way round.
 
 NOT DONE:
 
-* **next step:** constructing `PolyIso`/`PolyMap` instances for declared types. Generic theory
-  over a split of the functor into two variables, not attached to the declaration: with several
-  parameters, which functor to present is a choice. `mixed_mutual` depends on this, and
-  `ColeanTest/Param.lean`, `Mixed.lean`, `MixedOrder.lean`, `MixedRuns.lean` are out of the build
-  until then;
-* a functor with the recursive occurrence in several parameters at once (`Pair X X` for a
-  declared `Pair α β`): this is also section 5, step 2;
+* generating instances on demand, for user-defined structures and inductives (`todo.md`);
+* generated instances for indexed families and for the types of mutual blocks: they are skipped.
+  `mixed_mutual` is out of the build until its redesign, with `ColeanTest/Param.lean`,
+  `Mixed.lean`, `MixedOrder.lean`, `MixedRuns.lean`;
+* a field mentioning two parameters that may vary (`p : α × β`): both then count as constant;
+* holes at different indices in several arguments of a named constructor (`Pair (T i) (T j)`),
+  and instances for `×`, `⊕`, `→` inside such arguments (`E (T × Nat) T`);
+* constructor-level lemmas for the generated map, and for the positions in `T.rec`'s induction
+  hypotheses: `PolyFix.d_map` states the map on layers only;
 * `rel_*` characterisations of `Occ.Rel` through `prod`, `pi`, `comp` as iffs (only the
   introductions exist), and user-facing `T.map`/`T.Rel` abbreviations.
 
@@ -165,7 +174,7 @@ Decisions (fixed):
 * the textual order is the nesting order, the first declaration outermost ("the main type
   first"): `codata Tree` then `data Forest` is the finitely branching infinite trees;
 * a run is a maximal sequence of adjacent declarations of the same kind and is one uniform
-  mutual block (`Which`, block-level `corec`/`rec`, per-type aliases, as in section 3);
+  mutual block (`Ix`, block-level `corec`/`rec`, per-type aliases, as in section 3);
 * every order is allowed, any number of runs, no restriction on which runs a declaration may
   mention (steps 2 and 3 below make this possible);
 * a `mixed_mutual` block with a single kind is accepted with a warning ("use `mutual`");
@@ -176,7 +185,7 @@ Decisions (fixed):
 Semantics and contract (to be written as a "mixed mutual" section of `contract.md`): runs
 `R₁ ⊃ R₂ ⊃ … ⊃ Rₖ`, outermost first; `Rᵢ` is a uniform block with one family parameter per
 outer run it mentions (a type for a run of one type without indices, a family over the run's
-packed index `(m : Which) ×' idx` otherwise) and nesting through the inner runs at their
+index, `Blk.Ix` for several types, otherwise) and nesting through the inner runs at their
 families; `Rᵢ` keeps the uniform `data`/`codata` contract with the outer runs as parameters.
 The principles compose: coinduction on an outer run sees the inner runs through their relators
 (`Container.Rel`/`IContainer.Rel`, one whole finite layer per step), induction on an inner run
@@ -255,7 +264,7 @@ command, `genContainerLemmas` ↦ `genOccLemmas`, no instances passed):
    `mixed_mutual (codata|data)+ end`; runs; inside-out elaboration (`elabRuns`: a family
    parameter for the adjacent outer run if mentioned, occurrences rewritten by one pass of
    `substOccs` with three substitutions, nesting through the adjacent inner run at the run's
-   own family, `Which` of every run generated first, `universe u_<Run>` declared in scope);
+   own family, `Ix` of every run generated first, `universe u_<Run>` declared in scope);
    warning for a uniform block; `mutual` rejects mixed blocks; a temporary error for a
    declaration mentioning a run other than its own and its two neighbours, to be removed by
    steps 2 and 3. Tests: `ColeanTest/Mixed.lean` and `ColeanTest/MixedOrder.lean` as
@@ -281,7 +290,7 @@ command, `genContainerLemmas` ↦ `genOccLemmas`, no instances passed):
 1. Indices: DONE (front-end leftovers listed above).
 2. `data`: DONE (leftovers listed above).
 3. Mutual blocks: DONE (leftovers listed above).
-4. Nested types: DONE through user instances; next, instances for declared types.
+4. Nested types: DONE, with generated instances for simple types.
 5. Mixed blocks, `mixed_mutual`: BLOCKED on that; step 2 NOT DONE (a reference to a run further
    outside).
 6. Surface items, as they become blocking.

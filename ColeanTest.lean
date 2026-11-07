@@ -21,6 +21,7 @@ import ColeanTest.LeT
 import ColeanTest.Nat
 import ColeanTest.WType
 import ColeanTest.MTree
+import ColeanTest.MutualIx
 import ColeanTest.MRose
 import ColeanTest.EvenOdd
 import ColeanTest.Rose
@@ -28,9 +29,10 @@ import ColeanTest.FinRose
 import ColeanTest.OccNest
 import ColeanTest.Nest
 import ColeanTest.Names
+import ColeanTest.Derive
 import ColeanTest.MixedRejected
--- These nest through declared types, which needs `PolyIso` instances for them: `mixed_mutual`
--- cannot be given such instances by hand, so they wait for the generation of the instances.
+-- These use `mixed_mutual`, or the generated structures removed with `Model/Param.lean`: they
+-- wait for the redesign of mixed blocks.
 -- import ColeanTest.Param
 -- import ColeanTest.Mixed
 -- import ColeanTest.MixedOrder

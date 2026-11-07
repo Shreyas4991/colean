@@ -1,0 +1,894 @@
+import Colean.MutualCmd
+
+/-!
+# A tour of nested types
+
+What the `data` and `codata` commands accept as a nested argument today, and what they do not.
+Read it top to bottom. Part I (sections 1 to 7) is what works, Part II (sections 8 to 15) what does
+not work yet but could, and Part III (section 16) failures that look like bugs of the commands
+rather than limits.
+
+How the file is checked:
+
+* an example without an error on it works;
+* the failures of Parts II and III are left as they are, so they show as errors in the infoview;
+* in Part II a failed `data`/`codata` declares nothing, so the names of failed types do not exist
+  (blocks are less tidy: sections 12 and 14); in Part III it leaves broken declarations behind,
+  and nothing later depends on them;
+* the absence of an instance is shown by a failing `#synth`.
+
+A word used throughout. A *leaf* is a named type constructor applied in a nested argument, such
+as `List` in `List T`. The command looks for instances at leaves only; everything else it reads
+off the syntax of the argument (`occTreeOf` in `Colean/Cmd/Analysis.lean`).
+-/
+
+universe u v
+
+namespace NestingTour
+
+open Codata
+
+noncomputable section
+
+/-! ## Part I: what works -/
+
+/-! ### 1. Built-in forms, no instance needed
+
+Products, sums, functions and dependent pairs are read off the syntax, so they need no instance
+and may be combined at any depth. The domain of a function and the first component of a dependent
+pair must be constant. -/
+
+-- `T × T`: two recursive occurrences in one argument.
+data BinT
+  | leaf
+  | node (c : BinT × BinT)
+
+-- `T ⊕ A`: an occurrence on one side of a sum.
+data Tm (α : Type u)
+  | var (a : α)
+  | app (f : Tm α ⊕ α) (arg : Tm α)
+
+-- `A → T`: infinitely branching, a recursive argument under an arrow.
+data Omega
+  | leaf
+  | node (k : Nat → Omega)
+
+-- `A → List T`: a function into a leaf.
+codata Proc (α : Type u)
+  | act (k : α → List (Proc α))
+  | stop
+
+-- `(n : Nat) × (Fin n → T)`: the second component depends on the first.
+data SizedRose
+  | node (c : (n : Nat) × (Fin n → SizedRose))
+
+-- A function from a proposition: `k` gives children only when `0 < n`, and `n` is an earlier field.
+data Guarded
+  | mk (n : Nat) (k : 0 < n → List Guarded)
+
+-- All of them at once: the depth does not matter.
+codata Deep (α : Type u)
+  | mk (a : α) (c : (n : Nat) × (Fin n → List (Deep α × (Nat ⊕ Deep α))))
+
+-- The same in a `data`, with a proposition and a dependent function on the way.
+data DeepFin
+  | leaf
+  | mk (c : (n : Nat) → n = 0 → (Fin n → DeepFin) × Option (DeepFin ⊕ Nat))
+
+/-! ### 2. Library leaves
+
+`List`, `Option` and `Array` have instances in `Colean/PolyIso.lean`. Leaves compose with each
+other and with the forms of section 1. -/
+
+-- The rose tree, with `List`.
+codata ListRose (α : Type u)
+  | node (a : α) (cs : List (ListRose α))
+
+-- A possibly ending stream, with `Option`.
+codata OptStream (α : Type u)
+  | cons (a : α) (tail : Option (OptStream α))
+
+-- With `Array`.
+data ArrRose
+  | node (cs : Array ArrRose)
+
+-- `List (Option T)`, a composite of two leaves.
+data OptRose (α : Type u)
+  | node (a : α) (cs : List (Option (OptRose α)))
+
+-- A leaf outside a built-in form, and a built-in form outside a leaf.
+data Mixed
+  | leaf
+  | node (c : Option (Mixed × Mixed)) (d : Nat → Array (List Mixed))
+
+/-! ### 3. A user's functor, with hand-written instances
+
+Two instances make a type constructor a leaf: `PolyIso` presents it as a polynomial functor,
+`PolyMap` gives the intended map across two universes, and its naturality. -/
+
+structure Box (X : Type u) where
+  val : X
+
+instance : PolyIso Box.{u} Unit (fun _ => Unit) where
+  equiv := ⟨fun b => ⟨(), fun _ => b.val⟩, fun z => ⟨z.2 ()⟩, fun _ => rfl, fun _ => rfl⟩
+
+instance : PolyMap Box.{u} Box.{v} where
+  map f b := ⟨f b.val⟩
+  equiv_map _ _ := rfl
+
+-- Through `Box`, in both kinds.
+codata BoxStream (α : Type u)
+  | cons (a : α) (tail : Box (BoxStream α))
+
+data BoxList (α : Type u)
+  | nil
+  | cons (a : α) (tail : Box (BoxList α))
+
+-- The instances compose with everything above.
+codata BoxTree
+  | node (children : List (Box BoxTree × Option (Box BoxTree)))
+
+/-- The state of `corec` may live in any universe: that is what `PolyMap Box.{u} Box.{v}` buys. -/
+example : ∀ {α : Type u} {S : Type v}, (S → BoxStream.F α S) → S → BoxStream α := BoxStream.corec
+
+/-! A leaf with a constant argument takes an instance for the partial application, one for each
+constant, or for all of them at once. -/
+
+structure Labelled (A : Type) (X : Type u) where
+  label : A
+  val : X
+
+instance (A : Type) : PolyIso (Labelled.{u} A) A (fun _ => Unit) where
+  equiv := ⟨fun b => ⟨b.label, fun _ => b.val⟩, fun z => ⟨z.1, z.2 ()⟩, fun _ => rfl, fun _ => rfl⟩
+
+instance (A : Type) : PolyMap (Labelled.{u} A) (Labelled.{v} A) where
+  map f b := ⟨b.label, f b.val⟩
+  equiv_map _ _ := rfl
+
+data LabelledList
+  | nil
+  | cons (tail : Labelled Nat LabelledList)
+
+/-! The command checks `PolyMap G G` at one universe only, so an instance between two copies of
+one universe passes. The type is then complete, but `corec` has lost its freedom: the state must
+live in that universe. -/
+
+structure MonoBox (X : Type u) where
+  val : X
+
+instance : PolyIso MonoBox.{0} Unit (fun _ => Unit) where
+  equiv := ⟨fun b => ⟨(), fun _ => b.val⟩, fun z => ⟨z.2 ()⟩, fun _ => rfl, fun _ => rfl⟩
+
+instance : PolyMap MonoBox.{0} MonoBox.{0} where
+  map f b := ⟨f b.val⟩
+  equiv_map _ _ := rfl
+
+codata MonoStream
+  | cons (t : MonoBox MonoStream)
+
+/-- info: @MonoStream.corec : {S : Type} → (S → MonoStream.F S) → S → MonoStream -/
+#guard_msgs in
+#check @MonoStream.corec
+
+/-! ### 4. Declared types, with generated instances
+
+A single `data` or `codata` without indices gets `PolyIso` and `PolyMap` by itself, in a separate
+step after the declaration (`Colean/Cmd/Derive.lean`). Nothing is written by hand from here to
+the end of section 5. -/
+
+data L (α : Type u)
+  | nil
+  | cons (a : α) (t : L α)
+
+codata Str (α : Type u)
+  | cons (a : α) (t : Str α)
+
+/-- info: L.Poly.instPolyIsoEta -/
+#guard_msgs in
+#synth PolyIso L.{0} _ _
+
+/-- info: Str.Poly.instPolyIsoEta -/
+#guard_msgs in
+#synth PolyIso Str.{0} _ _
+
+/-- info: L.Poly.instPolyMapEta -/
+#guard_msgs in
+#synth PolyMap L.{0} L.{1}
+
+-- `data` through `data`: finite trees with finitely many children.
+data LRose
+  | node (cs : L LRose)
+
+-- `codata` through `data`: trees of any depth, each node with finitely many children.
+codata LInf
+  | node (cs : L LInf)
+
+-- `data` through `codata`: a well-founded tree with a stream of children at each node. Lean's
+-- `inductive` has no counterpart for this: it nests through inductive types only.
+data Bush
+  | leaf
+  | node (c : Str Bush)
+
+-- `codata` through `codata`.
+codata CoBush
+  | node (c : Str CoBush)
+
+-- A composite: the generated instance takes an instance as a premise.
+codata LList
+  | node (c : L (List LList))
+
+-- Three declared and library leaves in one argument, across kinds.
+data Tower
+  | leaf
+  | node (c : L (Str (Option Tower)))
+
+-- A declared type with a nested field is itself nested through: the instances chain.
+data Rose₁ (α : Type u)
+  | node (a : α) (cs : L (Rose₁ α))
+
+data Rose₂
+  | mk (r : Rose₁ Rose₂)
+
+/-! ### 5. Several parameters
+
+One generated instance covers `fun X => E (H₁ X) (H₂ X)` for `H₁`, `H₂` themselves instances,
+constants and the identity among them. So every line below is the same instance. -/
+
+data E (α β : Type u)
+  | l (a : α)
+  | r (b : β)
+
+/-- info: E.Poly.instPolyIso -/
+#guard_msgs in
+#synth PolyIso (fun X : Type u => E X X) _ _
+
+/-- info: E.Poly.instPolyIso -/
+#guard_msgs in
+#synth PolyIso (fun X : Type => E X Nat) _ _
+
+/-- info: E.Poly.instPolyIsoEta ℕ -/
+#guard_msgs in
+#synth PolyIso (E Nat) _ _
+
+/-- info: E.Poly.instPolyIso -/
+#guard_msgs in
+#synth PolyIso (fun X : Type u => E (List X) (Option X)) _ _
+
+-- `E T T`.
+data ETT
+  | leaf
+  | mk (p : E ETT ETT)
+
+-- `E Nat T`.
+codata ENT
+  | mk (p : List (E Nat ENT))
+
+-- `E T Nat`.
+data ETN
+  | leaf
+  | mk (p : E ETN Nat)
+
+-- `E (List T) (Option T)`.
+data EComp
+  | leaf
+  | mk (p : E (List EComp) (Option EComp))
+
+-- Declared leaves in both arguments, one inductive and one coinductive.
+data EDecl
+  | leaf
+  | mk (p : E (L EDecl) (Str EDecl))
+
+-- With one argument mentioning `T`, that argument may be anything: `×` is fine here, since the
+-- leaf is `fun X => E X Nat` and the command goes on inside the argument. Compare section 11.
+data EProd
+  | leaf
+  | mk (p : E (EProd × Nat) Nat)
+
+/-! A parameter may vary when it sits in fields with an occurrence structure in it. All these
+kinds of field count, and the parameters may live in different universes. -/
+
+data Fields (α : Type u)
+  | mk (x : Option (List α)) (y : Nat → α) (z : (n : Nat) × (Fin n → α)) (w : α ⊕ Nat)
+       (s : L α) (e : E α (List α)) (t : Fields α)
+
+/-- info: Fields.Poly.instPolyIsoEta -/
+#guard_msgs in
+#synth PolyIso Fields.{0} _ _
+
+data TwoUniv (α : Type u) (β : Type v)
+  | l (a : α)
+  | r (b : β)
+
+data UseTwoUniv
+  | leaf
+  | mk (x : TwoUniv UseTwoUniv UseTwoUniv)
+
+/-! A parameter that may not vary is constant, and the rest still works: `A` in `Fn` is a domain,
+and `n` in `FinFn` is not a type. -/
+
+data Fn (A : Type) (α : Type u)
+  | leaf (a : α)
+  | node (k : A → Fn A α)
+
+data UseFn
+  | mk (f : Fn Nat UseFn)
+
+data FinFn (n : Nat) (α : Type u)
+  | mk (v : Fin n → α)
+
+data UseFinFn
+  | leaf
+  | mk (x : FinFn 3 UseFinFn)
+
+/-! Degenerate cases are fine too: a parameter that is never used, and no constructors at all. -/
+
+data Phantom (α : Type u)
+  | mk (n : Nat)
+
+data UsePhantom
+  | mk (x : Phantom UsePhantom)
+
+codata Void (α : Type u)
+
+/-- info: Void.Poly.instPolyIsoEta -/
+#guard_msgs in
+#synth PolyIso Void.{0} _ _
+
+/-! ### 6. Indexed families and mutual blocks
+
+Here leaves come from sections 2 and 3, or from section 4: generated instances are for the type
+nested *through*, and the enclosing type may be a family or a block. What must not be indexed or
+mutual is the leaf (section 13). The limit of this section is in section 16: a single family here
+has one index. A block does not have this limit, whatever the indices of its types. -/
+
+-- A family through a plain leaf.
+codata BoxVec (α : Type u) : Nat → Type u
+  | nil : BoxVec α 0
+  | cons {n : Nat} (a : α) (tail : Box (BoxVec α n)) : BoxVec α (n + 1)
+
+-- The same with `List`, and with a generated leaf.
+data LevelRose : Nat → Type
+  | leaf : LevelRose 0
+  | node {n : Nat} (cs : List (LevelRose n)) : LevelRose (n + 1)
+
+data LevelL : Nat → Type
+  | leaf : LevelL 0
+  | node {n : Nat} (cs : L (LevelL n)) : LevelL (n + 1)
+
+-- A mutual block, through a plain leaf and a generated one.
+mutual
+data Even
+  | zero
+  | succ (o : L Odd)
+data Odd
+  | succ (e : Box Even)
+end
+
+-- Occurrences at several indices, through built-in forms.
+data Chain : Nat → Type
+  | zero : Chain 0
+  | link {n : Nat} (p : Chain n × Chain (n + 1)) : Chain (n + 2)
+
+-- The index may depend on a variable bound on the way.
+data ByIndex : Nat → Type
+  | zero : ByIndex 0
+  | mk {m : Nat} (c : (n : Nat) × (Fin n → ByIndex n)) : ByIndex (m + 1)
+
+codata ByArg : Nat → Type
+  | mk {m : Nat} (c : (k : Nat) → List (ByArg k)) : ByArg m
+
+-- Several arguments of a leaf are fine at one index: `E` at `n` in both.
+data OneIndex : Nat → Type
+  | zero : OneIndex 0
+  | mk {n : Nat} (p : E (List (OneIndex n)) (Option (OneIndex n))) : OneIndex (n + 2)
+
+/-! A functor on families has `IPolyIso` and `IPolyMap` instances, where each position says at
+which index its child lives. It takes a family `fun c => …`, and is what lets a single leaf hold
+occurrences at several indices. -/
+
+structure Both (X : Bool → Type u) where
+  yes : X true
+  no : X false
+
+instance : IPolyIso Both.{u} Unit (fun _ => Bool) (fun _ b => b) where
+  equiv :=
+    { toFun := fun t => ⟨(), fun b => match b with | true => t.yes | false => t.no⟩
+      invFun := fun z => ⟨z.2 true, z.2 false⟩
+      left_inv := fun _ => rfl
+      right_inv := fun ⟨_, c⟩ => congrArg (Sigma.mk ()) (funext fun b => by cases b <;> rfl) }
+
+instance : IPolyMap Both.{u} Both.{v} where
+  map f t := ⟨f _ t.yes, f _ t.no⟩
+  equiv_map f t := congrArg (Sigma.mk ()) (funext fun b => by cases b <;> rfl)
+
+-- The family at its own index.
+codata Alt : Bool → Type
+  | mk {b : Bool} (children : Both (fun c => Alt c)) : Alt b
+
+-- Reindexed.
+codata Flip : Bool → Type
+  | mk {b : Bool} (children : Both (fun c => Flip (!c))) : Flip b
+
+-- A plain leaf inside, and outside.
+codata AltIn : Bool → Type
+  | mk {b : Bool} (children : Both (fun c => List (AltIn c))) : AltIn b
+
+codata AltOut : Bool → Type
+  | mk {b : Bool} (children : List (Both (fun c => AltOut c))) : AltOut b
+
+-- In a `data`, with a built-in form inside.
+data AltFin : Bool → Type
+  | leaf {b : Bool} : AltFin b
+  | mk {b : Bool} (children : Option (Both (fun c => AltFin c × Nat))) : AltFin b
+
+-- On a plain type too, the family ignoring its index. The binder must be a name: section 15.
+codata AltPlain
+  | mk (children : Both (fun _b => AltPlain))
+
+/-! ### 7. Using a nested type
+
+`fold`, `corec` and the lemmas about them see the leaf: the argument of a nested constructor of
+`T.F` has the leaf applied to the state. To compute through it, `Occ.map_list`, `Occ.map_prod`,
+`Occ.map_ofIso` and friends turn the generated map into the map of the leaf. -/
+
+data URose (α : Type u)
+  | node (a : α) (cs : List (URose α))
+
+/-- The number of nodes: the children arrive already folded. -/
+def URose.size {α : Type u} (t : URose α) : Nat :=
+  URose.fold (S := Nat) (fun | .node _ cs => cs.sum + 1) t
+
+@[simp] theorem URose.size_node {α : Type u} (a : α) (cs : List (URose α)) :
+    (URose.node a cs).size = (cs.map URose.size).sum + 1 := by
+  rw [URose.size, URose.fold_node, Occ.map_list]
+  rfl
+
+theorem URose.size_pos {α : Type u} (t : URose α) : 0 < t.size := by
+  cases t with
+  | node a cs => simp
+
+codata UTree (α : Type u)
+  | node (a : α) (children : UTree α × Option (UTree α))
+
+/-- The tree with `a` everywhere, as a `corec` with one state. -/
+def UTree.const {α : Type u} (a : α) : UTree α :=
+  UTree.corec (S := Unit) (fun _ => .node a ((), some ())) ()
+
+@[simp] theorem UTree.dtor_const {α : Type u} (a : α) :
+    (UTree.const a).dtor = .node a (UTree.const a, some (UTree.const a)) := by
+  rw [UTree.const, UTree.dtor_corec]
+  simp [UTree.F.map_node, Occ.map_prod, Occ.map_hole, Occ.map_option]
+
+/-! Through a generated leaf the definitions are as easy, with the leaf's own `fold`, or its
+constructors in a `corec`. The lemmas stop earlier: `Occ.map_ofIso` turns the generated map into
+`PolyMap.map` of the leaf, and there are no lemmas for that map on constructors yet (plan,
+section 4). So the theorem below stops at the generated map on `L.cons`. -/
+
+/-- The number of nodes of an `LRose`: `L.fold` sums the folded children. -/
+def LRose.size (t : LRose) : Nat :=
+  LRose.fold (S := Nat)
+    (fun | .node cs => L.fold (S := Nat) (fun | .nil => 0 | .cons a n => a + n) cs + 1) t
+
+/-- A tree with one child at every node. -/
+def LInf.spine : LInf :=
+  LInf.corec (S := Unit) (fun _ => .node (L.cons () .nil)) ()
+
+theorem LInf.dtor_spine :
+    LInf.spine.dtor =
+      .node (Occ.map (Occ.ofIso L) (Occ.ofIso L) (fun _ => LInf.spine) (L.cons () .nil)) := by
+  rw [LInf.spine, LInf.dtor_corec, LInf.F.map_node]
+
+/-! ## Part II: what does not work yet
+
+Everything here could be supported. What should stay rejected is not listed: negative occurrences,
+functors that are not polynomial such as `Finset`, parameters that later types depend on,
+non-uniform parameters, and a `PolyIso` without its `PolyMap`. -/
+
+/-! ### 8. Missing instances
+
+A plain `structure` gets no instance: only `data` and `codata` generate them. Nothing in it stops
+one from being generated when a declaration nests through it (`todo.md`). -/
+
+structure NoIso (X : Type u) where
+  val : X
+
+codata NeedsIso
+  | mk (x : NoIso NeedsIso)
+
+/-! The same for functors on families. -/
+
+structure NoFamIso (X : Bool → Type u) where
+  yes : X true
+
+codata NeedsFamIso : Bool → Type
+  | mk {b : Bool} (children : NoFamIso (fun c => NeedsFamIso c)) : NeedsFamIso b
+
+/-! A generic fixpoint of a functor with instances: instance binders are not accepted among the
+parameters, so this cannot be written yet. -/
+
+data FixInst (G : Type → Type) (Sh : Type) (Pos : Sh → Type) [PolyIso G Sh Pos] [PolyMap G G]
+  | mk (x : G (FixInst G Sh Pos))
+
+/-! ### 9. A parameter in the same field as a recursive occurrence
+
+Such a parameter cannot vary yet, even though the field is positive in both. The field would
+need positions of both kinds, and the generator takes a field as one or the other. So `Str` of
+section 4 can be nested through, and the same stream as a pair cannot; neither can `Tm` of
+section 1, because of `f : Tm α ⊕ α`. Splitting the field is the way out when the type allows
+it. -/
+
+codata PairStr (α : Type u)
+  | mk (p : α × PairStr α)
+
+#synth PolyIso PairStr.{0} _ _
+
+#synth PolyIso Tm.{0} _ _
+
+data ThroughPairStr
+  | leaf
+  | mk (x : PairStr ThroughPairStr)
+
+/-! ### 10. A field mentioning two varying parameters
+
+Here is what happens with `p : α × β`: both parameters count as constant, so nothing is
+generated for them, silently, and neither `P2 T Nat` nor `P2 Nat T` can be nested through. The
+reason is that a field is presented in one hole at a time. -/
+
+data P2 (α β : Type u)
+  | mk (p : α × β)
+
+#synth PolyIso (fun X : Type => P2 X Nat) _ _
+
+#synth PolyIso (P2 Nat) _ _
+
+data ThroughP2
+  | leaf
+  | mk (p : P2 ThroughP2 Nat)
+
+/-! Only the two mentioned parameters are lost: a third one in a field of its own still varies.
+And the same data in two fields has no problem at all. -/
+
+data P3 (α β γ : Type u)
+  | mk (p : α × β) (c : γ)
+
+data ThroughP3
+  | leaf
+  | mk (x : P3 Nat Nat ThroughP3)
+
+data Split (α β : Type u)
+  | mk (a : α) (b : β)
+
+data ThroughSplit
+  | leaf
+  | mk (x : Split ThroughSplit Nat)
+
+/-! ### 11. A built-in form inside an argument of a leaf with several holes
+
+With `T` in several arguments of `E`, the leaf is the whole `fun X => E (X × Nat) X`, found by
+instance search. The search needs an instance at `fun X => X × Nat`, and `×`, `⊕` and `→` have
+none: they are built-in forms of the command, not instances. -/
+
+data EProdBoth
+  | leaf
+  | mk (p : E (EProdBoth × Nat) EProdBoth)
+
+/-- The missing instance can be written by hand for a given constant; then the same argument
+goes through. So the gap is only that none exists in general. -/
+instance : PolyIso (fun X : Type u => X × Nat) Nat (fun _ => Unit) :=
+  ⟨⟨fun x => ⟨x.2, fun _ => x.1⟩, fun z => (z.2 (), z.1), fun _ => rfl, fun _ => rfl⟩⟩
+
+instance : PolyMap (fun X : Type u => X × Nat) (fun X : Type v => X × Nat) where
+  map f x := (f x.1, x.2)
+  equiv_map _ _ := rfl
+
+data EProdHand
+  | leaf
+  | mk (p : E (EProdHand × Nat) EProdHand)
+
+/-! ### 12. Holes at different indices in several arguments of a leaf
+
+A leaf found by instance search is a functor of one variable, so all its holes must be one type.
+`Pair (T i) (T j)` has two. The built-in forms do not have this limit. -/
+
+data Pair (α β : Type u)
+  | mk (a : α) (b : β)
+
+data TwoIdx : Nat → Type
+  | zero : TwoIdx 0
+  | mk {n : Nat} (p : Pair (TwoIdx n) (TwoIdx (n + 1))) : TwoIdx (n + 2)
+
+/-! In a mutual block every type is an index of the block, so two types of a block in one leaf
+hit the same error, even though no index is written anywhere. -/
+
+mutual
+data PairA
+  | nil
+  | mk (p : Pair PairA PairB)
+data PairB
+  | mk (a : PairA)
+end
+
+/-! This failure comes before any declaration of the types, but after the index of the block,
+which stays. -/
+
+#check PairA_PairB.Ix
+
+-- With the built-in form the same data passes, for the family and for the block.
+data TwoIdxProd : Nat → Type
+  | zero : TwoIdxProd 0
+  | mk {n : Nat} (p : TwoIdxProd n × TwoIdxProd (n + 1)) : TwoIdxProd (n + 2)
+
+mutual
+data ProdA
+  | nil
+  | mk (p : ProdB × ProdC)
+data ProdB
+  | mk (a : ProdA)
+data ProdC
+  | mk (a : ProdA)
+end
+
+/-! ### 13. Nesting through an indexed family or a mutual block
+
+Only a single type without indices gets instances. A family or a member of a block is skipped
+silently, and nesting through it fails at the missing instance. -/
+
+data Vec (α : Type u) : Nat → Type u
+  | nil : Vec α 0
+  | cons {n : Nat} (a : α) (t : Vec α n) : Vec α (n + 1)
+
+#synth PolyIso (fun X : Type => Vec X 3) _ _
+
+data ThroughVec
+  | leaf
+  | mk (v : Vec ThroughVec 3)
+
+mutual
+data Ping (α : Type u)
+  | nil
+  | cons (a : α) (b : Pong α)
+data Pong (α : Type u)
+  | cons (a : α) (b : Ping α)
+end
+
+#synth PolyIso Ping.{0} _ _
+
+data ThroughPing
+  | leaf
+  | mk (v : Ping ThroughPing)
+
+/-! Hand-written instances do work for these: the restriction is on generation. First a family
+at a fixed index, whichever it is. -/
+
+data Tagged (α : Type u) : Bool → Type u
+  | mk {b : Bool} (a : α) : Tagged α b
+
+def Tagged.val {α : Type u} {b : Bool} (t : Tagged α b) : α :=
+  Tagged.casesOn (motive := fun _ _ => α) t id
+
+@[simp] theorem Tagged.val_mk {α : Type u} {b : Bool} (a : α) :
+    (Tagged.mk a : Tagged α b).val = a := by
+  simp [Tagged.val]
+
+instance (b : Bool) : PolyIso (fun X : Type u => Tagged X b) Unit (fun _ => Unit) where
+  equiv :=
+    { toFun := fun t => ⟨(), fun _ => t.val⟩
+      invFun := fun z => .mk (z.2 ())
+      left_inv := fun t => by cases t with | mk a => simp
+      right_inv := fun _ => by simp }
+
+instance (b : Bool) : PolyMap (fun X : Type u => Tagged X b) (fun X : Type v => Tagged X b) where
+  map f t := .mk (f t.val)
+  equiv_map f t := by simp [Equiv.coe_fn_mk, PolyIso.equiv, Poly.map]
+
+data ThroughTagged
+  | leaf
+  | mk (v : Tagged ThroughTagged true)
+
+/-! Then a member of a mutual block. -/
+
+mutual
+data Hand (α : Type u)
+  | mk (a : α) (b : Stop α)
+data Stop (α : Type u)
+  | stop
+end
+
+def Hand.val {α : Type u} (t : Hand α) : α :=
+  Hand.casesOn (motive := fun _ => α) t fun a _ => a
+
+@[simp] theorem Hand.val_mk {α : Type u} (a : α) (b : Stop α) : (Hand.mk a b).val = a := by
+  simp [Hand.val]
+
+instance : PolyIso Hand.{u} Unit (fun _ => Unit) where
+  equiv :=
+    { toFun := fun t => ⟨(), fun _ => t.val⟩
+      invFun := fun z => .mk (z.2 ()) .stop
+      left_inv := fun t => by
+        cases t with
+        | mk a b => cases b with | stop => simp
+      right_inv := fun _ => by simp }
+
+instance : PolyMap Hand.{u} Hand.{v} where
+  map f t := .mk (f t.val) .stop
+  equiv_map f t := by simp [Equiv.coe_fn_mk, PolyIso.equiv, Poly.map]
+
+data ThroughHand
+  | leaf
+  | mk (v : Hand ThroughHand)
+
+/-! ### 14. `mixed_mutual`
+
+A mixed block used to nest an outer run through its inner runs by the generated structures,
+which are gone. Instances are generated only by the single `data` and `codata` commands, not for
+the runs of a block, and cannot be written inside one. So a cyclic block stops at a missing
+instance, in either order. It is expected to be redesigned. -/
+
+mixed_mutual
+codata MTree (α : Type u)
+  | node (a : α) (children : MForest α)
+data MForest (α : Type u)
+  | nil
+  | cons (t : MTree α) (f : MForest α)
+end
+
+/-! Unlike a failed `data`, this one leaves something behind: runs are elaborated from the
+innermost out, so `MForest`, with the family parameter for the trees, is there, and only `MTree`
+is missing. -/
+
+#check @MForest.cons
+
+#check @MTree.node
+
+#synth PolyIso (MForest Nat) _ _
+
+mixed_mutual
+data MForest₂ (α : Type u)
+  | nil
+  | cons (t : MTree₂ α) (f : MForest₂ α)
+codata MTree₂ (α : Type u)
+  | node (a : α) (children : MForest₂ α)
+end
+
+/-! A block without a cycle does not need nesting and still passes. First, the inner run mentions
+the outer one, and the outer one does not mention it. -/
+
+mixed_mutual
+codata MOuter (α : Type u)
+  | mk (a : α) (o : MOuter α)
+data MInner (α : Type u)
+  | nil
+  | cons (o : MOuter α) (i : MInner α)
+end
+
+#check @MInner.cons
+
+/-! Then the outer run mentions the inner one, which does not mention it back. The field is then
+plain data: the inner type has no family parameter, and nothing is nested. So what stops a block
+is the cycle, not the mention. -/
+
+mixed_mutual
+codata MOuter₂ (α : Type u)
+  | mk (a : α) (i : MInner₂ α)
+data MInner₂ (α : Type u)
+  | nil
+  | cons (a : α) (i : MInner₂ α)
+end
+
+#check @MOuter₂.mk
+
+/-! ### 15. What the analysis does not recognise
+
+The analysis works on syntax, so a type that means the same but is spelled differently is another
+type to it. These are limits of the reading, not of the theory. -/
+
+/-! The prefix spellings of `×` and `⊕` are named constructors, hence leaves without instances. -/
+
+data PrefixProd
+  | leaf
+  | mk (p : Prod PrefixProd PrefixProd)
+
+data PrefixProd₂
+  | leaf
+  | mk (p : Prod Nat PrefixProd₂)
+
+data PrefixSum
+  | leaf
+  | mk (p : Sum PrefixSum Nat)
+
+/-! An abbreviation is not unfolded, nor is `id`. -/
+
+abbrev Twice (X : Type u) := X × X
+
+data ThroughAbbrev
+  | leaf
+  | mk (p : Twice ThroughAbbrev)
+
+data ThroughId
+  | leaf
+  | mk (p : id ThroughId)
+
+/-! Other notations are not read at all: `<|`, `Σ`, `∀`, `×'`. `∀` is in the plan, section 1, as a
+spelling still to do. -/
+
+data ThroughPipe
+  | leaf
+  | mk (p : Option <| List ThroughPipe)
+
+data ThroughSigma
+  | leaf
+  | mk (p : Σ n : Nat, Fin n → ThroughSigma)
+
+data ThroughForall
+  | leaf
+  | mk (p : ∀ n : Nat, Fin n → ThroughForall)
+
+data ThroughPProd
+  | leaf
+  | mk (p : ThroughPProd ×' ThroughPProd)
+
+/-! A dependent pair whose second component does not depend on the first is a product. It is
+refused, with a message about function domains that does not fit. -/
+
+data ThroughDepPair
+  | mk (f : (x : ThroughDepPair) × Nat)
+
+/-! A family argument needs a named binder: `fun _ => …` is not seen as a family, and the plain
+class is asked for. Section 6 has `AltPlain` with `fun _b => …`. -/
+
+codata AnonFamily
+  | mk (children : Both (fun _ => AnonFamily))
+
+/-! ## Part III: what looks like a bug
+
+Each declaration below is within the scope that `plan.md` and the file headers describe, or it
+should get a clean error, and instead the generators fail with many errors and leave broken
+declarations in the environment. When a bug is fixed, the example can move to Part I. -/
+
+/-! ### 16. Failures inside the generators -/
+
+/-! A family with two indices or more under a plain leaf, for `data` and `codata`. A block does not
+have this problem, since it has one index, `Blk.Ix`. The structure term is
+`IOcc.ofOcc occ ⟨n, m⟩`, whose anonymous constructor has no expected type: `occTermOf` gives
+`(J := …)` to `IOcc.hole` and not to `IOcc.ofOcc`, which is likely the whole story. -/
+
+codata TwoListCo : Nat → Nat → Type
+  | mk {n m : Nat} (c : List (TwoListCo n m)) : TwoListCo (n + 1) m
+
+/-! A `data` family with two indices or more through a built-in form. A block does not have this
+problem either. The same declaration passes as `codata`, and `(c : Nat → T n m)` passes as `data`,
+so the failure comes from what only `data` has: the first error is at a `motive`, where the packed
+index of a position is taken apart. -/
+
+codata TwoProdCo : Nat → Nat → Type
+  | mk {n m : Nat} (c : Nat × TwoProdCo n m) : TwoProdCo (n + 1) m
+
+data TwoFn : Nat → Nat → Type
+  | nil : TwoFn 0 0
+  | mk {n m : Nat} (c : Nat → TwoFn n m) : TwoFn (n + 1) m
+
+data TwoProd : Nat → Nat → Type
+  | nil : TwoProd 0 0
+  | mk {n m : Nat} (c : Nat × TwoProd n m) : TwoProd (n + 1) m
+
+/-! A later field that depends on a recursive or nested field. A list of children with a proof
+about it is a natural thing to write. It cannot be supported as such, since `F.map` changes the
+list and not the proof, but the analysis does not reject it. The plain case fails likewise. -/
+
+data NonEmpty
+  | mk (l : List NonEmpty) (h : l ≠ [])
+
+data PlainDep
+  | leaf
+  | mk (x : PlainDep) (h : x = x)
+
+/-! An implicit binder in the type of a nested argument. The analysis accepts it and forgets that
+it is implicit. -/
+
+data ImplicitPi
+  | leaf
+  | mk (k : {n : Nat} → List ImplicitPi)
+
+end
+
+end NestingTour

@@ -1,5 +1,5 @@
 import Colean.Cmd.Functor
-import Colean.Cmd.Surface
+import Colean.Cmd.Derive
 
 /-!
 # The `codata` command
@@ -80,8 +80,8 @@ The analysis of the declaration (`mkCtx`) and the generators of `T.F`, the signa
 isomorphism, the constructors and `casesOn` are shared with the `data` command
 (`DataCmd.lean`), which differs only in the contract and what is derived from it; `T.F.Rel`,
 `rel_map` and `rel_ofC` are generated for `codata` only. A mutual block (`MutualCmd.lean`) is
-one family whose first index enumerates its types: `mkCtx` receives the types with their
-constructors and the enumeration, every generator works on the block, and the user-facing
+one family over `Blk.Ix`, with a constructor per type: `mkCtx` receives the types with their
+sorts and constructors, every generator works on the block, and the user-facing
 types, constructors, `casesOn` and aliases are per type (`genTypes`, `genCases`, `genAliases`).
 
 The generators are split by the steps of `architecture.md`: `Cmd/Analysis.lean` (the context),
@@ -118,6 +118,9 @@ def codataPipeline (ctx : Ctx) : CommandElabM Unit := do
 @[command_elab codataCmd] def elabCodata : CommandElab := fun stx => do
   let `(codata $T:ident $paramsStx:bracketedBinder* $[: $sortStx]? $ctorsStx:codataCtor*) := stx
     | throwUnsupportedSyntax
-  codataPipeline (← mkCtx true T paramsStx sortStx #[(T, ctorsStx)] none)
+  let ctx ← mkCtx true T paramsStx #[(T, sortStx, ctorsStx)] none
+  codataPipeline ctx
+  -- A separate step, after the type is complete: it cannot fail the declaration.
+  deriveInstances ctx
 
 end Codata

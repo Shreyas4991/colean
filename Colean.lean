@@ -6,12 +6,14 @@ import Colean.PolyIso
 import Colean.Model.Cotype
 import Colean.Model.Intype
 import Colean.Model.Occ
+import Colean.Model.Poly
 import Colean.Cmd.Analysis
 import Colean.Cmd.Functor
 import Colean.Cmd.Model
 import Colean.Cmd.Framework
 import Colean.Cmd.Extras
 import Colean.Cmd.Surface
+import Colean.Cmd.Derive
 import Colean.CodataCmd
 import Colean.DataCmd
 import Colean.MutualCmd

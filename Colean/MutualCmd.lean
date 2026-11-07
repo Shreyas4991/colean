@@ -14,19 +14,21 @@ end
 ```
 
 A `mutual … end` block whose declarations are all `codata`, or all `data`, with the same
-parameters and the same indices, is one family over an enumeration of its types: the block
-`Tree_Forest` (the names joined by `_`) is declared as a single indexed family whose first index
-is `Tree_Forest.Which`, with constructors `Tree` and `Forest`, and every declaration of the single
+parameters, is one family: the block `Tree_Forest` (the names joined by `_`) is declared as a
+single family over the inductive `Tree_Forest.Ix`, which has a constructor per type, `Tree` and
+`Forest`, whose arguments are the indices of that type, and every declaration of the single
 type case is generated for the block (`Tree_Forest.F`, `Tree_Forest.corec`, `Tree_Forest.bisim`,
 `Tree_Forest.rec`, …). This is how Lean itself elaborates mutual fixpoints, and the generic
-theory needs nothing new. Then, per type: `Tree α := Tree_Forest α .Tree`, its constructors
+theory needs nothing new. The types need not agree on their indices, since each has its own
+constructor of `Ix`; written in a block, they must agree on their universe. Then, per type:
+`Tree α := Tree_Forest α .Tree`, and `Even n := Even_Odd (.Even n)` with an index, its constructors
 `Tree.node` with their lemmas under `Tree`, `Tree.casesOn` with only the constructors of `Tree`,
 registered as the `cases` eliminator, and aliases `Tree.corec`, `Tree.bisim` (or `Tree.fold`)
 restricting the block-level declarations to the type. Dot notation `t.dtor` resolves to
 `Tree_Forest.dtor` through the definition of `Tree`, and the lemmas are stated with the
 block-level `dtor` and `ctor`. Corecursion and induction take a state or motive over the whole
 block:
-`S : Tree_Forest.Which → Type _` and `c : ∀ m, S m → Tree_Forest.F α S m` for `corec`, and
+`S : Tree_Forest.Ix α → Type _` and `c : ∀ i, S i → Tree_Forest.F α S i` for `corec`, and
 `induction t using Tree_Forest.rec` for `data`, as with Lean's mutual inductives, whose
 `induction` tactic does not apply to mutual types either.
 
@@ -57,7 +59,7 @@ and is one uniform block; runs `R₁ ⊃ R₂ ⊃ … ⊃ Rₖ` are elaborated f
 
 * the innermost run `Rₖ` is declared with one extra parameter for the run `Rₖ₋₁` it mentions,
   the family `X` (a type `X : Type u_<Rₖ₋₁>` when `Rₖ₋₁` is a single type without indices, a
-  family `X : J → Type u_<Rₖ₋₁>` over its packed index `(m : Which) ×' idx` otherwise), every
+  family `X : J → Type u_<Rₖ₋₁>` over its index, `Blk.Ix` for a block, otherwise), every
   occurrence of a type of `Rₖ₋₁` replaced by `X` (at its packed index) and every occurrence of
   a type of `Rₖ` applied to `X`;
 * a run `Rᵢ` is declared likewise with a parameter for `Rᵢ₋₁`, and every occurrence of a type
@@ -69,8 +71,7 @@ So the user sees the parameterised inner types (`Forest α X`, with `Forest.nil 
 for any `X`, `Forest.fold`, `Forest.rec`) and the closed outer ones (`Tree.node : α → Forest α
 (Tree α) → Tree α`, `Tree.corec`, `Tree.bisim` with `Occ.Rel`/`IOcc.Rel` on the forests): the uniform contracts, composed. The universe of a family parameter is a `universe`
 variable declared in scope (a hole would be solved differently across the generated
-declarations). All declarations of the block must have the same parameters; the declarations
-of a run must have the same indices.
+declarations). All declarations of the block must have the same parameters.
 
 Any number of runs is allowed, in any order. A declaration may mention any run inside its own:
 an occurrence of a type of a run further inside is applied to the chain of families down to
@@ -116,27 +117,35 @@ private def readDecl (stx : Syntax) : CommandElabM Decl := do
 private def declExists (id : Ident) : CommandElabM Bool := do
   return (← getEnv).contains ((← getCurrNamespace) ++ id.getId)
 
-/-- The block name of several declarations, and its enumeration `Which`. -/
+/-- The block name of several declarations. -/
 private def blockName (decls : Array Decl) : Ident :=
   mkIdent (Name.mkSimple ("_".intercalate (decls.map (·.T.getId.toString)).toList))
 
-/-- The enumeration of the types of a block. -/
-private def genWhich (which : Ident) (decls : Array Decl) : CommandElabM Unit := do
-  let wCtors ← decls.mapM fun d =>
-    `(Parser.Command.ctor| | $(mkIdent (Name.mkSimple d.T.getId.getString!)):ident)
-  elabCommand (← `(inductive $which:ident where $[$wCtors:ctor]*))
+/-- The index of a block: a constructor per type, with the indices of that type as arguments. It
+takes the parameters `ps`, on which the indices may depend. -/
+private def genIx (Ix : Ident) (ps : Array (TSyntax ``bracketedBinder)) (decls : Array Decl) :
+    CommandElabM Unit := do
+  let pExp ← ps.mapM fun b => do
+    let (ids, ty, _) ← readBinder b
+    `(bracketedBinder| ($ids* : $ty))
+  let ctors ← decls.mapM fun d => do
+    let bs ← (← readIdx d.sort).mapM fun (x, ty) => `(bracketedBinder| ($x:ident : $ty))
+    `(Parser.Command.ctor| | $(mkIdent (Name.mkSimple d.T.getId.getString!)):ident $bs:bracketedBinder*)
+  elabCommand (← `(inductive $Ix:ident $pExp:bracketedBinder* where $[$ctors:ctor]*))
 
 /-- Elaborate a uniform group (all `codata` or all `data`), as a single declaration or as a
-block; `Which` may have been declared already. -/
-private def elabGroup (isCo : Bool) (decls : Array Decl) : CommandElabM Unit := do
-  let (T, ps, sort) := (decls[0]!.T, decls[0]!.ps, decls[0]!.sort)
+block. The index of the block may have been declared already, on the first `nPs` parameters. -/
+private def elabGroup (isCo : Bool) (decls : Array Decl) (nPs : Option Nat := none) :
+    CommandElabM Unit := do
+  let (T, ps) := (decls[0]!.T, decls[0]!.ps)
   let ctx ← if decls.size == 1 then
-      mkCtx isCo T ps sort #[(T, decls[0]!.ctors)] none
+      mkCtx isCo T ps #[(T, decls[0]!.sort, decls[0]!.ctors)] none
     else do
       let blk := blockName decls
-      let which := mkIdent (blk.getId ++ `Which)
-      unless ← declExists which do genWhich which decls
-      mkCtx isCo blk ps sort (decls.map fun d => (d.T, d.ctors)) (some which)
+      let Ix := mkIdent (blk.getId ++ `Ix)
+      unless ← declExists Ix do genIx Ix ps decls
+      let nAll ← ps.foldlM (fun n b => do return n + (← readBinder b).1.size) 0
+      mkCtx isCo blk ps (decls.map fun d => (d.T, d.sort, d.ctors)) (some (Ix, nPs.getD nAll))
   if isCo then codataPipeline ctx else dataPipeline ctx
 
 /-- A substitution of the occurrences of some types: their names, and the replacement of an
@@ -153,18 +162,23 @@ private partial def substOccs (params : Array Ident) (subs : Array Subst) (stx :
   | .node info k args => return .node info k (← args.mapM (substOccs params subs))
   | _ => return stx
 
-/-- The checks shared by `mutual` and `mixed_mutual`: the same parameters everywhere, and the
-same indices within the declarations `decls` that form one uniform block. -/
-private def checkUniform (d₀ : Decl) (decls : Array Decl) (sameSort : Bool) : CommandElabM Unit := do
+/-- The sort at the end of a declared sort `I₁ → … → Type u`. -/
+private partial def resultSort : Term → CommandElabM Term
+  | `($_:bracketedBinder → $cod) => resultSort cod
+  | `($_ → $cod) => resultSort cod
+  | t => pure t
+
+/-- The checks shared by `mutual` and `mixed_mutual`: the same parameters everywhere, and, within
+the declarations `decls` that form one uniform block, the same universe where it is written.
+Indices may differ. -/
+private def checkUniform (d₀ : Decl) (decls : Array Decl) (sameUniverse : Bool) :
+    CommandElabM Unit := do
   for d in decls do
     unless d.ps.size == d₀.ps.size && (d.ps.zip d₀.ps).all (fun (a, b) => a.raw.structEq b.raw) do
       throwErrorAt d.T "the types of a mutual block must have the same parameters as `{d₀.T}`"
-    let same := match d.sort, d₀.sort with
-      | none, none => true
-      | some a, some b => a.raw.structEq b.raw
-      | _, _ => false
-    unless !sameSort || same do
-      throwErrorAt d.T "the types of a mutual block must have the same indices as `{d₀.T}`"
+    if let (true, some a, some b) := (sameUniverse, d.sort, d₀.sort) then
+      unless (← resultSort a).raw.structEq (← resultSort b).raw do
+        throwErrorAt d.T "the types of a mutual block must be in the same universe as `{d₀.T}`"
 
 /-! ### Runs of a `mixed_mutual` block -/
 
@@ -179,7 +193,7 @@ private def Run.names (r : Run) : Array Name := r.decls.map (·.T.getId)
 /-- The block name of the run: the type itself for a single declaration. -/
 private def Run.blk (r : Run) : Ident := if r.decls.size == 1 then r.decls[0]!.T else blockName r.decls
 
-private def Run.which (r : Run) : Ident := mkIdent (r.blk.getId ++ `Which)
+private def Run.Ix (r : Run) : Ident := mkIdent (r.blk.getId ++ `Ix)
 
 /-- The runs of a block, in order. -/
 private def runsOf (decls : Array Decl) : Array Run := Id.run do
@@ -203,26 +217,27 @@ private def Run.uidx (r : Run) : CommandElabM (Array (Ident × Term)) :=
   | none => pure #[]
   | some s => readSort s
 
-/-- The number of components of the run's packed index: its enumeration when it has several
-types, then the user's indices. -/
+/-- The number of components of the run's index: one for a block, the user's indices otherwise. -/
 private def Run.kIdx (r : Run) : CommandElabM Nat := do
-  return (if r.decls.size ≥ 2 then 1 else 0) + (← r.uidx).size
+  if r.decls.size ≥ 2 then return 1
+  return (← r.uidx).size
 
-/-- The packed index type of the run, `(m : Which) ×' idx…`, or `none` for a single type
-without indices (whose family is a type). -/
-private def Run.J (r : Run) : CommandElabM (Option Term) := do
-  let mId ← freshId "m"
-  let tele := (if r.decls.size ≥ 2 then #[(mId, idT r.which)] else #[]) ++ (← r.uidx)
+/-- The packed index type of the run on the parameters `pTerms`: `Blk.Ix params` for a block,
+`none` for a single type without indices (whose family is a type). -/
+private def Run.J (r : Run) (pTerms : Array Term) : CommandElabM (Option Term) := do
+  if r.decls.size ≥ 2 then return some (← mkAppT r.Ix pTerms)
+  let tele ← r.uidx
   if tele.isEmpty then return none
   some <$> mkIxTerm tele
 
 /-- The packed index of an occurrence of the `k`-th type of the run at the user's indices
-`idx`: `⟨.Tₖ, idx…⟩`, or the single component. -/
-private def Run.packIdx (r : Run) (k : Nat) (idx : Array Term) : CommandElabM Term := do
-  let args := (if r.decls.size ≥ 2 then
-      #[idT (mkIdent (r.which.getId ++ Name.mkSimple r.decls[k]!.T.getId.getString!))]
-    else #[]) ++ idx
-  if args.size == 1 then pure args[0]! else `(⟨$[$args],*⟩)
+`idx`: `@Blk.Ix.Tₖ params idx…` for a block, or `⟨idx…⟩`. -/
+private def Run.packIdx (r : Run) (pTerms : Array Term) (k : Nat) (idx : Array Term) :
+    CommandElabM Term := do
+  if r.decls.size ≥ 2 then
+    let c := mkIdent (r.Ix.getId ++ Name.mkSimple r.decls[k]!.T.getId.getString!)
+    return Syntax.mkApp (← `(@$c:ident)) (pTerms ++ idx)
+  if idx.size == 1 then pure idx[0]! else `(⟨$[$idx],*⟩)
 
 /-- The family of the run, applied to the parameters `pTerms` (its own family parameter
 included): the type itself, or `fun p => Blk params p.1 p.2…` on its packed index. -/
@@ -272,11 +287,11 @@ private def elabRuns (stx : Syntax) (runs : Array Run) : CommandElabM Unit := do
           used := used ++ ids.map (·.getId)
   let hygX ← `(X)
   let X : Ident := if used.contains `X then ⟨hygX.raw⟩ else mkIdent `X
-  -- The enumerations of all runs first: the family parameter of a run mentions the
-  -- enumeration of the run outside it.
+  -- The indices of all blocks first: the family parameter of a run mentions the index of the
+  -- run outside it.
   for r in runs do
     if r.decls.size ≥ 2 then
-      unless ← declExists r.which do genWhich r.which r.decls
+      unless ← declExists r.Ix do genIx r.Ix ps₀ r.decls
   for r' in [0:k] do
     let r := k - 1 - r'
     let run := runs[r]!
@@ -289,14 +304,14 @@ private def elabRuns (stx : Syntax) (runs : Array Run) : CommandElabM Unit := do
       let uX := mkIdent (Name.mkSimple ("u_" ++ outer.blk.getId.toString))
       unless (← getScope).levelNames.contains uX.getId do
         elabCommand (← `(universe $uX:ident))
-      let XTy ← match ← outer.J with
+      let XTy ← match ← outer.J pTerms with
         | none => `(Type $uX:ident)
         | some J => `($J → Type $uX:ident)
       ps := ps.push ⟨(← `(bracketedBinderF| ($X:ident : $XTy))).raw⟩
       pTermsX := pTerms.push (idT X)
-      let outerJ ← outer.J
+      let outerJ ← outer.J pTerms
       subs := subs.push (outer.names, fun j idx => do
-        if outerJ.isNone then pure (idT X) else `($X $(← outer.packIdx j idx)))
+        if outerJ.isNone then pure (idT X) else `($X $(← outer.packIdx pTerms j idx)))
       subs := subs.push (run.names, fun j idx => `($(run.decls[j]!.T) $pTerms* $X $idx*))
     -- The runs inside that are mentioned: a run whose types are parameterised by the family of
     -- the run before it takes the chain of families down to this run's own, a nested
@@ -310,7 +325,7 @@ private def elabRuns (stx : Syntax) (runs : Array Run) : CommandElabM Unit := do
     let decls' ← run.decls.mapM fun d => do
       let ctors ← d.ctors.mapM fun c => return ⟨← substOccs pids subs c.raw⟩
       return { d with ctors, ps }
-    withRef stx <| elabGroup run.isCo decls'
+    withRef stx <| elabGroup run.isCo decls' (some pids.size)
 
 /-- The declarations of a `mixed_mutual` block, in order. -/
 private partial def collectDecls (stx : Syntax) : Array Syntax :=

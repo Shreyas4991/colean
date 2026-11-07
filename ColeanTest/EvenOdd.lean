@@ -24,18 +24,18 @@ end
 #check @Even_Odd.rec
 
 /-- Parity, by induction over the block. -/
-def Par : ∀ m (n : Nat), Even_Odd m n → Prop
-  | .Even, n, _ => n % 2 = 0
-  | .Odd, n, _ => n % 2 = 1
+def Par : ∀ i, Even_Odd i → Prop
+  | .Even n, _ => n % 2 = 0
+  | .Odd n, _ => n % 2 = 1
 
-theorem par (m : Even_Odd.Which) (n : Nat) (x : Even_Odd m n) : Par m n x := by
+theorem par (i : Even_Odd.Ix) (x : Even_Odd i) : Par i x := by
   induction x with
   | zero => simp [Par]
   | Even_succ o ih => simp [Par] at *; omega
   | Odd_succ e ih => simp [Par] at *; omega
 
-theorem Even.even {n : Nat} (e : Even n) : n % 2 = 0 := par .Even n e
-theorem Odd.odd {n : Nat} (o : Odd n) : n % 2 = 1 := par .Odd n o
+theorem Even.even {n : Nat} (e : Even n) : n % 2 = 0 := par (.Even n) e
+theorem Odd.odd {n : Nat} (o : Odd n) : n % 2 = 1 := par (.Odd n) o
 
 /-- Case analysis refines the index: there is no odd zero, and an even zero is `zero`. -/
 example (o : Odd 0) : False := by cases o

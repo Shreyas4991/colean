@@ -42,3 +42,23 @@ The route is at the command level: detect a lone `Prop` index by elaborating the
 and pack it as `PLift p` (or as `PSigma` with `Unit`). Since a `Prop`-valued index is
 proof-irrelevant, such a family is a plain type with a precondition, so this is a convenience
 only.
+
+## Generate `PolyIso` on demand
+
+Today instances are generated only for `data` and `codata`, when they are declared. A plain
+`structure` or `inductive` used as a leaf gets the missing-instance error, even when it is
+obviously polynomial:
+
+```
+structure Box (X : Type u) where
+  val : X
+
+codata T
+  | mk (x : Box T)
+```
+
+Generate the instances when a declaration needs them instead: when `checkLeaf` finds no instance
+for a leaf whose head is a user-defined structure or inductive, derive them there and go on. The
+definition has to be read from the environment, at the `Expr` level, since it may come from another
+file with other `open`s. If generation fails, the error stays the missing-instance one. Two
+independent files may then generate the same instance, so the names have to be unique per module.

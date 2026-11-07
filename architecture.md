@@ -21,6 +21,7 @@ Theory, in dependency order:
 - `Framework.lean`: `Codata.Rel`, `Codata.Contract`, `Data.All`, `Data.Contract` and every theorem that follows from a contract alone. Depends on Mathlib only.
 - `Model/Cotype.lean`: signatures, the container functor `Obj`, the encoding, the greatest fixpoint `IsWf`, `Cotype`, its contract pieces and the transport theorems to a functor `F ≃ Obj`.
 - `Model/Intype.lean`: the least fixpoint `IsFin`, `Intype`, the dependent recursor by well-founded recursion, fold, and the transports.
+- `Model/Poly.lean`: a least or greatest fixpoint of a layer polynomial in a parameter is polynomial in that parameter: trees of shapes, `Path`, `PolyFix`, `coFix`, `inFix`.
 - `Model/Occ.lean`: occurrence structures `Occ`/`IOcc`, internal to the command: their combinators, laws and computation lemmas; the leaves are `Occ.ofIso F`, from the `PolyIso` instances.
 
 Generators, in dependency order:
@@ -31,6 +32,7 @@ Generators, in dependency order:
 - `Cmd/Framework.lean`: step 3.
 - `Cmd/Extras.lean`: step 2b (`genRec`).
 - `Cmd/Surface.lean`: step 4 (`genRel`, `genCtors`, `genCases`, `genTypes`, `genAliases`, `genRecLemmas`, `genDataAliases`).
+- `Cmd/Derive.lean`: step 5 (`deriveInstances`), separate from the pipeline.
 - `CodataCmd.lean`, `DataCmd.lean`: the pipelines and the commands. `MutualCmd.lean`: `mutual` and `mixed_mutual` blocks, which only rewrite syntax and call the pipelines.
 
 ## Rules
@@ -46,4 +48,8 @@ Generators, in dependency order:
 
 ## Nesting and declared types
 
-Defining a type and presenting it as a polynomial functor are separate. A declaration produces no instance of `PolyIso`; with several parameters, the functor to present is not even determined by the declaration. So nesting through a declared type needs hand-written instances, and `mixed_mutual`, which nests through its inner runs, is blocked until instances can be constructed for declared types. The tests of that step are not built (`ColeanTest.lean`).
+Defining a type and presenting it as a polynomial functor are separate steps. Step 5, `deriveInstances` (`Cmd/Derive.lean`), runs after the pipeline has finished. It reads the declaration's analysis and the type's public declarations, and nothing in the pipeline depends on it. On failure it rolls back and logs a warning, so it can't affect the type.
+
+It generates one instance per type, `PolyIso (fun X => T (H₁ X) … (Hₙ X))` with premises on the `Hᵢ`, over the parameters that may vary, and the eta-reduced form `T A₁ … Aₙ₋₁`. Only the layer `T.Poly.toL`/`ofL` and its laws are per-declaration; the fixpoint is `Model/Poly.lean`, one proof for `data` and `codata`, from the contract.
+
+Scope: a single type without indices. Mutual blocks and indexed families are skipped. `mixed_mutual` nests through its inner runs, which get no instances, so it stays blocked; its tests are not built (`ColeanTest.lean`).

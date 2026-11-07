@@ -70,6 +70,9 @@ def dataPipeline (ctx : Ctx) : CommandElabM Unit := do
 @[command_elab dataCmd] def elabData : CommandElab := fun stx => do
   let `(data $T:ident $paramsStx:bracketedBinder* $[: $sortStx]? $ctorsStx:codataCtor*) := stx
     | throwUnsupportedSyntax
-  dataPipeline (← mkCtx false T paramsStx sortStx #[(T, ctorsStx)] none)
+  let ctx ← mkCtx false T paramsStx #[(T, sortStx, ctorsStx)] none
+  dataPipeline ctx
+  -- A separate step, after the type is complete: it cannot fail the declaration.
+  deriveInstances ctx
 
 end Codata

@@ -166,14 +166,14 @@ value whose possible constructors are those of the type. -/
 def genCases (ctx : Ctx) : CommandElabM Unit := do
   let pImp := ctx.pImp
   let pTerms := ctx.pTerms
-  let ib ← ctx.uIxB
-  let jB ← ctx.uJB
-  let iArg := ctx.uIArgs
   let motive := ctx.motiveId
   for m in [0:ctx.types.size] do
+    let ib ← ctx.uIxB m
+    let jB ← ctx.uJB m
+    let iArg := ctx.uIArgs m
     let ctors := ctx.ctors.filter (·.owner == m)
     let Tm ← ctx.tyP m
-    let mTy ← if ctx.uIdxed then `(∀ $[$jB]*, $(← appT Tm ctx.uJArgs) → Sort _)
+    let mTy ← if ctx.uIdxed m then `(∀ $[$jB]*, $(← appT Tm (ctx.uJArgs m)) → Sort _)
       else `($Tm → Sort _)
     let mI ← appT (idT motive) iArg
     let Ti ← ctx.tyAtU m
@@ -184,12 +184,12 @@ def genCases (ctx : Ctx) : CommandElabM Unit := do
     let minors ← ctors.mapM fun c => do
       let bs ← binders c
       let capp ← ctx.tApp c
-      let mc ← appT (idT motive) (ctx.uIdxOf c)
+      let mc ← appT (idT motive) c.uidx
       let ty ← if c.groups.isEmpty then `($mc $capp) else `(∀ $[$bs]*, $mc $capp)
       `(bracketedBinderF| ($(c.name) : $ty))
     let auxAlts : Array (TSyntax ``matchAlt) ← ctors.mapM fun c => do
       ctx.uAlt c #[← ctx.fPat c] (← mkAppT c.name ((ctx.valArgs c).map idT))
-    let discrsY := ctx.uDiscrs (← `(y))
+    let discrsY := ctx.uDiscrs m (← `(y))
     elabCommand (← `(def $casesOnAux:ident $[$pImp]* {$motive : $mTy} $[$ib]* (y : $FTi)
         $[$minors]* : $mI ($(ctx.ctor) y) := match $[$discrsY:term],* with $auxAlts:matchAlt*))
     let minorIds := ctors.map fun c => idT c.name
@@ -209,7 +209,7 @@ def genCases (ctx : Ctx) : CommandElabM Unit := do
       let capp ← ctx.tApp c
       let fapp ← ctx.fApp c ctx.Tp (c.allIds.map idT)
       let rhs ← mkAppT c.name (c.args.map idT)
-      let cidx := ctx.uIdxOf c
+      let cidx := c.uidx
       elabCommand (← `(@[simp] theorem $(ctx.tName' c "casesOn_" ""):ident $[$pImp]*
           {$motive : $mTy} $[$bs]* $[$minors]* :
           @$casesOnId $pTerms:term* $motive $cidx:term* $capp $minorIds:term* = $rhs :=
@@ -222,8 +222,8 @@ after the family and before anything that mentions the types in a binder. -/
 def genTypes (ctx : Ctx) : CommandElabM Unit := do
   unless ctx.isMutual do return
   let pExp := ctx.pExp
-  let ixBExp ← ctx.uIxBExp
   for m in [0:ctx.types.size] do
+    let ixBExp ← ctx.uIxBExp m
     let body ← appT ctx.Tp (ctx.fullArgs m)
     elabCommand (← `(def $(ctx.types[m]!):ident $[$pExp]* $[$ixBExp]* : Type _ := $body))
 
@@ -242,8 +242,8 @@ def genAliases (ctx : Ctx) : CommandElabM Unit := do
   let RTy ← ctx.famRel ctx.Tp ctx.Tp
   let Rixy ← appT (← `(R)) (iArgs ++ #[← `(x), ← `(y)])
   let HTy ← `(∀ $[$ixBExp]* x y, $Rixy → $(ctx.Rel) R ($(ctx.dtor) x) ($(ctx.dtor) y))
-  let ib ← ctx.uIxB
   for m in [0:ctx.types.size] do
+    let ib ← ctx.uIxB m
     let Ti ← ctx.tyAtU m
     let Si ← appT (idT S) (ctx.fullArgs m)
     let Rm ← appT (← `(R)) (ctx.fullArgs m ++ #[← `(x), ← `(y)])
@@ -319,8 +319,8 @@ def genDataAliases (ctx : Ctx) : CommandElabM Unit := do
   let xTy ← ctx.famTy
   let S := ctx.Sid
   let aTy ← ctx.famFn (← `($(ctx.Fp) $S)) (idT S)
-  let ib ← ctx.uIxB
   for m in [0:ctx.types.size] do
+    let ib ← ctx.uIxB m
     let Ti ← ctx.tyAtU m
     let Si ← appT (idT S) (ctx.fullArgs m)
     elabCommand (← `(abbrev $(ctx.tyId m "fold"):ident $[$pImp]* {$S : $xTy} (a : $aTy) $[$ib]*

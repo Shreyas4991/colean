@@ -60,12 +60,12 @@ def Forest.length {α : Type u} (f : Forest α) : Nat := Forest.fold lengthAlg f
     (Forest.cons t f).length = f.length + 1 := by
   simp [Forest.length, lengthAlg]
 
-/-- Induction over the block: the motive is a family over `Which`. -/
+/-- Induction over the block: the motive is a family over `Ix`. -/
 def LenLe {α : Type u} : ∀ m, Rose_Forest α m → Prop
   | .Rose, t => 1 ≤ Rose.size t
   | .Forest, f => Forest.length f ≤ Forest.size f
 
-theorem lenLe {α : Type u} (m : Rose_Forest.Which) (x : Rose_Forest α m) : LenLe m x := by
+theorem lenLe {α : Type u} (m : Rose_Forest.Ix α) (x : Rose_Forest α m) : LenLe m x := by
   induction x with
   | node a c ih => simp [LenLe]
   | nil => simp [LenLe]

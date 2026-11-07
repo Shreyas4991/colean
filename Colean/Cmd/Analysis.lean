@@ -93,12 +93,14 @@ structure Group where
   implicit : Bool
 
 /-- A constructor, analysed: its name, binder groups, and the index arguments of its result type
-(none without indices; in a mutual block, the first index is the type's constructor of `Which`).
+(none without indices; in a mutual block, one term of `Blk.Ix`, and the user's `uidx`).
 -/
 structure CtorInfo where
   name : Ident
   groups : Array Group
   idx : Array Term
+  /-- The index arguments as the user wrote them. Outside mutual blocks, the same as `idx`. -/
+  uidx : Array Term
   /-- The position of the type it belongs to in the block (`0` outside mutual blocks). -/
   owner : Nat
   /-- Its name in the block-level inductives `F`, `Shape`, `B`: the name itself, or `T_name`
@@ -216,14 +218,27 @@ def recIdx (tNames : Array Name) (params : Array Ident) (ty : Term) :
     | none => none
   | _ => none
 
-/-- A recursive occurrence with its full index: one of the types `T params idx…` (its block
-index prepended, `pre`), or the block family itself `Blk params idx…` (in a mutual block, the
-block name applied to the block index and the user's indices). -/
-def recOcc (tNames : Array Name) (blk : Name) (pre : Nat → Array Term) (params : Array Ident)
-    (ty : Term) : Option (Array Term) :=
+/-- A recursive occurrence with its full index: one of the types `T params idx…` (its indices
+turned into the block's by `wrap`), or the block family itself `Blk params idx`, in a mutual
+block. -/
+def recOcc (tNames : Array Name) (blk : Name) (wrap : Nat → Array Term → Array Term)
+    (params : Array Ident) (ty : Term) : Option (Array Term) :=
   match recIdx tNames params ty with
-  | some (m, idx) => some (pre m ++ idx)
+  | some (m, idx) => some (wrap m idx)
   | none => (recIdx #[blk] params ty).map (·.2)
+
+/-- In a mutual block: every occurrence of a type of the block in `stx` has the number of indices
+of that type, `arity`. The block index is built from them, so a wrong number has to be caught
+before it is. -/
+partial def checkArity (tNames : Array Name) (params : Array Ident) (arity : Nat → Nat)
+    (stx : Syntax) : CommandElabM Unit := do
+  if let some (m, idx) := recIdx tNames params ⟨stx⟩ then
+    unless idx.size == arity m do
+      throwErrorAt stx "recursive argument with the wrong number of indices"
+    return
+  match stx with
+  | .node _ _ args => args.forM (checkArity tNames params arity)
+  | _ => pure ()
 
 /-- A binder `(x y : A)` or `{x y : A}`: its names, type, and whether it is implicit. -/
 def readBinder (b : TSyntax ``bracketedBinder) : CommandElabM (Array Ident × Term × Bool) := do
@@ -302,6 +317,23 @@ def isPropTy (scope : Array (TSyntax ``bracketedBinderF)) (ty : Term) : CommandE
       Term.synthesizeSyntheticMVarsNoPostponing
       Meta.isProp e
 
+/-- `stx` with every hole replaced by `X`. -/
+partial def replaceHoles (holeOf : Term → Option (Array Term)) (X : Ident) (stx : Syntax) :
+    CommandElabM Syntax := do
+  if (holeOf ⟨stx⟩).isSome then return X.raw
+  match stx with
+  | .node info k args => return .node info k (← args.mapM (replaceHoles holeOf X))
+  | _ => return stx
+
+/-- The indices of the holes of `stx`. -/
+partial def collectHoles (holeOf : Term → Option (Array Term)) (stx : Syntax) :
+    Array (Array Term) :=
+  match holeOf ⟨stx⟩ with
+  | some idx => #[idx]
+  | none => match stx with
+    | .node _ _ args => args.foldl (fun acc a => acc ++ collectHoles holeOf a) #[]
+    | _ => #[]
+
 /-- The occurrence tree of `ty`, for the hole recognised by `holeOf` (an occurrence with its
 index arguments) among the names `names`: products, sums, functions and dependent pairs over
 constant types, and named type constructors applied to one hole-containing argument (a family
@@ -342,9 +374,20 @@ partial def occTreeOf (holeOf : Term → Option (Array Term)) (names : Array Nam
       throwErrorAt ty "recursive occurrence not recognised: a type being defined must be \
         applied to its parameters (and indices)"
     let ks := (Array.range args.size).filter fun k => mentionsAny args[k]!.raw names
-    unless ks.size == 1 do
-      throwErrorAt ty "the types being defined occur in several arguments of `{f}`, which is \
-        supported only for products, sums, functions and dependent pairs"
+    -- Several arguments: the whole type as a functor of the hole, at one index.
+    if ks.size ≥ 2 then
+      let X ← freshId "X"
+      let body ← replaceHoles holeOf X ty.raw
+      let found := collectHoles holeOf ty.raw
+      let some idx := found[0]? | throwErrorAt ty "recursive occurrence not recognised"
+      unless found.all (idxEq idx) do
+        throwErrorAt ty "the types being defined occur at different indices in several arguments \
+          of `{f}`, which is supported only for products, sums, functions and dependent pairs"
+      if mentionsAny body names then
+        throwErrorAt ty "recursive occurrence not recognised: a type being defined must be \
+          applied to its parameters (and indices)"
+      let G ← `(fun $X:ident => $(⟨body⟩))
+      return .leaf G (← checkLeaf scope ty G false) (.hole idx)
     let k := ks[0]!
     let arg := stripParen args[k]!
     let X ← freshId "X"
@@ -436,16 +479,17 @@ partial def OccTree.firstIdx? : OccTree → Option (Array Term)
 /-- Classify the type of a constructor argument: a plain recursive argument `T params idx`, a
 recursive argument under a telescope of arrows ending in one, a nested one (any other type
 mentioning the types being defined, through its occurrence structure), or non-recursive data,
-which may not mention the types being defined at all. `pre m` is the block index of the `m`-th
-type (its constructor of `Which`, nothing outside mutual blocks), prepended to the index
-arguments; `blk` is the block family, which nested occurrences may mention directly. With
+which may not mention the types being defined at all. `wrap m` turns the index arguments of the
+`m`-th type into those of the block (the identity outside mutual blocks); `blk` is the block
+family, which nested occurrences may mention directly. With
 indices (`idxed`), the structure of a nested argument is indexed over the packed index type
 `Ixp`, the indices packed by `pack`. -/
 private partial def classify (tNames : Array Name) (blk : Name) (params : Array Ident)
-    (scope : Array (TSyntax ``bracketedBinderF)) (pre : Nat → Array Term) (idxed : Bool)
+    (scope : Array (TSyntax ``bracketedBinderF)) (wrap : Nat → Array Term → Array Term)
+    (idxed : Bool)
     (Ixp : Term) (pack : Array Term → CommandElabM Term) (ty : Term) : CommandElabM Kind := do
   let names := tNames.push blk
-  if let some idx := recOcc tNames blk pre params ty then return .pos idx
+  if let some idx := recOcc tNames blk wrap params ty then return .pos idx
   let rec go (t : Term) (acc : Array (Ident × Term)) : CommandElabM (Option Kind) := do
     match t with
     | `($b:bracketedBinder → $cod) =>
@@ -453,7 +497,7 @@ private partial def classify (tNames : Array Name) (blk : Name) (params : Array 
       go cod (acc ++ ids.map (·, dom))
     | `($dom → $cod) =>
       go cod (acc.push (← freshId s!"y{Nat.toSubscriptString (acc.size + 1)}", dom))
-    | _ => return (recOcc tNames blk pre params t).map fun idx => .fn acc idx
+    | _ => return (recOcc tNames blk wrap params t).map fun idx => .fn acc idx
   if let some k ← go ty #[] then
     if let .fn tele _ := k then
       for (_, dom) in tele do
@@ -461,7 +505,7 @@ private partial def classify (tNames : Array Name) (blk : Name) (params : Array 
           throwErrorAt dom "the types being defined may not occur in the domain of a function"
     return k
   unless mentionsAny ty.raw names do return .data
-  let tree ← occTreeOf (recOcc tNames blk pre params) names scope ty
+  let tree ← occTreeOf (recOcc tNames blk wrap params) names scope ty
   let o ← occTermOf idxed Ixp pack tree
   let (Sh, Pos, pidx?) ← occShapes scope o idxed
   return .occ { tree, o, Sh, Pos, indexed := idxed, pidx := pidx?.getD Pos }
@@ -497,8 +541,13 @@ structure Ctx where
   tName : Name
   /-- The user-facing types: `#[T]`, or the types of the block, in order. -/
   types : Array Ident
-  /-- In a mutual block, the enumeration of the types, which is the first index of the block. -/
-  which : Option Ident
+  /-- In a mutual block, the constructors `@Blk.Ix.Tₘ params` of the index of the block, one per
+  type. Empty outside mutual blocks. -/
+  ixCtors : Array Term
+  /-- The user's index binders of every type, and fresh names for a second copy of them. Outside
+  mutual blocks, `#[idx]` and `#[jIds]`. -/
+  uidx : Array (Array (Ident × Term))
+  ujIds : Array (Array Ident)
   pids : Array Ident
   pExp : Array (TSyntax ``bracketedBinderF)
   pImp : Array (TSyntax ``bracketedBinderF)
@@ -632,20 +681,15 @@ def tName' (c : CtorInfo) (pre post : String) : Ident :=
   mkIdent (ctx.tyName c.owner ++ Name.mkSimple (pre ++ c.name.getId.toString ++ post))
 def nF (s : String) : Ident := mkIdent (.str (genName ctx.tName "F") s)
 
-def isMutual : Bool := ctx.which.isSome
+def isMutual : Bool := !ctx.ixCtors.isEmpty
 
 /-- `T.s`, for the family being defined. -/
 def nm (s : String) : Ident := mkIdent (genName ctx.tName s)
 
-/-- The number of leading indices that are not the user's: one in a mutual block. -/
-def off : Nat := if ctx.isMutual then 1 else 0
-
-/-- The constructor of `Which` for the `m`-th type. -/
-def whichCtor (m : Nat) : Term :=
-  idT (mkIdent (ctx.which.get!.getId ++ Name.mkSimple (ctx.tyName m).getString!))
-
-/-- The block index of the `m`-th type: its constructor of `Which`, or nothing. -/
-def pre (m : Nat) : Array Term := if ctx.isMutual then #[ctx.whichCtor m] else #[]
+/-- The index arguments of the block for the `m`-th type at the user's arguments `args`: the
+constructor of `Blk.Ix` applied to them, or `args` outside mutual blocks. -/
+def wrapIdx (m : Nat) (args : Array Term) : Array Term :=
+  if ctx.isMutual then #[Syntax.mkApp ctx.ixCtors[m]! args] else args
 
 /-- A declaration of the generic signature theory. -/
 def sigId (_ : Ctx) (n : Name) : Ident := mkIdent (`Codata.Signature ++ n)
@@ -771,7 +815,9 @@ def pHoles : CommandElabM (Array Term) := ctx.pids.mapM fun _ => `(_)
 binder. In a `match` whose discriminant has the index binders as indices, the pattern variable
 `x` is eliminated in favour of the index binder, so right-hand sides refer to the latter. -/
 def bareIdx (c : CtorInfo) (x : Name) : Option Ident :=
-  (c.idx.findIdx? fun t => t.raw.isIdent && t.raw.getId == x).map fun m => ctx.iIds[m]!
+  if c.allDataIds.any (·.getId == x) then
+    (c.idx.findIdx? fun t => t.raw.isIdent && t.raw.getId == x).map fun m => ctx.iIds[m]!
+  else none
 
 /-- Substitute the binders that are indices by the index binders. -/
 def substBare (c : CtorInfo) (t : Term) : Term := ⟨substIds t.raw (ctx.bareIdx c)⟩
@@ -809,51 +855,50 @@ def alt (c : CtorInfo) (pats : Array Term) (rhs : Term) : CommandElabM (TSyntax 
   let pats := (← ctx.idxPats c) ++ pats
   `(matchAltExpr| | $[$pats:term],* => $rhs:term)
 
-/-! The user's indices, without the block index: what the per-type declarations of a mutual
-block (the types, `casesOn`, the aliases) are stated with. Outside mutual blocks these coincide
-with the helpers above. -/
+/-! The user's indices, type by type: what the per-type declarations of a mutual block (the
+types, `casesOn`, the aliases) are stated with. Outside mutual blocks these coincide with the
+helpers above. -/
 
-/-- The number of the user's indices. -/
-def uk : Nat := ctx.k - ctx.off
+def uIArgs (m : Nat) : Array Term := ctx.uidx[m]!.map (idT ·.1)
+def uJArgs (m : Nat) : Array Term := ctx.ujIds[m]!.map idT
 
-def uIdxed : Bool := ctx.uk > 0
+/-- Does the `m`-th type have indices? -/
+def uIdxed (m : Nat) : Bool := !ctx.uidx[m]!.isEmpty
 
-def uIArgs : Array Term := ctx.iArgs.extract ctx.off ctx.k
-def uJArgs : Array Term := ctx.jArgs.extract ctx.off ctx.k
+/-- The index binders of the `m`-th type, named `names`. -/
+def uIxBindersWith (m : Nat) (names : Array Ident) (implicit : Bool) :
+    CommandElabM (Array (TSyntax ``bracketedBinderF)) := do
+  let tele := ctx.uidx[m]!
+  let rename (t : Term) : Term :=
+    ⟨substIds t.raw fun n => (tele.findIdx? (·.1.getId == n)).map fun i => names[i]!⟩
+  (Array.range tele.size).mapM fun i => mkBinder implicit #[names[i]!] (rename tele[i]!.2)
 
-/-- The user's index binders, named as in `names` (which names all indices). -/
-def uIxBindersWith (names : Array Ident) (implicit : Bool) :
-    CommandElabM (Array (TSyntax ``bracketedBinderF)) :=
-  (Array.range ctx.k).filterMapM fun m => do
-    if m < ctx.off then return none
-    return some (← mkBinder implicit #[names[m]!] (ctx.renameTo names ctx.idx[m]!.2))
-
-def uIxB : CommandElabM (Array (TSyntax ``bracketedBinderF)) := ctx.uIxBindersWith ctx.iIds true
-def uIxBExp : CommandElabM (Array (TSyntax ``bracketedBinderF)) := ctx.uIxBindersWith ctx.iIds false
-def uJB : CommandElabM (Array (TSyntax ``bracketedBinderF)) := ctx.uIxBindersWith ctx.jIds false
-
-/-- The user's index arguments of a constructor's result type. -/
-def uIdxOf (c : CtorInfo) : Array Term := c.idx.extract ctx.off c.idx.size
+def uIxB (m : Nat) : CommandElabM (Array (TSyntax ``bracketedBinderF)) :=
+  ctx.uIxBindersWith m (ctx.uidx[m]!.map (·.1)) true
+def uIxBExp (m : Nat) : CommandElabM (Array (TSyntax ``bracketedBinderF)) :=
+  ctx.uIxBindersWith m (ctx.uidx[m]!.map (·.1)) false
+def uJB (m : Nat) : CommandElabM (Array (TSyntax ``bracketedBinderF)) :=
+  ctx.uIxBindersWith m ctx.ujIds[m]! false
 
 /-- The `m`-th user-facing type applied to the parameters. -/
 def tyP (m : Nat) : CommandElabM Term :=
   if ctx.isMutual then mkAppT ctx.types[m]! ctx.pTerms else pure ctx.Tp
 
 /-- `Tₘ params i…`, at the user's index binders. -/
-def tyAtU (m : Nat) : CommandElabM Term := do appT (← ctx.tyP m) ctx.uIArgs
+def tyAtU (m : Nat) : CommandElabM Term := do appT (← ctx.tyP m) (ctx.uIArgs m)
 
 /-- The user-facing type of a constructor's result, `Tₘ params idx…`. -/
-def tyAt (c : CtorInfo) : CommandElabM Term := do appT (← ctx.tyP c.owner) (ctx.uIdxOf c)
+def tyAt (c : CtorInfo) : CommandElabM Term := do appT (← ctx.tyP c.owner) c.uidx
 
-/-- The full index arguments of the `m`-th type at the user's index binders: its block index,
-then the user's binders. -/
-def fullArgs (m : Nat) : Array Term := ctx.pre m ++ ctx.uIArgs
+/-- The index arguments of the block for the `m`-th type at the user's index binders. -/
+def fullArgs (m : Nat) : Array Term := ctx.wrapIdx m (ctx.uIArgs m)
 
-/-- The patterns for the user's indices. -/
+/-- The patterns for the user's indices. In a mutual block they are holes: the constructor's
+binders are named in its pattern, and its index is reached through the block's. -/
 def uIdxPats (c : CtorInfo) : CommandElabM (Array Term) :=
-  return (← ctx.idxPats c).extract ctx.off ctx.k
+  if ctx.isMutual then c.uidx.mapM fun _ => `(_) else ctx.idxPats c
 
-def uDiscrs (x : Term) : Array Term := ctx.uIArgs.push x
+def uDiscrs (m : Nat) (x : Term) : Array Term := (ctx.uIArgs m).push x
 
 def uAlt (c : CtorInfo) (pats : Array Term) (rhs : Term) : CommandElabM (TSyntax ``matchAlt) := do
   let pats := (← ctx.uIdxPats c) ++ pats
@@ -999,50 +1044,61 @@ partial def readSort (t : Term) : CommandElabM (Array (Ident × Term)) := do
     return #[(← freshId s!"i{Nat.toSubscriptString (rest.size + 1)}", dom)] ++ rest
   | _ => return #[]
 
+/-- The index telescope of a declared sort, if any, with fresh names numbered from the front
+(`readSort` numbers from the back). -/
+def readIdx (sortStx : Option Term) : CommandElabM (Array (Ident × Term)) := do
+  let idx0 ← match sortStx with
+    | none => pure #[]
+    | some sort => readSort sort
+  idx0.mapIdxM fun m (x, ty) => do
+    if x.getId.hasMacroScopes then return (← freshId s!"i{Nat.toSubscriptString (m + 1)}", ty)
+    else return (x, ty)
+
 /-- Analyse a declaration, or the declarations of a mutual block, and name everything: shared by
 `codata` and `data`. `T` is the family being defined (the type, or the block `T₁_T₂`), `decls`
-the types with their constructors, `which` the enumeration of the types of a mutual block, which
-becomes the first index. -/
+the types with their declared sorts and constructors. In a mutual block, `ix` is the index of the
+block `Blk.Ix`, which has a constructor per type and is the only index of the family, and the
+number of leading parameters it takes. -/
 def mkCtx (co : Bool) (T : Ident) (paramsStx : Array (TSyntax ``bracketedBinder))
-    (sortStx : Option Term) (decls : Array (Ident × Array (TSyntax ``codataCtor)))
-    (which : Option Ident) : CommandElabM Ctx := do
+    (decls : Array (Ident × Option Term × Array (TSyntax ``codataCtor)))
+    (ix : Option (Ident × Nat)) : CommandElabM Ctx := do
   let tName := T.getId
   let types := decls.map (·.1)
   let tNames := types.map (·.getId)
+  let uidxs ← decls.mapM fun (_, sort, _) => readIdx sort
   let params ← paramsStx.mapM fun b => do
     let (ids, ty, _) ← readBinder b
     return (ids, ty)
   let pids : Array Ident := params.foldl (fun acc (ids, _) => acc ++ ids) #[]
   let pExp ← params.mapM fun (ids, ty) => `(bracketedBinderF| ($ids* : $ty))
   let pImp ← params.mapM fun (ids, ty) => `(bracketedBinderF| {$ids* : $ty})
-  -- The index telescope, from the declared sort. Unnamed indices get fresh names numbered from
-  -- the front; `readSort` numbers from the back, so renumber.
-  let idx0 ← match sortStx with
-    | none => pure #[]
-    | some sort => readSort sort
-  let uidx ← idx0.mapIdxM fun m (x, ty) => do
-    if x.getId.hasMacroScopes then return (← freshId s!"i{Nat.toSubscriptString (m + 1)}", ty)
-    else return (x, ty)
-  let rawCtors ← decls.mapM fun (_, cs) => cs.mapM fun c => do
+  let rawCtors ← decls.mapM fun (_, _, cs) => cs.mapM fun c => do
     let `(codataCtor| | $name:ident $bs:bracketedBinder* $[: $resTy]?) := c
       | throwUnsupportedSyntax
     let raw ← bs.mapM readBinder
     return (name, raw, resTy, c)
   -- Names the user may refer to: plain unless the declaration uses them.
-  let used : Array Name := pids.map (·.getId) ++ uidx.map (·.1.getId) ++
+  let used : Array Name := pids.map (·.getId) ++
+    uidxs.foldl (fun acc tele => acc ++ tele.map (·.1.getId)) #[] ++
     rawCtors.foldl (fun acc cs => cs.foldl (fun acc (name, raw, _, _) =>
       acc.push name.getId ++ raw.foldl (fun acc (ids, _, _) => acc ++ ids.map (·.getId)) #[]) acc) #[]
   let plainOr (n : Name) (hyg : Ident) : Ident := if used.contains n then hyg else mkIdent n
   let motiveId := plainOr `motive ⟨(← `(motive)).raw⟩
   let Sid := plainOr `S ⟨(← `(S)).raw⟩
   let mId := plainOr `m ⟨(← `(m)).raw⟩
-  -- In a mutual block, the enumeration of the types is the first index, and every index list
-  -- starts with the type's constructor.
-  let idx := (match which with | some W => #[(mId, idT W)] | none => #[]) ++ uidx
+  -- In a mutual block, `Blk.Ix` is the only index, and the indices of a type are the arguments
+  -- of its constructor.
+  let (idx, ixCtors) ← match ix with
+    | none => pure (uidxs[0]!, #[])
+    | some (Ix, nPs) =>
+      let ixPs := (pids.extract 0 nPs).map idT
+      let ixCtors ← tNames.mapM fun t => do
+        let c := mkIdent (Ix.getId ++ Name.mkSimple t.getString!)
+        return Syntax.mkApp (← `(@$c:ident)) ixPs
+      pure (#[(mId, ← mkAppT Ix ixPs)], ixCtors)
   let nIdx := idx.size
-  let pre (m : Nat) : Array Term := match which with
-    | some W => #[idT (mkIdent (W.getId ++ Name.mkSimple tNames[m]!.getString!))]
-    | none => #[]
+  let wrap (m : Nat) (args : Array Term) : Array Term :=
+    if ix.isSome then #[Syntax.mkApp ixCtors[m]! args] else args
   -- Constructor names shared by several types of the block are qualified in `F`, `Shape`, `B`.
   let allNames := rawCtors.map fun cs => cs.map (·.1.getId)
   let clashes (n : Name) : Bool := (allNames.filter (·.contains n)).size ≥ 2
@@ -1060,7 +1116,8 @@ def mkCtx (co : Bool) (T : Ident) (paramsStx : Array (TSyntax ``bracketedBinder)
       -- (the structure of a nested argument may mention them).
       let mut scope := pExp
       for (ids, ty, implicit) in raw do
-        let kind ← classify tNames tName pids scope pre (nIdx > 0) IxpB pack ty
+        if ix.isSome then checkArity tNames pids (uidxs[·]!.size) ty
+        let kind ← classify tNames tName pids scope wrap (nIdx > 0) IxpB pack ty
         if kind.isData then scope := scope.push (← mkBinder implicit ids ty)
         groups := groups.push { ids, ty, kind, implicit }
       for g in groups do
@@ -1068,28 +1125,31 @@ def mkCtx (co : Bool) (T : Ident) (paramsStx : Array (TSyntax ``bracketedBinder)
           throwErrorAt g.ty "implicit binders must not be recursive"
         unless g.kind.isData || g.kind.isOcc || g.kind.idx.size == nIdx do
           throwErrorAt g.ty "recursive argument with the wrong number of indices"
-      let cidx ← match resTy with
+      let uidx ← match resTy with
         | none =>
-          if uidx.size > 0 then throwErrorAt c "the constructor needs a result type"
-          else pure (pre m)
+          if uidxs[m]!.size > 0 then throwErrorAt c "the constructor needs a result type"
+          else pure #[]
         | some r =>
           match recIdx tNames pids r with
           | some (m', cidx) =>
             unless m' == m do throwErrorAt r "the result type must be the type being declared"
-            if cidx.size == uidx.size then pure (pre m ++ cidx)
+            if cidx.size == uidxs[m]!.size then pure cidx
             else throwErrorAt r "result type with the wrong number of indices"
           | none => throwErrorAt r "the result type must be the declared type applied to its parameters"
       let fname := if clashes name.getId then
           mkIdent (Name.mkSimple (tNames[m]!.getString! ++ "_" ++ name.getId.toString))
         else name
-      ctors := ctors.push { name, groups, idx := cidx, owner := m, fname }
+      ctors := ctors.push { name, groups, idx := wrap m uidx, uidx, owner := m, fname }
   let nF (s : String) : Ident := mkIdent (.str (genName tName "F") s)
   let pTerms := pids.map idT
   let jIds ← idx.mapIdxM fun m _ => freshId s!"j{Nat.toSubscriptString (m + 1)}"
+  let ujIds ← if ix.isSome then
+      uidxs.mapM fun tele => tele.mapIdxM fun m _ => freshId s!"j{Nat.toSubscriptString (m + 1)}"
+    else pure #[jIds]
   let Ixp ← if nIdx ≥ 2 then mkAppT (n "Ix") pTerms
     else if nIdx == 1 then pure idx[0]!.2 else `(Unit)
   return {
-    co, T, tName, types, which, pids, pExp, pImp, pTerms
+    co, T, tName, types, ixCtors, uidx := uidxs, ujIds, pids, pExp, pImp, pTerms
     ctors, idx, jIds, Ixp, motiveId, Sid
     Ix := n "Ix", idxId := n "idx", F := n "F", Shape := n "Shape", ShapeP := n "ShapeP"
     B := n "B", sig := n "sig"

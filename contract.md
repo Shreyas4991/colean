@@ -134,8 +134,34 @@ the intended one (`Occ.map_ofIso`): `List.map` on lists (`Occ.map_list`), and co
 pairs and the other built-in forms (`Occ.map_prod`, …). For a functor on families the classes
 are `IPolyIso` and `IPolyMap`, with `G X ≃ Σ sh, (q : Pos sh) → X (pidx sh q)`.
 
-Declaring a type provides no such instances. A later declaration nests through a declared type
-once the user has given them (`ColeanTest/OccNest.lean`).
+A declared type gets these instances when it can, in a separate step after its declaration
+(`Cmd/Derive.lean`): for `fun X => T (H₁ X) … (Hₙ X)` over the parameters that may vary, with the
+`Hᵢ` themselves instances, so that one instance covers every use, constants and the identity
+being instances too. If that step fails, it logs a warning and leaves no trace: the type is
+declared as usual and can still be given instances by hand. The step works from the contract:
+a value is a tree of shapes with the contents of its slots (`Model/Poly.lean`), and the map on
+the parameter is the structural one (`PolyFix.d_map`). For now it covers a single type without
+indices.
+
+
+# Mutual blocks
+
+```
+mutual
+data Even : Nat → Type
+  | zero : Even 0
+  | succ {n : Nat} (o : Odd n) : Even (n + 1)
+data Odd : Nat → Type
+  | succ {n : Nat} (e : Even n) : Odd (n + 1)
+end
+```
+
+A block of `data` declarations, or of `codata` declarations, is one family `Even_Odd` over the
+inductive `Even_Odd.Ix`, with a constructor per type whose arguments are the indices of that type
+(`Ix.Even n`, `Ix.Odd n`), so the contract is the one of indexed families, over `I = Ix`. The types
+are `Even n := Even_Odd (.Even n)`. All types of a block have the same parameters, on which `Ix`
+may depend. Their indices may differ, and a type may have none. As for any family, the family
+lives in a universe at least that of `Ix`, so the largest index of the block counts for every type.
 
 
 # Mixed blocks
@@ -159,7 +185,7 @@ is one uniform block with the contract above; runs `R₁ ⊃ R₂ ⊃ … ⊃ R�
 
 1. A run is declared with one extra parameter for the run outside it that it mentions, the
    family `X` (a type `X : Type u_<R>` for a run of one type without indices, a family
-   `X : J → Type u_<R>` over the run's packed index `(m : Which) ×' idx` otherwise), every
+   `X : J → Type u_<R>` over the run's index, `Blk.Ix` for several types, otherwise), every
    occurrence of a type of that run replaced by `X` (at its packed index) and every occurrence
    of its own types applied to `X`.
 2. Every occurrence of a type `E` of the run inside it is `E params (Rᵢ params X)` (or
@@ -176,8 +202,7 @@ the outer runs as opaque parameters; an inner induction inside a coinductive ste
 in the outer relation; a coinduction inside an inductive step is a closed statement about the
 outer type. This nesting needs instances for the inner runs, which are not generated yet, so
 blocks in which an outer run mentions an inner one are not available at the moment. All
-declarations of a block have the same parameters, the declarations of a run
-the same indices; the universe of a family parameter is a `universe` variable declared in
+declarations of a block have the same parameters; the universe of a family parameter is a `universe` variable declared in
 scope. Any number of runs, in any order; a declaration may mention any run inside its own (an
 occurrence of a type of a run further inside is applied to the chain of families down to the
 declaration's own run, `Trace α (Menu α (Proc α))`, a nested occurrence through the composite of

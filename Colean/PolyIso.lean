@@ -39,8 +39,8 @@ pairs, which the command handles itself. Named type constructors take the occurr
 argument. `IPolyIso` and `IPolyMap` are the same classes for functors on families
 `(J → Type u) → Type v`, where every position says at which index its child lives.
 
-Instances are never generated: a type declared by `codata` or `data` can be nested through once
-it is given these instances.
+A type declared by `codata` or `data` gets these instances when it can (`Cmd/Derive.lean`):
+in the arguments that may vary, for the functors `fun X => T (H X)` with `H` itself an instance.
 -/
 
 universe u u' v v' s p j
@@ -95,6 +95,26 @@ class IPolyMap {J : Type j} (G : (J → Type u) → Type v) (G' : (J → Type u'
   map {X : J → Type u} {Y : J → Type u'} : (∀ j, X j → Y j) → G X → G' Y
   equiv_map {X : J → Type u} {Y : J → Type u'} (f : ∀ j, X j → Y j) (x : G X) :
     hG'.equiv (map f x) = IPoly.map f (hG.equiv x)
+
+/-! ### The identity and constants
+
+What the instances of a functor with several arguments compose with: `Pair Nat X` is `Pair` at
+a constant and the identity. -/
+
+instance : PolyIso (fun X : Type u => X) Unit (fun _ => Unit) :=
+  ⟨⟨fun x => ⟨(), fun _ => x⟩, fun z => z.2 (), fun _ => rfl, fun _ => rfl⟩⟩
+
+instance : PolyMap (fun X : Type u => X) (fun X : Type u' => X) where
+  map f x := f x
+  equiv_map _ _ := rfl
+
+instance (A : Type v) : PolyIso (fun _ : Type u => A) A (fun _ => Empty) :=
+  ⟨⟨fun a => ⟨a, fun q => q.elim⟩, fun z => z.1, fun _ => rfl,
+    fun z => congrArg (Sigma.mk z.1) (funext fun q => q.elim)⟩⟩
+
+instance (A : Type v) : PolyMap (fun _ : Type u => A) (fun _ : Type u' => A) where
+  map _ a := a
+  equiv_map _ a := congrArg (Sigma.mk a) (funext fun q => q.elim)
 
 /-! ### `List`, `Option`, `Array` -/
 

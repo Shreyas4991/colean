@@ -16,7 +16,7 @@ codata Forest (α : Type u)
   | cons (t : Tree α) (f : Forest α)
 end
 
-#check @Tree_Forest.Which
+#check @Tree_Forest.Ix
 #check @Tree_Forest.F.cons
 #check @Tree.node
 #check @Forest.cons
