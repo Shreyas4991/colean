@@ -10,7 +10,8 @@ dependencies, all inside one `TermElabM` run (`runTermElabM`, for the section va
 functor (step 1), for `codata` the lifting `T.F.Rel` (step 4, needed by the model), the
 signature, the isomorphism and the contract (step 2), in a block the types `Tₘ`, the framework
 (step 3), the constructors and `casesOn` (step 4), for `data` the recursor (step 2b, stated with
-the constructors) and the computation rules, and in a block the aliases. Each declaration is
+the constructors) and the computation rules, and in a block the recursors per type (`data`) and
+the aliases. Each declaration is
 checked by the kernel as it is added, so a failure stops the command there, and the state is
 restored: a failed command declares nothing. Each step has its own heartbeat budget. Then,
 separately, the derived instances (step 5, `Gen/Derive.lean`), whose failure is only a warning.
@@ -46,6 +47,7 @@ def elabDecls (decls : Array DeclStx) (ref : Syntax) : CommandElabM Unit :=
     else
       step ctx.genRec
       step ctx.genRecLemmas
+      step ctx.genTypeRecs
       step ctx.genDataAliases
     ctx.addDeclInfo
     -- A separate step, after the type is complete: it cannot fail the declaration.

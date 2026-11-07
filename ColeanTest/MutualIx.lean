@@ -93,6 +93,28 @@ data Other : Nat → Type
   | mk {n : Nat} (a : Own) (l : List (Other n)) (p : Other n × Nat) : Other (n + 1)
 end
 
+/-- The recursors per type, with nested arguments: the hypothesis of the list of `Other n` is at
+`motive_2 n` for every position; that of the pair keeps the block's index of its position, whose
+type the recursor cannot read off. -/
+theorem Other.index {n : Nat} (o : Other n) : n = 0 ∨ 0 < n := by
+  induction o using Other.rec (motive_1 := fun _ => True) with
+  | nil => trivial
+  | Own_mk p ih => trivial
+  | pr p ih => trivial
+  | stop => simp
+  | Other_mk a l p iha ihl ihp => simp
+
+/-- The length of the list of an `Own.mk`, by the recursor of `Own`, computed by its rules. -/
+def Own.width (o : Own) : Nat :=
+  Own.rec (motive_2 := fun _ _ => Nat) 0 (fun p _ => p.length) (fun _ _ => 0) 0
+    (fun _ _ _ _ _ _ => 0) o
+
+example : (Own.mk [.nil, .mk []]).width = 2 := by
+  simp [Own.width]
+
+example (p : List Own) : (Own.mk p).width = p.length := by
+  rw [Own.width, Own.rec_mk]
+
 mutual
 codata OwnCo
   | mk (p : OwnCo' × OwnCo)

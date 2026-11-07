@@ -69,29 +69,40 @@ def withNestPos (n : Nest) (σ : Expr → Expr) (t : Expr)
     k q idx
 
 /-- The induction hypotheses of a constructor `c` with arguments `ys` (as those of `T.c`), for
-the motive `motive`: one per recursive argument, `x_ih`. -/
-def recIHs (motive : Expr) (c : Ctor) (ys : Array Expr) (σ : Expr → Expr) :
-    TermElabM (Array (Name × Expr)) := do
+the motive given by `app idx x`, the motive at the family-level index arguments `idx` and `x`: one
+per recursive argument, `x_ih`. -/
+def recIHsWith (app : Array Expr → Expr → TermElabM Expr) (c : Ctor) (ys : Array Expr)
+    (σ : Expr → Expr) : TermElabM (Array (Name × Expr)) := do
   let L ← ctx.tLvl
   (c.args.zip ys).filterMapM fun (a, y) => do
     if a.kind.isData then return none
     let ty ← match a.kind with
       | .data => unreachable!
-      | .plain idx => pure (mkAppN motive (idx.map σ |>.push y))
+      | .plain idx => app (idx.map σ) y
       | .fn n => ctx.openTFn n (← inferType y) fun zs idx => do
-        mkForallFVars zs (mkAppN motive (idx.push (mkAppN y zs)))
+        mkForallFVars zs (← app idx (mkAppN y zs))
       | .nest n =>
         let t ← ctx.nestToC (ctx.nestAt n L σ) y
         ctx.withNestPos n σ t fun q idx => do
-          mkForallFVars #[q] (mkAppN motive (idx.push (mkApp (← mkAppM ``Sigma.snd #[t]) q)))
+          mkForallFVars #[q] (← app idx (mkApp (← mkAppM ``Sigma.snd #[t]) q))
     return some (a.name.appendAfter "_ih", ty)
 
-/-- The minor premise of `T.rec` for `c`: `∀ args ihs, motive idx (T.c args)`. -/
-def recMinorTy (motive : Expr) (c : Ctor) : TermElabM Expr := do
+/-- The induction hypotheses of `c` for the motive `motive` (`recIHsWith`). -/
+def recIHs (motive : Expr) (c : Ctor) (ys : Array Expr) (σ : Expr → Expr) :
+    TermElabM (Array (Name × Expr)) :=
+  ctx.recIHsWith (fun idx x => pure (mkAppN motive (idx.push x))) c ys σ
+
+/-- The minor premise for `c` of a recursor whose motive is given by `app` (`recIHsWith`):
+`∀ args ihs, motive idx (T.c args)`. -/
+def recMinorTyWith (app : Array Expr → Expr → TermElabM Expr) (c : Ctor) : TermElabM Expr := do
   ctx.withTArgs c fun ys σ => do
-  let ihs ← ctx.recIHs motive c ys σ
+  let ihs ← ctx.recIHsWith app c ys σ
   withLocalDeclsDND ihs fun ihs => do
-    mkForallFVars (ys ++ ihs) (mkAppN motive (c.idx.map σ |>.push (← ctx.tCtorApp c ys)))
+    mkForallFVars (ys ++ ihs) (← app (c.idx.map σ) (← ctx.tCtorApp c ys))
+
+/-- The minor premise of `T.rec` for `c`: `∀ args ihs, motive idx (T.c args)`. -/
+def recMinorTy (motive : Expr) (c : Ctor) : TermElabM Expr :=
+  ctx.recMinorTyWith (fun idx x => pure (mkAppN motive (idx.push x))) c
 
 /-- Run `k` on local variables for the minor premises `mk c` of the constructors `cs` (all by
 default), named after them (`names c`). -/
@@ -111,14 +122,16 @@ def withMotive (v : Level) (k : Expr → TermElabM α) : TermElabM α := do
     withLocalDeclD `t (← ctx.tAt js) fun t => do mkForallFVars (js.push t) (mkSort v)
   withLocalDecl (← ctx.userName `motive) .implicit mTy k
 
-/-- Run `k` on the motive `{motive : ∀ j₁ j₂, Tₘ params j₁ j₂ → Sort v}` of the `m`-th type. -/
-def withTypeMotive (m : Nat) (v : Level) (k : Expr → TermElabM α) : TermElabM α := do
+/-- Run `k` on the motive `{motive : ∀ j₁ j₂, Tₘ params j₁ j₂ → Sort v}` of the `m`-th type,
+named `name`. -/
+def withTypeMotive (m : Nat) (v : Level) (k : Expr → TermElabM α) (name : Name := `motive) :
+    TermElabM α := do
   let idx := ctx.types[m]!.idx
   let names := (Array.range idx.size).map fun i =>
     Name.mkSimple s!"j{Nat.toSubscriptString (i + 1)}"
   let mTy ← withCopies idx names .default fun js => do
     withLocalDeclD `t (← ctx.tyAt m js) fun t => do mkForallFVars (js.push t) (mkSort v)
-  withLocalDecl (← ctx.userName `motive) .implicit mTy k
+  withLocalDecl (← ctx.userName name) .implicit mTy k
 
 /-- `∀ b, motive (σ.idx b) ((toC y).child b)`: the induction hypotheses of `T.recAux` at `y`,
 indexed by the positions of `toC y`. -/

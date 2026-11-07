@@ -73,6 +73,27 @@ theorem lenLe {α : Type u} (m : Rose_Forest.Ix α) (x : Rose_Forest α m) : Len
 
 theorem Forest.length_le_size {α : Type u} (f : Forest α) : f.length ≤ f.size := lenLe .Forest f
 
+/-! The recursors per type. -/
+
+#check @Rose.rec
+#check @Forest.rec
+#check @Rose_Forest.rec_cons
+
+/-- Induction per type: the motive of `Forest` is given, that of `Rose` comes from the goal. -/
+theorem Rose.one_le_size {α : Type u} (t : Rose α) : 1 ≤ t.size := by
+  induction t using Rose.rec (motive_2 := fun f => f.length ≤ f.size) with
+  | node a c ih => simp
+  | nil => simp
+  | cons t f iht ihf => simp; omega
+
+/-- The number of trees in a forest, by the recursor of `Forest`. -/
+def Forest.count {α : Type u} (f : Forest α) : Nat :=
+  Forest.rec (motive_1 := fun _ => Nat) (fun _ _ k => k) 0 (fun _ _ _ k => k + 1) f
+
+example {α : Type u} (a b : α) :
+    (Forest.cons (.node a .nil) (.cons (.node b .nil) .nil)).count = 2 := by
+  simp [Forest.count]
+
 /-- Case analysis per type. -/
 theorem Rose.size_pos {α : Type u} (t : Rose α) : 0 < t.size := by
   cases t with

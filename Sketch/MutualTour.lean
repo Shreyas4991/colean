@@ -8,8 +8,8 @@ same parameters. It is one family over an inductive `Ix`, with a constructor per
 arguments are the indices of that type, so nothing new is involved: `Even`/`Odd` is one `data`
 with one index.
 
-Read it top to bottom. Part I (sections 1 to 6) is what works, Part II (section 7) what
-does not work yet but could, and Part III (section 8) what looks like a bug. Blocks that mix
+Read it top to bottom. Part I (sections 1 to 7) is what works, Part II what does not work yet
+but could (nothing at present), and Part III (section 8) what looks like a bug. Blocks that mix
 `data` and `codata` (`mixed_mutual`) were removed pending a redesign, and their part with them.
 
 Nesting is left out on purpose. Fields here are plain members, constants or functions into
@@ -57,13 +57,16 @@ end
 #check @Even_Odd.fold
 #check @Even_Odd.fold_ctor
 #check @Even_Odd.rec
+#check @Even_Odd.rec_Even_succ
 
--- Per type: constructors, case analysis, the fold, the computation rules, disjointness.
+-- Per type: constructors, case analysis, the fold, the recursor, the computation rules,
+-- disjointness.
 #check @Even.zero
 #check @Even.succ
 #check @Odd.succ
 #check @Even.casesOn
 #check @Even.fold
+#check @Even.rec
 #check @Even.fold_succ
 #check @Even.rec_succ
 #check @Even.succ_ne_zero
@@ -108,8 +111,8 @@ def Forest.size {α : Type u} (f : Forest α) : Nat := Forest.fold sizeAlg f
     (Forest.cons t f).size = t.size + f.size := by
   simp [Rose.size, Forest.size, sizeAlg]
 
-/-- Induction is over the block, with a motive over `Ix`. As with Lean's mutual inductives, the
-statement for one type comes by restricting. -/
+/-- Induction over the block, with a motive over `Ix`: the statement for one type comes by
+restricting. Induction per type, with a motive per type, is section 7. -/
 def Pos {α : Type u} : ∀ m, Rose_Forest α m → Prop
   | .Rose, t => 0 < Rose.size t
   | .Forest, _ => True
@@ -593,18 +596,14 @@ end
 
 end CtorName
 
-/-! ## Part II: what does not work yet
-
-Each of these could be lifted. What should stay refused is not listed: the types of a block share
-their parameters, names included, and their universe, as in Lean, an implicit parameter cannot be
-left out at an occurrence, as in Lean, and a `mutual` block is all `data` or all `codata`. -/
-
 /-! ### 7. Recursors per type
 
-`fold` and `corec` have aliases per type, the recursor does not, and `induction` does not reach
-the block from a value of one type: it takes the value apart as the subtype it is, into a `Raw`
-value and a proof, so the alternatives `nil` and `mk` are unknown to it. The way that works is
-section 2. `cases` does work per type. -/
+Each type of a `data` block has its recursor in the shape of Lean's mutual inductives: a motive
+per type (`motive_1`, `motive_2` in block order), the minor premises of every constructor of the
+block, with the block's names for shared ones, and the type's own indices. `induction … using`
+takes it, the other motives given by name. As with Lean, plain `induction` on a value of one type
+does not apply: it takes the value apart as the subtype it is. The rules `Tₘ.rec_cᵢ` are simp
+lemmas; those of the block-level recursor are `Blk.rec_cᵢ`. -/
 
 namespace PerType
 
@@ -617,13 +616,36 @@ data Qa
 end
 
 #check @Pa.rec
+#check @Pa.rec_mk
+#check @Pa_Qa.rec_Pa_mk
 
 example (p : Pa) : True := by
-  induction p with
+  induction p using Pa.rec (motive_2 := fun _ => True) with
   | nil => trivial
-  | mk q ih => trivial
+  | Pa_mk q ih => trivial
+  | Qa_mk p ih => trivial
+
+-- With indices: parity as in section 4, without a motive over the block.
+example {n : Nat} (e : Indexed.Even n) : n % 2 = 0 := by
+  induction e using Indexed.Even.rec (motive_2 := fun n _ => n % 2 = 1) with
+  | zero => rfl
+  | Even_succ o ih => omega
+  | Odd_succ e ih => omega
+
+-- A function by the recursor of one type, computed by the rules.
+def Pa.depth (p : Pa) : Nat :=
+  Pa.rec (motive_2 := fun _ => Nat) 0 (fun _ k => k + 1) (fun _ k => k + 1) p
+
+example : (Pa.mk (.mk .nil)).depth = 2 := by simp [Pa.depth]
 
 end PerType
+
+/-! ## Part II: what does not work yet
+
+Nothing at present: the last item, recursors per type, is section 7. What should stay refused is
+not listed: the types of a block share their parameters, names included, and their universe, as
+in Lean, an implicit parameter cannot be left out at an occurrence, as in Lean, and a `mutual`
+block is all `data` or all `codata`. -/
 
 /-! ## Part III: what looks like a bug
 

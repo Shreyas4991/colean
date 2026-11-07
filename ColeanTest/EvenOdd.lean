@@ -50,6 +50,34 @@ def Even.ofNat : ∀ n, Even (2 * n)
 
 example : (Even.ofNat 2).even = rfl := rfl
 
+/-! The recursors per type, in the shape of Lean's mutual inductives: a motive per type, the
+minor premises of the block with their block-level names, the type's own indices. -/
+
+#check @Even.rec
+#check @Odd.rec
+#check @Even.rec_succ
+#check @Odd.rec_succ
+#check @Even_Odd.rec_Even_succ
+
+/-- Parity again, by induction per type: the motive of `Odd` is given, that of `Even` comes from
+the goal. -/
+theorem Even.even' {n : Nat} (e : Even n) : n % 2 = 0 := by
+  induction e using Even.rec (motive_2 := fun n _ => n % 2 = 1) with
+  | zero => rfl
+  | Even_succ o ih => omega
+  | Odd_succ e ih => omega
+
+/-- A function by the recursor of `Even`, computed by the rules per type. -/
+def Even.toNat {n : Nat} (e : Even n) : Nat :=
+  Even.rec (motive_2 := fun _ _ => Nat) 0 (fun _ k => k + 1) (fun _ k => k + 1) e
+
+example : (Even.succ (Odd.succ Even.zero)).toNat = 2 := by
+  simp [Even.toNat]
+
+example {n : Nat} (o : Odd n) : (Even.succ o).toNat =
+    Odd.rec (motive_1 := fun _ _ => Nat) 0 (fun _ k => k + 1) (fun _ k => k + 1) o + 1 := by
+  rw [Even.toNat, Even.rec_succ]
+
 end
 
 end DataTest

@@ -10,7 +10,7 @@ file of theory and one generator file.
 | 2. Model | `T.F` | `T.contract : Contract T F` (a signature, an isomorphism `F X ≃ σ.Obj X`, the fixpoint on `Raw`) | the isomorphism's laws by tactic; the rest instantiated |
 | 2b. Model extras | the model | polymorphic `fold`/`corec`, `T.rec` | instantiated |
 | 3. Framework | `T.contract` only | `ctor`, `dtor_ctor`, `ctor_dtor`, `ctor_injective`, `corec_eq`, `corec_unique` and the data duals | none: instantiation of generic theorems |
-| 4. Surface | the constructor list and steps 2–3 | `T.cᵢ` with their lemmas, `casesOn`, `rec_cᵢ`, `fold_cᵢ`, the characterisation `T.F.Rel`, the types and aliases of a block | term assembly |
+| 4. Surface | the constructor list and steps 2–3 | `T.cᵢ` with their lemmas, `casesOn`, `rec_cᵢ`, `fold_cᵢ`, the characterisation `T.F.Rel`, the types, aliases and per-type recursors of a block | term assembly |
 | 5. Instances | a declared type | `PolyIso`/`PolyMap` instances for it (`T.Poly.*`) | the layer's laws by tactic; the fixpoint instantiated |
 
 ## Files
@@ -36,7 +36,7 @@ Generators, on `Expr`, in dependency order. `Syntax.lean` holds the command synt
 - `Gen/Rel.lean`: `T.F.Rel`, `rel_map`, `rel_ofC` (step 4, generated before the model, see below).
 - `Gen/Framework.lean`: step 3.
 - `Gen/Extras.lean`: step 2b (`T.rec`).
-- `Gen/Surface.lean`: step 4 (constructors and their lemmas, `casesOn`, `rec_cᵢ`, `fold_cᵢ`; in a block, the types `Tₘ` and the aliases).
+- `Gen/Surface.lean`: step 4 (constructors and their lemmas, `casesOn`, `rec_cᵢ`, `fold_cᵢ`; in a block, the types `Tₘ`, the aliases and, for `data`, the recursors `Tₘ.rec` per type).
 - `Gen/Derive.lean`: step 5, separate from the pipeline (see below).
 - `Gen/Command.lean`: the pipeline. `CodataCmd.lean`, `DataCmd.lean`: the commands; `MutualCmd.lean`: `mutual` blocks of them.
 
@@ -90,6 +90,9 @@ declares `Blk.Ix` and gives the family the one index `m : Blk.Ix params`; an occ
 type with one index. Step 4 adds the types `Tₘ params idx := Blk params (.Tₘ idx)`, and works per
 type: the constructors and their lemmas are stated with the types `Tₘ`, `Tₘ.casesOn` has only the
 constructors of `Tₘ`, and `Tₘ.corec`, `Tₘ.bisim`, `Tₘ.fold` restrict the block-level declarations.
+For `data`, `Tₘ.rec` has a motive per type, as Lean's mutual recursors: it is `Blk.rec` at the
+motive `fun i x => Blk.Ix.casesOn i motive_1 … x`, whose minor premises are the per-type ones by
+unfolding, and its rules `Tₘ.rec_cᵢ` are the block-level rules `Blk.rec_cᵢ` by unfolding.
 
 A block mixing `data` and `codata` is a nested fixpoint, whose order is a choice. The
 `mixed_mutual` command that stated the order is removed, pending a redesign; `mutual` rejects
