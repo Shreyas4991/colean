@@ -113,9 +113,9 @@ Nested occurrences change nothing in the contracts. A constructor argument whose
 `Option (T idx × T idx)`, `(n : ℕ) × (Fin n → T idx)`, …, has an *occurrence structure*: an
 equivalence `G X ≃ Σ sh, Pos sh → X` between the argument type as a function `G` of the
 occurrence and a shape with contents at its positions (`Codata.Occ`, `Codata.IOcc` when the
-positions carry an index of the family). It is built by recursion on the syntax of the type,
-from a constant, the occurrence, products, sums, functions and dependent pairs over constant
-types, and named type constructors. `F` keeps the argument type as a field, `F.map` acts on it
+positions carry an index of the family). It is built by recursion on the elaborated type, from
+a constant, the occurrence, products, sums, functions and dependent pairs over constant types,
+and named type constructors, whatever their spelling. `F` keeps the argument type as a field, `F.map` acts on it
 through the structure, and the canonical `F.Rel` relates nested fields with the same shape and
 related contents (`Occ.Rel`).
 
@@ -135,7 +135,7 @@ pairs and the other built-in forms (`Occ.map_prod`, …). For a functor on famil
 are `IPolyIso` and `IPolyMap`, with `G X ≃ Σ sh, (q : Pos sh) → X (pidx sh q)`.
 
 A declared type gets these instances when it can, in a separate step after its declaration
-(`Cmd/Derive.lean`): for `fun X => T (H₁ X) … (Hₙ X)` over the parameters that may vary, with the
+(`Gen/Derive.lean`): for `fun X => T (H₁ X) … (Hₙ X)` over the parameters that may vary, with the
 `Hᵢ` themselves instances, so that one instance covers every use, constants and the identity
 being instances too. If that step fails, it logs a warning and leaves no trace: the type is
 declared as usual and can still be given instances by hand. The step works from the contract:
@@ -166,47 +166,14 @@ lives in a universe at least that of `Ix`, so the largest index of the block cou
 
 # Mixed blocks
 
-```
-mixed_mutual
-codata Tree (α : Type u)
-  | node (a : α) (children : Forest α)
-data Forest (α : Type u)
-  | nil
-  | cons (t : Tree α) (f : Forest α)
-end
-```
-
 A block with `data` and `codata` declarations is a nested fixpoint, and a cyclic system has
 several nested solutions (the trees outside the forests are the finitely branching infinite
-trees, the forests outside the trees the finite ones), so the block states the order: *the
-textual order is the nesting order, the first declaration outermost*. A `mutual` block may not
-mix the two kinds. A *run* is a maximal sequence of adjacent declarations of the same kind and
-is one uniform block with the contract above; runs `R₁ ⊃ R₂ ⊃ … ⊃ Rₖ` nest as follows.
+trees, the forests outside the trees the finite ones), so such a block would have to state the
+order. A `mutual` block may not mix the two kinds. The `mixed_mutual` command, which nested the
+declarations in the order written, is removed, pending a redesign.
 
-1. A run is declared with one extra parameter for the run outside it that it mentions, the
-   family `X` (a type `X : Type u_<R>` for a run of one type without indices, a family
-   `X : J → Type u_<R>` over the run's index, `Blk.Ix` for several types, otherwise), every
-   occurrence of a type of that run replaced by `X` (at its packed index) and every occurrence
-   of its own types applied to `X`.
-2. Every occurrence of a type `E` of the run inside it is `E params (Rᵢ params X)` (or
-   `E params (fun p => Rᵢ params X p.1 …)`), a nested occurrence through the functor that
-   `E` is in its family parameter.
-3. The outermost run has no extra parameter: its types are closed.
 
-So the user sees the parameterised inner types (`Forest α X`, `Forest.nil : Forest α X`,
-`Forest.fold`, `Forest.rec`) and the closed outer ones (`Tree.node : α → Forest α (Tree α) →
-Tree α`, `Tree.corec`, `Tree.bisim` with `Occ.Rel`/`IOcc.Rel` on the forests). The
-principles compose: coinduction on an outer run sees the inner runs through their relators, one
-finite layer per step (`Forest.rel_cons`, `Occ.rel_map`); induction on an inner run sees
-the outer runs as opaque parameters; an inner induction inside a coinductive step is parametric
-in the outer relation; a coinduction inside an inductive step is a closed statement about the
-outer type. This nesting needs instances for the inner runs, which are not generated yet, so
-blocks in which an outer run mentions an inner one are not available at the moment. All
-declarations of a block have the same parameters; the universe of a family parameter is a `universe` variable declared in
-scope. Any number of runs, in any order; a declaration may mention any run inside its own (an
-occurrence of a type of a run further inside is applied to the chain of families down to the
-declaration's own run, `Trace α (Menu α (Proc α))`, a nested occurrence through the composite of
-the declared structures); for now, among the runs outside its own, only the adjacent one.
+# Recursors
 
 Beyond the contract, the command generates the dependent recursor `T.rec` into any `Sort`, with
 one minor premise per constructor carrying an induction hypothesis for each recursive argument.

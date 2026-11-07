@@ -1,10 +1,10 @@
-import Colean.Cmd.Functor
-import Colean.Cmd.Derive
+import Colean.Gen.Command
 
 /-!
 # The `codata` command
 
-Current scope: parameters, a single type or a mutual block, any number of indices. Constructor
+Current scope: parameters, a single type or a mutual block (`MutualCmd.lean`), any number of
+indices. Constructor
 binders may be explicit or implicit; recursive arguments may be plain (`t : T params idx`),
 under a telescope of arrows (`f : (y₁ : B₁) → … → Bₙ → T params idx`), dependent or not, where
 the domains may depend on the constructor's own data and the index on the bound variables, or
@@ -13,9 +13,10 @@ and dependent pairs over constant types, and named type constructors with `PolyI
 `PolyMap` instances (`List`, `Option`, `Array`, and the user's; see `PolyIso.lean`):
 `children : List (T params idx)`, `p : T params i × T params j`, `k : A → List (T params idx)`,
 `c : Option (T params idx × T params idx)`, `List (Option (T params idx))`, …. The structure of
-the argument type is built by recursion on its syntax (`occTreeOf`, `occTermOf`), with instance
-search only at the named constructors. A data binder may not mention `T`. Declaring a type gives
-it no such instances: a later declaration can nest through it once the user has provided them.
+the argument type is built by recursion on its elaborated type (`Gen/Occ.lean`), with instance
+search only at the named constructors. A single type without indices is given such instances
+when its parameters allow it (step 5, `Gen/Derive.lean`), so that a later declaration can nest
+through it; for other types the user provides them.
 
 ```
 codata ITree (E : Type → Type) (R : Type)
@@ -61,7 +62,7 @@ user gave them. Injectivity and disjointness lemmas are generated only when they
 that is when the indices involved do not depend on the constructors' arguments and (for
 disjointness) coincide.
 
-The generic theory (`Codata.lean`) has one index type. Several indices are packed into one,
+The generic theory (`Framework.lean`, `Model/Cotype.lean`) has one index type. Several indices are packed into one,
 `T.Ix (params) := (i₁ : I₁) ×' I₂` (a `PSigma`, so indices may be propositions), and no index is
 `Unit`; the user-facing declarations are curried: the internal isomorphism `T.toC`/`T.ofC` with
 its three laws takes the family on the packed index, and the instantiations of the generic
@@ -69,58 +70,27 @@ theorems convert between the two forms with lambdas (`fun j₁ j₂ => f ⟨j₁
 `fun p => c p.1 p.2`), so that every statement above is definitionally the generic one. With one
 index nothing is packed.
 
-Only the seven lemmas about the generated inductive `T.F` (`map_id`, `map_comp`, `rel_map`,
-`ofC_toC`, `toC_ofC`, `ofC_map`, `rel_ofC`) are proved by tactic scripts, and those are `cases`
-followed by `rfl` or `solve_by_elim`, with the laws of `Occ.lean` for nested arguments;
-everything else instantiates a theorem of `Codata.lean`.
-All declarations are generated in a `noncomputable section`: the encoding decides equality of
-shapes classically, and a `PolyIso` instance may be noncomputable too.
+Only the laws of the generated inductive `T.F` (`map_id`, `map_comp`, `rel_map`, `ofC_toC`,
+`toC_ofC`, `ofC_map`, `rel_ofC`) are proved by tactics on goal metavariables, `cases` followed
+by `rfl`, `simp only` or `solve_by_elim`, with the laws of `Model/Occ.lean` for nested arguments;
+everything else instantiates a theorem of the theory. Every declaration is noncomputable: the
+encoding decides equality of shapes classically, and a `PolyIso` instance may be noncomputable
+too.
 
-The analysis of the declaration (`mkCtx`) and the generators of `T.F`, the signature, the
-isomorphism, the constructors and `casesOn` are shared with the `data` command
-(`DataCmd.lean`), which differs only in the contract and what is derived from it; `T.F.Rel`,
-`rel_map` and `rel_ofC` are generated for `codata` only. A mutual block (`MutualCmd.lean`) is
-one family over `Blk.Ix`, with a constructor per type: `mkCtx` receives the types with their
-sorts and constructors, every generator works on the block, and the user-facing
-types, constructors, `casesOn` and aliases are per type (`genTypes`, `genCases`, `genAliases`).
-
-The generators are split by the steps of `architecture.md`: `Cmd/Analysis.lean` (the context),
-`Cmd/Functor.lean` (step 1), `Cmd/Model.lean` (step 2), `Cmd/Extras.lean` (step 2b),
-`Cmd/Framework.lean` (step 3), `Cmd/Surface.lean` (step 4); this file is the pipeline.
+The declaration is analysed (`Gen/Front.lean`) and the generated declarations are built as
+`Expr`s and added directly, by the generators of `Gen/`, split by the steps of
+`architecture.md`: `Gen/Functor.lean` (step 1), `Gen/Signature.lean`, `Gen/Iso.lean`,
+`Gen/Model.lean` (step 2), `Gen/Extras.lean` (step 2b), `Gen/Framework.lean` (step 3),
+`Gen/Rel.lean` and `Gen/Surface.lean` (step 4), `Gen/Derive.lean` (step 5); `Gen/Command.lean`
+is the pipeline, shared with the `data` command (`DataCmd.lean`), which differs only in the
+contract and what is derived from it, and with mutual blocks (`MutualCmd.lean`); `T.F.Rel`,
+`rel_map` and `rel_ofC` are generated for `codata` only.
 -/
 
-open Lean Elab Command Lean.Parser.Term
+open Lean Elab Command
 
 namespace Codata
 
-/-- The generators of `codata`, in order. The encoding decides equality of shapes classically:
-the type's corecursor and constructors are noncomputable. -/
-def codataPipeline (ctx : Ctx) : CommandElabM Unit := do
-  -- Since Lean 4.34 implicit arguments and the types of assigned metavariables are compared
-  -- without unfolding definitions; the generated proofs rely on unfolding the type to its model,
-  -- so restore the old comparison for the generated declarations only.
-  elabCommand (← `(noncomputable section))
-  elabCommand (← `(set_option backward.isDefEq.respectTransparency false))
-  elabCommand (← `(set_option backward.isDefEq.respectTransparency.types false))
-  genFunctor ctx
-  if ctx.co then genRel ctx
-  genSignature ctx
-  genIso ctx
-  genContract ctx
-  genContractDef ctx
-  genTypes ctx
-  genDerived ctx
-  genCtors ctx
-  genCases ctx
-  genAliases ctx
-  elabCommand (← `(end))
-
-@[command_elab codataCmd] def elabCodata : CommandElab := fun stx => do
-  let `(codata $T:ident $paramsStx:bracketedBinder* $[: $sortStx]? $ctorsStx:codataCtor*) := stx
-    | throwUnsupportedSyntax
-  let ctx ← mkCtx true T paramsStx #[(T, sortStx, ctorsStx)] none
-  codataPipeline ctx
-  -- A separate step, after the type is complete: it cannot fail the declaration.
-  deriveInstances ctx
+@[command_elab codataCmd] def elabCodata : CommandElab := Gen.elabDecl
 
 end Codata

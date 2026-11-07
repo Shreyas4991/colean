@@ -30,7 +30,7 @@ convention is what makes `Raw.node` injective).
 ## Layout
 
 The generic theory lives in `Framework.lean` and `Model/`, the user interface for nesting in
-`PolyIso.lean`, the generators in `Cmd/`, and the commands in `CodataCmd.lean`, `DataCmd.lean` and
+`PolyIso.lean`, the generators in `Gen/`, and the commands in `CodataCmd.lean`, `DataCmd.lean` and
 `MutualCmd.lean`; see `architecture.md`.
 -/
 

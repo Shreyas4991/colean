@@ -4,22 +4,21 @@ import Colean.MutualCmd
 # A tour of nested types
 
 What the `data` and `codata` commands accept as a nested argument today, and what they do not.
-Read it top to bottom. Part I (sections 1 to 7) is what works, Part II (sections 8 to 15) what does
-not work yet but could, and Part III (section 16) failures that look like bugs of the commands
-rather than limits.
+Read it top to bottom. Part I (sections 1 to 8) is what works, Part II (sections 9 to 15) what does
+not work yet but could, and Part III failures that look like bugs of the commands rather than
+limits; there are none at the moment.
 
 How the file is checked:
 
 * an example without an error on it works;
 * the failures of Parts II and III are left as they are, so they show as errors in the infoview;
 * in Part II a failed `data`/`codata` declares nothing, so the names of failed types do not exist
-  (blocks are less tidy: sections 12 and 14); in Part III it leaves broken declarations behind,
-  and nothing later depends on them;
+  (a block keeps its index: section 13);
 * the absence of an instance is shown by a failing `#synth`.
 
 A word used throughout. A *leaf* is a named type constructor applied in a nested argument, such
 as `List` in `List T`. The command looks for instances at leaves only; everything else it reads
-off the syntax of the argument (`occTreeOf` in `Colean/Cmd/Analysis.lean`).
+off the elaborated type of the argument (`occOf` in `Colean/Gen/Occ.lean`).
 -/
 
 universe u v
@@ -34,9 +33,9 @@ noncomputable section
 
 /-! ### 1. Built-in forms, no instance needed
 
-Products, sums, functions and dependent pairs are read off the syntax, so they need no instance
-and may be combined at any depth. The domain of a function and the first component of a dependent
-pair must be constant. -/
+Products, sums, functions and dependent pairs are recognised by their head once elaborated, so
+they need no instance and may be combined at any depth. The domain of a function and the first
+component of a dependent pair must be constant. -/
 
 -- `T × T`: two recursive occurrences in one argument.
 data BinT
@@ -170,10 +169,15 @@ codata MonoStream
 #guard_msgs in
 #check @MonoStream.corec
 
+/-! A generic fixpoint of a functor with instances: the instances are parameters of the type. -/
+
+data FixInst (G : Type → Type) (Sh : Type) (Pos : Sh → Type) [PolyIso G Sh Pos] [PolyMap G G]
+  | mk (x : G (FixInst G Sh Pos))
+
 /-! ### 4. Declared types, with generated instances
 
 A single `data` or `codata` without indices gets `PolyIso` and `PolyMap` by itself, in a separate
-step after the declaration (`Colean/Cmd/Derive.lean`). Nothing is written by hand from here to
+step after the declaration (`Colean/Gen/Derive.lean`). Nothing is written by hand from here to
 the end of section 5. -/
 
 data L (α : Type u)
@@ -279,7 +283,7 @@ data EDecl
   | mk (p : E (L EDecl) (Str EDecl))
 
 -- With one argument mentioning `T`, that argument may be anything: `×` is fine here, since the
--- leaf is `fun X => E X Nat` and the command goes on inside the argument. Compare section 11.
+-- leaf is `fun X => E X Nat` and the command goes on inside the argument. Compare section 12.
 data EProd
   | leaf
   | mk (p : E (EProd × Nat) Nat)
@@ -338,8 +342,8 @@ codata Void (α : Type u)
 
 Here leaves come from sections 2 and 3, or from section 4: generated instances are for the type
 nested *through*, and the enclosing type may be a family or a block. What must not be indexed or
-mutual is the leaf (section 13). The limit of this section is in section 16: a single family here
-has one index. A block does not have this limit, whatever the indices of its types. -/
+mutual is the leaf (section 14). A family may have several indices, and so may the types of a
+block. -/
 
 -- A family through a plain leaf.
 codata BoxVec (α : Type u) : Nat → Type u
@@ -421,11 +425,76 @@ data AltFin : Bool → Type
   | leaf {b : Bool} : AltFin b
   | mk {b : Bool} (children : Option (Both (fun c => AltFin c × Nat))) : AltFin b
 
--- On a plain type too, the family ignoring its index. The binder must be a name: section 15.
+-- On a plain type too, the family ignoring its index, with a named binder or not.
 codata AltPlain
   | mk (children : Both (fun _b => AltPlain))
 
-/-! ### 7. Using a nested type
+codata AnonFamily
+  | mk (children : Both (fun _ => AnonFamily))
+
+/-! Several indices, through a plain leaf and through built-in forms, in both kinds. These failed
+in the generated proofs until the commands moved to `Expr`. -/
+
+codata TwoListCo : Nat → Nat → Type
+  | mk {n m : Nat} (c : List (TwoListCo n m)) : TwoListCo (n + 1) m
+
+codata TwoProdCo : Nat → Nat → Type
+  | mk {n m : Nat} (c : Nat × TwoProdCo n m) : TwoProdCo (n + 1) m
+
+data TwoFn : Nat → Nat → Type
+  | nil : TwoFn 0 0
+  | mk {n m : Nat} (c : Nat → TwoFn n m) : TwoFn (n + 1) m
+
+data TwoProd : Nat → Nat → Type
+  | nil : TwoProd 0 0
+  | mk {n m : Nat} (c : Nat × TwoProd n m) : TwoProd (n + 1) m
+
+/-! ### 7. Spellings
+
+The analysis works on the elaborated type of an argument, so a type spelled differently is the
+same type: prefix `Prod` and `Sum`, an abbreviation, `id`, `<|`, `Σ`, `∀`, an implicit binder.
+These were refused while the analysis read the syntax. -/
+
+data PrefixProd
+  | leaf
+  | mk (p : Prod PrefixProd PrefixProd)
+
+data PrefixProd₂
+  | leaf
+  | mk (p : Prod Nat PrefixProd₂)
+
+data PrefixSum
+  | leaf
+  | mk (p : Sum PrefixSum Nat)
+
+abbrev Twice (X : Type u) := X × X
+
+data ThroughAbbrev
+  | leaf
+  | mk (p : Twice ThroughAbbrev)
+
+data ThroughId
+  | leaf
+  | mk (p : id ThroughId)
+
+data ThroughPipe
+  | leaf
+  | mk (p : Option <| List ThroughPipe)
+
+data ThroughSigma
+  | leaf
+  | mk (p : Σ n : Nat, Fin n → ThroughSigma)
+
+data ThroughForall
+  | leaf
+  | mk (p : ∀ n : Nat, Fin n → ThroughForall)
+
+-- An implicit binder in a nested argument stays implicit in `T.F` and in the constructor.
+data ImplicitPi
+  | leaf
+  | mk (k : {n : Nat} → List ImplicitPi)
+
+/-! ### 8. Using a nested type
 
 `fold`, `corec` and the lemmas about them see the leaf: the argument of a nested constructor of
 `T.F` has the leaf applied to the state. To compute through it, `Occ.map_list`, `Occ.map_prod`,
@@ -480,11 +549,13 @@ theorem LInf.dtor_spine :
 
 /-! ## Part II: what does not work yet
 
-Everything here could be supported. What should stay rejected is not listed: negative occurrences,
-functors that are not polynomial such as `Finset`, parameters that later types depend on,
-non-uniform parameters, and a `PolyIso` without its `PolyMap`. -/
+Everything here could be supported. What should stay rejected is not listed: negative
+occurrences, functors that are not polynomial such as `Finset`, parameters that later types depend
+on, fields whose type depends on a recursive field, non-uniform parameters, and a `PolyIso` without
+its `PolyMap`. The section on `mixed_mutual` is gone with the command, removed pending a
+redesign. -/
 
-/-! ### 8. Missing instances
+/-! ### 9. Missing instances
 
 A plain `structure` gets no instance: only `data` and `codata` generate them. Nothing in it stops
 one from being generated when a declaration nests through it (`todo.md`). -/
@@ -503,13 +574,7 @@ structure NoFamIso (X : Bool → Type u) where
 codata NeedsFamIso : Bool → Type
   | mk {b : Bool} (children : NoFamIso (fun c => NeedsFamIso c)) : NeedsFamIso b
 
-/-! A generic fixpoint of a functor with instances: instance binders are not accepted among the
-parameters, so this cannot be written yet. -/
-
-data FixInst (G : Type → Type) (Sh : Type) (Pos : Sh → Type) [PolyIso G Sh Pos] [PolyMap G G]
-  | mk (x : G (FixInst G Sh Pos))
-
-/-! ### 9. A parameter in the same field as a recursive occurrence
+/-! ### 10. A parameter in the same field as a recursive occurrence
 
 Such a parameter cannot vary yet, even though the field is positive in both. The field would
 need positions of both kinds, and the generator takes a field as one or the other. So `Str` of
@@ -528,7 +593,7 @@ data ThroughPairStr
   | leaf
   | mk (x : PairStr ThroughPairStr)
 
-/-! ### 10. A field mentioning two varying parameters
+/-! ### 11. A field mentioning two varying parameters
 
 Here is what happens with `p : α × β`: both parameters count as constant, so nothing is
 generated for them, silently, and neither `P2 T Nat` nor `P2 Nat T` can be nested through. The
@@ -562,7 +627,7 @@ data ThroughSplit
   | leaf
   | mk (x : Split ThroughSplit Nat)
 
-/-! ### 11. A built-in form inside an argument of a leaf with several holes
+/-! ### 12. A built-in form inside an argument of a leaf with several holes
 
 With `T` in several arguments of `E`, the leaf is the whole `fun X => E (X × Nat) X`, found by
 instance search. The search needs an instance at `fun X => X × Nat`, and `×`, `⊕` and `→` have
@@ -585,7 +650,7 @@ data EProdHand
   | leaf
   | mk (p : E (EProdHand × Nat) EProdHand)
 
-/-! ### 12. Holes at different indices in several arguments of a leaf
+/-! ### 13. Holes at different indices in several arguments of a leaf
 
 A leaf found by instance search is a functor of one variable, so all its holes must be one type.
 `Pair (T i) (T j)` has two. The built-in forms do not have this limit. -/
@@ -628,7 +693,7 @@ data ProdC
   | mk (a : ProdA)
 end
 
-/-! ### 13. Nesting through an indexed family or a mutual block
+/-! ### 14. Nesting through an indexed family or a mutual block
 
 Only a single type without indices gets instances. A family or a member of a block is skipped
 silently, and nesting through it fails at the missing instance. -/
@@ -717,111 +782,9 @@ data ThroughHand
   | leaf
   | mk (v : Hand ThroughHand)
 
-/-! ### 14. `mixed_mutual`
+/-! ### 15. Spellings that mean something else
 
-A mixed block used to nest an outer run through its inner runs by the generated structures,
-which are gone. Instances are generated only by the single `data` and `codata` commands, not for
-the runs of a block, and cannot be written inside one. So a cyclic block stops at a missing
-instance, in either order. It is expected to be redesigned. -/
-
-mixed_mutual
-codata MTree (α : Type u)
-  | node (a : α) (children : MForest α)
-data MForest (α : Type u)
-  | nil
-  | cons (t : MTree α) (f : MForest α)
-end
-
-/-! Unlike a failed `data`, this one leaves something behind: runs are elaborated from the
-innermost out, so `MForest`, with the family parameter for the trees, is there, and only `MTree`
-is missing. -/
-
-#check @MForest.cons
-
-#check @MTree.node
-
-#synth PolyIso (MForest Nat) _ _
-
-mixed_mutual
-data MForest₂ (α : Type u)
-  | nil
-  | cons (t : MTree₂ α) (f : MForest₂ α)
-codata MTree₂ (α : Type u)
-  | node (a : α) (children : MForest₂ α)
-end
-
-/-! A block without a cycle does not need nesting and still passes. First, the inner run mentions
-the outer one, and the outer one does not mention it. -/
-
-mixed_mutual
-codata MOuter (α : Type u)
-  | mk (a : α) (o : MOuter α)
-data MInner (α : Type u)
-  | nil
-  | cons (o : MOuter α) (i : MInner α)
-end
-
-#check @MInner.cons
-
-/-! Then the outer run mentions the inner one, which does not mention it back. The field is then
-plain data: the inner type has no family parameter, and nothing is nested. So what stops a block
-is the cycle, not the mention. -/
-
-mixed_mutual
-codata MOuter₂ (α : Type u)
-  | mk (a : α) (i : MInner₂ α)
-data MInner₂ (α : Type u)
-  | nil
-  | cons (a : α) (i : MInner₂ α)
-end
-
-#check @MOuter₂.mk
-
-/-! ### 15. What the analysis does not recognise
-
-The analysis works on syntax, so a type that means the same but is spelled differently is another
-type to it. These are limits of the reading, not of the theory. -/
-
-/-! The prefix spellings of `×` and `⊕` are named constructors, hence leaves without instances. -/
-
-data PrefixProd
-  | leaf
-  | mk (p : Prod PrefixProd PrefixProd)
-
-data PrefixProd₂
-  | leaf
-  | mk (p : Prod Nat PrefixProd₂)
-
-data PrefixSum
-  | leaf
-  | mk (p : Sum PrefixSum Nat)
-
-/-! An abbreviation is not unfolded, nor is `id`. -/
-
-abbrev Twice (X : Type u) := X × X
-
-data ThroughAbbrev
-  | leaf
-  | mk (p : Twice ThroughAbbrev)
-
-data ThroughId
-  | leaf
-  | mk (p : id ThroughId)
-
-/-! Other notations are not read at all: `<|`, `Σ`, `∀`, `×'`. `∀` is in the plan, section 1, as a
-spelling still to do. -/
-
-data ThroughPipe
-  | leaf
-  | mk (p : Option <| List ThroughPipe)
-
-data ThroughSigma
-  | leaf
-  | mk (p : Σ n : Nat, Fin n → ThroughSigma)
-
-data ThroughForall
-  | leaf
-  | mk (p : ∀ n : Nat, Fin n → ThroughForall)
+`×'` is a named constructor, hence a leaf, and it has no instance. -/
 
 data ThroughPProd
   | leaf
@@ -833,61 +796,11 @@ refused, with a message about function domains that does not fit. -/
 data ThroughDepPair
   | mk (f : (x : ThroughDepPair) × Nat)
 
-/-! A family argument needs a named binder: `fun _ => …` is not seen as a family, and the plain
-class is asked for. Section 6 has `AltPlain` with `fun _b => …`. -/
-
-codata AnonFamily
-  | mk (children : Both (fun _ => AnonFamily))
-
 /-! ## Part III: what looks like a bug
 
-Each declaration below is within the scope that `plan.md` and the file headers describe, or it
-should get a clean error, and instead the generators fail with many errors and leave broken
-declarations in the environment. When a bug is fixed, the example can move to Part I. -/
-
-/-! ### 16. Failures inside the generators -/
-
-/-! A family with two indices or more under a plain leaf, for `data` and `codata`. A block does not
-have this problem, since it has one index, `Blk.Ix`. The structure term is
-`IOcc.ofOcc occ ⟨n, m⟩`, whose anonymous constructor has no expected type: `occTermOf` gives
-`(J := …)` to `IOcc.hole` and not to `IOcc.ofOcc`, which is likely the whole story. -/
-
-codata TwoListCo : Nat → Nat → Type
-  | mk {n m : Nat} (c : List (TwoListCo n m)) : TwoListCo (n + 1) m
-
-/-! A `data` family with two indices or more through a built-in form. A block does not have this
-problem either. The same declaration passes as `codata`, and `(c : Nat → T n m)` passes as `data`,
-so the failure comes from what only `data` has: the first error is at a `motive`, where the packed
-index of a position is taken apart. -/
-
-codata TwoProdCo : Nat → Nat → Type
-  | mk {n m : Nat} (c : Nat × TwoProdCo n m) : TwoProdCo (n + 1) m
-
-data TwoFn : Nat → Nat → Type
-  | nil : TwoFn 0 0
-  | mk {n m : Nat} (c : Nat → TwoFn n m) : TwoFn (n + 1) m
-
-data TwoProd : Nat → Nat → Type
-  | nil : TwoProd 0 0
-  | mk {n m : Nat} (c : Nat × TwoProd n m) : TwoProd (n + 1) m
-
-/-! A later field that depends on a recursive or nested field. A list of children with a proof
-about it is a natural thing to write. It cannot be supported as such, since `F.map` changes the
-list and not the proof, but the analysis does not reject it. The plain case fails likewise. -/
-
-data NonEmpty
-  | mk (l : List NonEmpty) (h : l ≠ [])
-
-data PlainDep
-  | leaf
-  | mk (x : PlainDep) (h : x = x)
-
-/-! An implicit binder in the type of a nested argument. The analysis accepts it and forgets that
-it is implicit. -/
-
-data ImplicitPi
-  | leaf
-  | mk (k : {n : Nat} → List ImplicitPi)
+Nothing at the moment. The failures inside the generators that were here work now (sections 6
+and 7). A field whose type depends on a recursive field, such as `(l : List T) (h : l ≠ [])`, was
+accepted and then failed; it is refused now, with a clear message. -/
 
 end
 

@@ -8,20 +8,20 @@ same parameters. It is one family over an inductive `Ix`, with a constructor per
 arguments are the indices of that type, so nothing new is involved: `Even`/`Odd` is one `data`
 with one index.
 
-Read it top to bottom. Part I (sections 1 to 5) is what works, Part II (sections 6 and 7) what is
-refused with a clear message, Part III (section 8) what looks like a bug, and Part IV (section 9)
-`mixed_mutual` blocks that need no nesting.
+Read it top to bottom. Part I (sections 1 to 6) is what works, Part II (section 7) what
+does not work yet but could, and Part III (section 8) what looks like a bug. Blocks that mix
+`data` and `codata` (`mixed_mutual`) were removed pending a redesign, and their part with them.
 
 Nesting is left out on purpose. Fields here are plain members, constants or functions into
-members; `×`, `⊕`, `List` and other leaves are not used. The failures with those, and the cyclic
-`mixed_mutual` blocks, are in `Sketch/NestingTour.lean` (sections 14 and 16).
+members; `×`, `⊕`, `List` and other leaves are not used. Blocks with nesting are in
+`Sketch/NestingTour.lean`: what works in section 6, what does not in sections 13 and 14.
 
 How the file is checked:
 
 * an example without an error on it works;
 * failures are left as they are, so they show as errors in the infoview;
-* Part III reports many errors per declaration: the first one is the real one, the others follow
-  from it, and the broken declarations stay, so every example has a namespace of its own.
+* a failed block declares nothing of its types, and every example has a namespace of its own, so
+  names do not clash.
 -/
 
 universe u v
@@ -470,17 +470,11 @@ end
 
 end Dotted
 
-/-! ## Part II: what is refused, with a clear message
+/-! ### 6. Spellings and names
 
-Each of these could be lifted. What should stay refused is not listed: the types of a block share
-their parameters, names included, and their universe, as in Lean, and a `mutual` block is all
-`data` or all `codata`. -/
+Each of these failed until the generators moved to `Expr`. -/
 
-/-! ### 6. Spellings the commands do not take
-
-These are the same for a single type. -/
-
--- A constructor must name its fields: an arrow type is not read.
+-- A constructor given by its type, with arrows instead of named fields.
 namespace Arrow
 
 mutual
@@ -490,21 +484,12 @@ data Qa
   | mk : Pa → Qa
 end
 
+#check @Qa.mk
+
 end Arrow
 
--- An implicit parameter cannot be left out at an occurrence, and it cannot be given by name.
-namespace ImplicitParam
-
-mutual
-data Pa {α : Type u} (β : Type v)
-  | nil
-  | mk (b : β) (q : Qa β)
-data Qa {α : Type u} (β : Type v)
-  | mk (p : Pa β)
-end
-
-end ImplicitParam
-
+-- An implicit parameter given by name at an occurrence. Leaving it out is refused, as by Lean's
+-- `inductive`.
 namespace NamedParam
 
 mutual
@@ -530,41 +515,7 @@ end
 
 end InstParam
 
-/-! ### 7. Recursors per type
-
-`fold` and `corec` have aliases per type, the recursor does not, and `induction` does not reach
-the block from a value of one type. The way that works is section 2. -/
-
-namespace PerType
-
-mutual
-data Pa
-  | nil
-  | mk (q : Qa)
-data Qa
-  | mk (p : Pa)
-end
-
-#check @Pa.rec
-
-example (p : Pa) : True := by
-  induction p with
-  | nil => trivial
-  | mk q ih => trivial
-
-end PerType
-
-/-! ## Part III: what looks like a bug
-
-Each of these either deserves a clear error or should simply work, and instead the generators fail
-with a flood of errors, or say nothing at all. -/
-
-/-! ### 8. Failures inside the generators -/
-
-/-! Types of a block named like what the block generates: `B`, `F`, `Shape`, `Ix` and `S`. A
-single type is protected from this, its generated name gets a prime (`ColeanTest/Names.lean`), but
-a block is not. -/
-
+-- Types named like what the block generates: `B`, `F`, `Shape`, `Ix` and `S`.
 namespace NameB
 
 mutual
@@ -625,8 +576,65 @@ end
 
 end NameS
 
-/-! The name of the block is taken. It is a name the user never wrote, and it deserves a clear
-error at least. -/
+-- A constructor named like its type, which `inductive` accepts. A linter warns about the name, as
+-- it does for `inductive`, so it is turned off here.
+namespace CtorName
+
+set_option linter.dupNamespace false in
+mutual
+data Pa
+  | Pa (q : Qa)
+  | nil
+data Qa
+  | Qa (p : Pa)
+end
+
+#check @Pa.Pa
+
+end CtorName
+
+/-! ## Part II: what does not work yet
+
+Each of these could be lifted. What should stay refused is not listed: the types of a block share
+their parameters, names included, and their universe, as in Lean, an implicit parameter cannot be
+left out at an occurrence, as in Lean, and a `mutual` block is all `data` or all `codata`. -/
+
+/-! ### 7. Recursors per type
+
+`fold` and `corec` have aliases per type, the recursor does not, and `induction` does not reach
+the block from a value of one type: it takes the value apart as the subtype it is, into a `Raw`
+value and a proof, so the alternatives `nil` and `mk` are unknown to it. The way that works is
+section 2. `cases` does work per type. -/
+
+namespace PerType
+
+mutual
+data Pa
+  | nil
+  | mk (q : Qa)
+data Qa
+  | mk (p : Pa)
+end
+
+#check @Pa.rec
+
+example (p : Pa) : True := by
+  induction p with
+  | nil => trivial
+  | mk q ih => trivial
+
+end PerType
+
+/-! ## Part III: what looks like a bug
+
+Each of these either deserves a clear error or should simply work. Instead the command fails late,
+in the kernel or in a proof it generates, or says nothing at all. -/
+
+/-! ### 8. Failures inside the generators -/
+
+/-! The name of the block is taken. It is a name the user never wrote, and the command does not
+check it: the index `Pa_Qa.Ix` is declared, and then the kernel refuses `Pa_Qa` itself, with
+"constant has already been declared". It deserves a clear error before anything is declared. -/
 
 namespace BlockName
 
@@ -642,22 +650,9 @@ end
 
 end BlockName
 
-/-! A constructor named like its type, which `inductive` accepts. A single type fails likewise. -/
-
-namespace CtorName
-
-mutual
-data Pa
-  | Pa (q : Qa)
-  | nil
-data Qa
-  | Qa (p : Pa)
-end
-
-end CtorName
-
-/-! A result index that the pattern matcher cannot invert. `!b` is a function of `b`, and the
-generated proofs do a `cases` on the index. A single type fails likewise. -/
+/-! A result index that the pattern matcher cannot invert. `!b` is a function of `b`, and a
+generated proof does a `cases` on the index, which fails at the constructor `mk`. `inductive`
+accepts this. A single type fails likewise. -/
 
 namespace ResultIndex
 
@@ -687,106 +682,6 @@ end
 #check Pa
 
 end PropSort
-
-/-! ## Part IV: `mixed_mutual` without nesting
-
-A mixed block is a nested fixpoint, and the textual order is the nesting order, the first
-declaration outermost. A cycle between `data` and `codata` needs nesting, so it is in
-`Sketch/NestingTour.lean`, section 14. Without a cycle the block passes. -/
-
-/-! ### 9. Blocks without a cycle
-
-An inner type mentioning an outer one takes it as a parameter `X`. So it is not closed:
-`Inner α X`, to be used at `Inner α (Outer α)`. Neighbours of one kind form one uniform block. -/
-
-namespace MixedInner
-
-mixed_mutual
-codata Ou (α : Type u)
-  | mk (a : α) (o : Ou α)
-data In₁ (α : Type u)
-  | nil
-  | cons (o : Ou α) (i : In₂ α)
-data In₂ (α : Type u)
-  | mk (i : In₁ α)
-end
-
-#check @In₁.cons
-#check @Ou.mk
-
-end MixedInner
-
--- The outer type mentions the inner one, which does not mention it back: a plain field.
-namespace MixedOuter
-
-mixed_mutual
-data Ou (α : Type u)
-  | nil
-  | mk (s : In α) (o : Ou α)
-codata In (α : Type u)
-  | mk (a : α) (i : In α)
-end
-
-#check @Ou.mk
-
-end MixedOuter
-
--- Indices may differ, between kinds and within a kind.
-namespace MixedIndices
-
-mixed_mutual
-codata Ou : Nat → Type
-  | mk {n : Nat} (o : Ou (n + 1)) : Ou n
-data In : Bool → Type
-  | nil : In true
-  | cons {b : Bool} (i : In b) : In b
-end
-
-#check @In.cons
-
-mixed_mutual
-codata Ou₂ (α : Type u)
-  | mk (a : α) (o : Ou₂ α)
-data In₁ (α : Type u) : Nat → Type _
-  | nil : In₁ α 0
-  | cons {n : Nat} (o : Ou₂ α) (i : In₂ α) : In₁ α (n + 1)
-data In₂ (α : Type u)
-  | mk (i : In₁ α 3)
-end
-
-#check @In₁.cons
-
-end MixedIndices
-
--- A block outside: the family parameter of the inner type is over its `Ix`.
-namespace MixedOuterBlock
-
-mixed_mutual
-codata O₁ (α : Type u)
-  | mk (a : α) (o : O₂ α)
-codata O₂ (α : Type u)
-  | mk (o : O₁ α)
-data In (α : Type u)
-  | nil
-  | cons (o : O₁ α) (i : In α)
-end
-
-#check @In.cons
-
-end MixedOuterBlock
-
--- A block of one kind passes, with a warning that it is a plain `mutual`.
-namespace MixedOneKind
-
-mixed_mutual
-data Pa
-  | nil
-  | mk (q : Qa)
-data Qa
-  | mk (p : Pa)
-end
-
-end MixedOneKind
 
 end
 

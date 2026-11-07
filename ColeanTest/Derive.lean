@@ -125,11 +125,12 @@ end
 
 section Failing
 
-universe poly_x
+-- A name the step needs is taken.
+def Bad.Poly.fix : Nat := 0
 
 /--
 warning: `Bad` cannot be nested through: no `Codata.PolyIso` instance was generated. The type itself is not affected.
-a universe level named `poly_x` has already been declared
+(kernel) constant has already been declared 'DeriveTest.Bad.Poly.fix'
 -/
 #guard_msgs in
 data Bad (α : Type)
