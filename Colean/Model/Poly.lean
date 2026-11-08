@@ -14,6 +14,12 @@ are obtained (`coFill` by corecursion, `inFill` by a fold and well-founded recur
 
 This is the construction of `MvPFunctor.wp` and `MvPFunctor.M.Path`, on any type satisfying the
 hypotheses, so that it applies to the types of the commands through their contracts.
+
+The second part is the same for a family: a layer at the index `i` of a signature,
+`ILay σ P X Y i = Σ s : σ.Shape i, (P i s → X) × ((b : σ.B i s) → Y (σ.idx b))`, has fixpoints
+polynomial in `X` at every index (`IPolyFix.equiv`), with the trees of shapes at `i` and their
+slots (`IPath`). It is derived from the first part on the total spaces `Σ i, T i`, where a layer
+is a plain one whose shapes carry their index; the plain case is not an instance of it.
 -/
 
 universe s p b x x' y y' w t t' st
@@ -394,5 +400,377 @@ theorem in_ind {F : Type t → Type t} (K : Data.Contract (fun _ : Unit => T) (f
   exact h
 
 end In
+
+end Codata
+
+/-! ## Indexed signatures
+
+A layer at the index `i` of a signature `σ`, polynomial in the parameter `X` and in the family
+`Y`, `ILay σ P X Y i = Σ s : σ.Shape i, (P i s → X) × ((b : σ.B i s) → Y (σ.idx b))`: its least
+and greatest fixpoints at `i` are polynomial in `X`, with the trees of shapes at `i` (`σ.Intype i`,
+`σ.Cotype i`) and their slots (`IPath`). This is the plain case on the total spaces: a layer of
+the family is a plain layer whose shapes are the labels `Σ i, σ.Shape i` (`ILay.total`), the trees
+of shapes of all indices are plain trees of shapes (`IShapeTree.total`), and so is the fixpoint
+(`IPolyFix.total`); the equivalence at `i` is the fibre of the plain one (`IPolyFix.equiv`).
+
+The fixpoint may be a family over another index type `I'`, the one of its contract, read along a
+map `ι : σ.I → I'`: the types of a mutual block live over the block's index, whose type mentions
+the parameters, while the trees of shapes may not. `ico_bisim` and `iin_ind` take the principles
+of the contract along `ι`, and `Along`, `Over` turn the states of `corec` and `fold` on `σ.I` into
+states on `I'`.
+-/
+
+universe j j' v
+
+namespace Codata
+
+section Indexed
+
+variable {σ : Signature.{j, s, b}}
+
+/-- The positions of the parameter, on the labels. -/
+abbrev lblP (σ : Signature.{j, s, b}) (P : (i : σ.I) → σ.Shape i → Type p) (l : σ.Lbl) :
+    Type p :=
+  P l.1 l.2
+
+/-- The positions of the children, on the labels. -/
+abbrev lblB (σ : Signature.{j, s, b}) (l : σ.Lbl) : Type b := σ.B l.1 l.2
+
+variable (σ) (P : (i : σ.I) → σ.Shape i → Type p) in
+/-- A layer at the index `i`, polynomial in the parameter `X` and in the family `Y`. -/
+abbrev ILay (X : Type x) (Y : σ.I → Type y) (i : σ.I) : Type (max s p b x y) :=
+  Σ s : σ.Shape i, (P i s → X) × ((b : σ.B i s) → Y (σ.idx b))
+
+variable {P : (i : σ.I) → σ.Shape i → Type p}
+
+/-- The action on the recursive family. -/
+def ILay.map {X : Type x} {Y : σ.I → Type y} {Y' : σ.I → Type y'} (f : ∀ j, Y j → Y' j)
+    {i : σ.I} (z : ILay σ P X Y i) : ILay σ P X Y' i :=
+  ⟨z.1, z.2.1, fun b => f _ (z.2.2 b)⟩
+
+/-- Two layers with the same shape and contents, and related children. -/
+def ILay.Rel {X : Type x} {Y : σ.I → Type y} {Y' : σ.I → Type y'} (R : ∀ j, Y j → Y' j → Prop)
+    {i : σ.I} (z : ILay σ P X Y i) (z' : ILay σ P X Y' i) : Prop :=
+  ∃ (s : σ.Shape i) (v : P i s → X) (k : (b : σ.B i s) → Y (σ.idx b))
+    (k' : (b : σ.B i s) → Y' (σ.idx b)), z = ⟨s, v, k⟩ ∧ z' = ⟨s, v, k'⟩ ∧ ∀ b, R _ (k b) (k' b)
+
+/-- A layer as a plain layer of the total space: its shape with its index. -/
+def ILay.total {X : Type x} {Y : σ.I → Type y} {i : σ.I} (z : ILay σ P X Y i) :
+    Lay (lblP σ P) (lblB σ) X (Σ j, Y j) :=
+  ⟨⟨i, z.1⟩, z.2.1, fun b => ⟨_, z.2.2 b⟩⟩
+
+theorem ILay.total_inj {X : Type x} {Y : σ.I → Type y} {i : σ.I} {z z' : ILay σ P X Y i}
+    (h : z.total = z'.total) : z = z' := by
+  obtain ⟨s, v, k⟩ := z
+  obtain ⟨s', v', k'⟩ := z'
+  obtain rfl : s = s' := eq_of_heq (Sigma.mk.inj (Sigma.mk.inj h).1).2
+  have h' := Prod.mk.inj (eq_of_heq (Sigma.mk.inj h).2)
+  obtain rfl : v = v' := h'.1
+  obtain rfl : k = k' := funext fun b => eq_of_heq (Sigma.mk.inj (congrFun h'.2 b)).2
+  rfl
+
+/-! ### Trees of shapes and slots -/
+
+variable (σ) in
+/-- An indexed tree of shapes: a family with a destructor and the bisimulation principle. -/
+structure IShapeTree (W : σ.I → Type w) where
+  d {i : σ.I} : W i → σ.Obj W i
+  bisim (R : ∀ i, W i → W i → Prop) (H : ∀ i x y, R i x y → Signature.Obj.Rel R (d x) (d y))
+    {i : σ.I} {x y : W i} : R i x y → x = y
+
+/-- The trees of shapes of all indices, as plain trees of shapes over the labels. -/
+def IShapeTree.total {W : σ.I → Type w} (𝕎 : IShapeTree σ W) : ShapeTree (lblB σ) (Σ i, W i) where
+  d a := ⟨⟨a.1, (𝕎.d a.2).shape⟩, fun b => ⟨_, (𝕎.d a.2).child b⟩⟩
+  bisim R H := by
+    rintro ⟨i, x⟩ ⟨i', y⟩ h
+    obtain rfl : i = i' := congrArg Sigma.fst (H _ _ h).1
+    refine congrArg (Sigma.mk i) (𝕎.bisim (fun i x y => R ⟨i, x⟩ ⟨i, y⟩) (fun i x y hxy => ?_) h)
+    obtain ⟨e, hk⟩ := H _ _ hxy
+    revert e hk
+    obtain ⟨sx, kx⟩ := 𝕎.d x
+    obtain ⟨sy, ky⟩ := 𝕎.d y
+    intro e hk
+    obtain rfl : sx = sy := eq_of_heq (Sigma.mk.inj e).2
+    exact ⟨sx, kx, ky, rfl, rfl, hk⟩
+
+variable (P) in
+/-- The slots of a tree of shapes at the index `i`: the paths from it in the total tree. -/
+abbrev IPath {W : σ.I → Type w} (𝕎 : IShapeTree σ W) (i : σ.I) (a : W i) :
+    Type (max p b j w) :=
+  Path (lblP σ P) 𝕎.total ⟨i, a⟩
+
+/-! ### The fixpoint -/
+
+variable (P) in
+/-- A fixpoint of the layer at `X`, a family over `σ.I`, with its trees of shapes: a destructor
+and the bisimulation principle, `erase` to the tree of shapes, and `fill` back. -/
+structure IPolyFix {W : σ.I → Type w} (𝕎 : IShapeTree σ W) (X : Type x) (T : σ.I → Type t) where
+  d {i : σ.I} : T i → ILay σ P X T i
+  bisim (R : ∀ i, T i → T i → Prop) (H : ∀ i a c, R i a c → ILay.Rel R (d a) (d c)) {i : σ.I}
+    (a c : T i) : R i a c → a = c
+  erase {i : σ.I} : T i → W i
+  d_erase {i : σ.I} (a : T i) : 𝕎.d (erase a) = ⟨(d a).1, fun b => erase ((d a).2.2 b)⟩
+  fill {i : σ.I} (c : W i) : (IPath P 𝕎 i c → X) → T i
+  d_fill {i : σ.I} (c : W i) (f : IPath P 𝕎 i c → X) :
+    d (fill c f) = ⟨(𝕎.d c).shape, fun q => f (.here q), fun b => fill _ fun r => f (.there b r)⟩
+
+namespace IPolyFix
+
+variable {W : σ.I → Type w} {𝕎 : IShapeTree σ W} {X : Type x} {T : σ.I → Type t}
+  (M : IPolyFix P 𝕎 X T)
+
+/-- The fixpoint on the total space, a plain one. -/
+def total : PolyFix (lblP σ P) 𝕎.total X (Σ i, T i) where
+  d a := (M.d a.2).total
+  bisim R H := by
+    rintro ⟨i, x⟩ ⟨i', y⟩ h
+    obtain rfl : i = i' := congrArg Sigma.fst (H _ _ h).1
+    refine congrArg (Sigma.mk i) (M.bisim (fun i x y => R ⟨i, x⟩ ⟨i, y⟩) (fun i x y hxy => ?_) x y h)
+    obtain ⟨e, hv, hk⟩ := H _ _ hxy
+    revert e hv hk
+    obtain ⟨sx, vx, kx⟩ := M.d x
+    obtain ⟨sy, vy, ky⟩ := M.d y
+    intro e hv hk
+    obtain rfl : sx = sy := eq_of_heq (Sigma.mk.inj e).2
+    obtain rfl : vx = vy := funext hv
+    exact ⟨sx, vx, kx, ky, rfl, rfl, hk⟩
+  erase a := ⟨a.1, M.erase a.2⟩
+  d_erase a := by
+    show (⟨⟨a.1, (𝕎.d (M.erase a.2)).shape⟩, fun b => ⟨_, (𝕎.d (M.erase a.2)).child b⟩⟩ :
+      Σ l : σ.Lbl, (lblB σ l → Σ i, W i)) = _
+    rw [M.d_erase]
+    rfl
+  fill a f := ⟨a.1, M.fill a.2 f⟩
+  d_fill a f := by
+    show (M.d (M.fill a.2 f)).total = _
+    rw [M.d_fill]
+    rfl
+
+/-- A value at `i` is a tree of shapes at `i` with the contents of its slots. -/
+def equiv (i : σ.I) : T i ≃ Poly (W i) (IPath P 𝕎 i) X where
+  toFun a := ⟨M.erase a, fun r => M.total.val r ⟨i, a⟩ rfl⟩
+  invFun z := M.fill z.1 z.2
+  left_inv a := eq_of_heq (Sigma.mk.inj (M.total.fill_val_eq ⟨i, a⟩ rfl)).2
+  right_inv := by
+    rintro ⟨c, f⟩
+    have h : M.erase (M.fill c f) = c := eq_of_heq (Sigma.mk.inj (M.total.erase_fill ⟨i, c⟩ f)).2
+    have key : ∀ (c' : W i) (h' : M.total.erase ⟨i, M.fill c f⟩ = ⟨i, c'⟩),
+        M.erase (M.fill c f) = c' →
+        (⟨M.erase (M.fill c f), fun r => M.total.val r ⟨i, M.fill c f⟩ rfl⟩ :
+          Poly (W i) (IPath P 𝕎 i) X) = ⟨c', fun r => M.total.val r ⟨i, M.fill c f⟩ h'⟩ := by
+      rintro _ _ rfl
+      rfl
+    exact (key c (congrArg (Sigma.mk i) h) h).trans
+      (congrArg (Sigma.mk c) (funext fun r => M.total.val_fill r _ _ f rfl))
+
+/-- The action on the parameter: the same tree of shapes, the contents mapped. -/
+def map {X' : Type x'} {T' : σ.I → Type t'} (M' : IPolyFix P 𝕎 X' T') (f : X → X') {i : σ.I}
+    (a : T i) : T' i :=
+  (M'.equiv i).symm (Poly.map f (M.equiv i a))
+
+theorem equiv_map {X' : Type x'} {T' : σ.I → Type t'} (M' : IPolyFix P 𝕎 X' T') (f : X → X')
+    {i : σ.I} (a : T i) : M'.equiv i (M.map M' f a) = Poly.map f (M.equiv i a) :=
+  (M'.equiv i).apply_symm_apply _
+
+theorem total_map {X' : Type x'} {T' : σ.I → Type t'} (M' : IPolyFix P 𝕎 X' T') (f : X → X')
+    {i : σ.I} (a : T i) : M.total.map M'.total f ⟨i, a⟩ = ⟨i, M.map M' f a⟩ :=
+  rfl
+
+/-- The action on the parameter is the structural one: it maps the contents of the layer and goes
+on in the children. -/
+theorem d_map {X' : Type x'} {T' : σ.I → Type t'} (M' : IPolyFix P 𝕎 X' T') (f : X → X')
+    {i : σ.I} (a : T i) :
+    M'.d (M.map M' f a) =
+      ⟨(M.d a).1, fun q => f ((M.d a).2.1 q), fun b => M.map M' f ((M.d a).2.2 b)⟩ :=
+  ILay.total_inj (M.total.d_map M'.total f ⟨i, a⟩)
+
+end IPolyFix
+
+/-! ### Trees of shapes -/
+
+variable (σ) in
+/-- The coinductive trees of shapes. -/
+noncomputable def coITree : IShapeTree σ σ.Cotype where
+  d := Signature.dtorC
+  bisim := Signature.bisimC
+
+variable (σ) in
+/-- The inductive trees of shapes. -/
+noncomputable def inITree : IShapeTree σ σ.Intype where
+  d := Signature.dtorI
+  bisim R H {i} x y h := by
+    have key : ∀ i (x : σ.Intype i) y, R i x y → x = y := by
+      intro i x
+      refine Signature.recI (motive := fun i x => ∀ y, R i x y → x = y) ?_ x
+      intro i z ih y hy
+      obtain ⟨s, c, c', hz, hy', hc⟩ := H i _ y hy
+      rw [Signature.dtorI_ctorI] at hz
+      subst hz
+      rw [← Signature.ctorI_dtorI y, hy']
+      exact congrArg (fun c => Signature.ctorI ⟨s, c⟩) (funext fun b => ih b _ (hc b))
+    exact key i x y h
+
+/-! ### The two instances -/
+
+section Co
+
+variable {X : Type x} {T : σ.I → Type t}
+
+/-- A coinductive fixpoint of the layer. -/
+noncomputable def icoFix (d : ∀ {i}, T i → ILay σ P X T i)
+    (corec : ∀ {St : σ.I → Type (max j s b p x)}, (∀ i, St i → ILay σ P X St i) →
+      ∀ {i}, St i → T i)
+    (d_corec : ∀ {St : σ.I → Type (max j s b p x)} (c : ∀ i, St i → ILay σ P X St i) {i}
+      (a : St i), d (corec c a) = ILay.map (fun _ => corec c) (c i a))
+    (bisim : ∀ (R : ∀ i, T i → T i → Prop), (∀ i a c, R i a c → ILay.Rel R (d a) (d c)) →
+      ∀ {i} (a c : T i), R i a c → a = c) :
+    IPolyFix P (coITree σ) X T where
+  d := d
+  bisim := bisim
+  erase := Signature.corecC (σ := σ) (S := T) fun _ a => ⟨(d a).1, (d a).2.2⟩
+  d_erase a := Signature.dtorC_corecC _ a
+  fill c f := corec (St := fun i => Σ c : σ.Cotype i, IPath P (coITree σ) i c → X)
+    (fun _ z => ⟨(Signature.dtorC z.1).shape, fun q => z.2 (.here q),
+      fun b => ⟨_, fun r => z.2 (.there b r)⟩⟩) ⟨c, f⟩
+  d_fill _ _ := d_corec _ _
+
+variable {I' : Type j'}
+
+/-- The states of a coalgebra on `σ.I` as states on `I'`, along `ι`: at `i'`, a state at some `i`
+over `i'`. -/
+def Along (ι : σ.I → I') (St : σ.I → Type v) (i' : I') : Type (max j v) :=
+  {a : Σ i, St i // ι a.1 = i'}
+
+/-- A state at `i` as a state at `ι i`. -/
+def Along.mk (ι : σ.I → I') {St : σ.I → Type v} {i : σ.I} (a : St i) : Along ι St (ι i) :=
+  ⟨⟨i, a⟩, rfl⟩
+
+/-- The coalgebra on `I'` of a coalgebra `c` on `σ.I`, through `ofL` from layers to `G`. -/
+def Along.coalg (ι : σ.I → I') {St : σ.I → Type v} {G : I' → Type y}
+    (ofL : ∀ {i}, ILay σ P X (fun j => Along ι St (ι j)) i → G (ι i))
+    (c : ∀ i, St i → ILay σ P X St i) (i' : I') (a : Along ι St i') : G i' :=
+  a.2 ▸ ofL (ILay.map (fun _ a => Along.mk ι a) (c a.1.1 a.1.2))
+
+theorem Along.coalg_mk (ι : σ.I → I') {St : σ.I → Type v} {G : I' → Type y}
+    (ofL : ∀ {i}, ILay σ P X (fun j => Along ι St (ι j)) i → G (ι i))
+    (c : ∀ i, St i → ILay σ P X St i) {i : σ.I} (a : St i) :
+    Along.coalg ι ofL c (ι i) (Along.mk ι a) = ofL (ILay.map (fun _ a => Along.mk ι a) (c i a)) :=
+  rfl
+
+/-- The bisimulation principle of a layer destructor, from a contract along `ι`. -/
+theorem ico_bisim {T' : I' → Type t} {F : (I' → Type t) → I' → Type t} (K : Contract T' F)
+    (ι : σ.I → I') (d : ∀ {i}, T' (ι i) → ILay σ P X (fun j => T' (ι j)) i)
+    (ofL : ∀ {Y : I' → Type t} {i}, ILay σ P X (fun j => Y (ι j)) i → F Y (ι i))
+    (ofL_d : ∀ {i} (a : T' (ι i)), ofL (d a) = K.dtor a)
+    (ofL_map : ∀ {Y Y' : I' → Type t} (f : ∀ j, Y j → Y' j) {i}
+      (z : ILay σ P X (fun j => Y (ι j)) i), ofL (ILay.map (fun j => f (ι j)) z) = K.map f (ofL z))
+    (R : ∀ i, T' (ι i) → T' (ι i) → Prop) (H : ∀ i a c, R i a c → ILay.Rel R (d a) (d c))
+    {i : σ.I} (a c : T' (ι i)) (h : R i a c) : a = c := by
+  let R' (i' : I') (x y : T' i') : Prop := ∃ (i : σ.I) (e : i' = ι i), R i (e ▸ x) (e ▸ y)
+  refine K.bisim R' (fun i' x y hxy => ?_) (i := ι i) ⟨i, rfl, h⟩
+  obtain ⟨i, rfl, r⟩ := hxy
+  obtain ⟨s, v, k, k', hx, hy, hk⟩ := H i x y r
+  let Pr (i' : I') : Type t := {p : T' i' × T' i' // R' i' p.1 p.2}
+  refine ⟨ofL (Y := Pr) ⟨s, v, fun b => ⟨(k b, k' b), _, rfl, hk b⟩⟩, ?_, ?_⟩
+  · refine (ofL_map (fun i' (p : Pr i') => p.1.1) _).symm.trans ?_
+    rw [← ofL_d, hx]
+    rfl
+  · refine (ofL_map (fun i' (p : Pr i') => p.1.2) _).symm.trans ?_
+    rw [← ofL_d, hy]
+    rfl
+
+end Co
+
+section In
+
+variable {X : Type x} {T : σ.I → Type t}
+
+/-- The bisimulation principle of an inductive fixpoint. -/
+theorem iin_bisim (ctor : ∀ {i}, ILay σ P X T i → T i) (d : ∀ {i}, T i → ILay σ P X T i)
+    (d_ctor : ∀ {i} (z : ILay σ P X T i), d (ctor z) = z) (ctor_d : ∀ {i} (a : T i), ctor (d a) = a)
+    (ind : ∀ motive : ∀ i, T i → Prop,
+      (∀ i (z : ILay σ P X T i), (∀ b, motive _ (z.2.2 b)) → motive i (ctor z)) →
+      ∀ {i} (a : T i), motive i a)
+    (R : ∀ i, T i → T i → Prop) (H : ∀ i a c, R i a c → ILay.Rel R (d a) (d c))
+    {i : σ.I} (a c : T i) (h : R i a c) : a = c := by
+  refine ind (fun i a => ∀ c, R i a c → a = c) (fun i z ih c hc => ?_) a c h
+  obtain ⟨s, v, k, k', hz, hc', hk⟩ := H i _ c hc
+  rw [d_ctor] at hz
+  subst hz
+  rw [← ctor_d c, hc']
+  exact congrArg (fun k => ctor ⟨s, v, k⟩) (funext fun b => ih b _ (hk b))
+
+/-- An inductive fixpoint of the layer. -/
+noncomputable def iinFix (ctor : ∀ {i}, ILay σ P X T i → T i) (d : ∀ {i}, T i → ILay σ P X T i)
+    (d_ctor : ∀ {i} (z : ILay σ P X T i), d (ctor z) = z) (ctor_d : ∀ {i} (a : T i), ctor (d a) = a)
+    (fold : ∀ {St : σ.I → Type (max j s b)}, (∀ i, ILay σ P X St i → St i) → ∀ {i}, T i → St i)
+    (fold_ctor : ∀ {St : σ.I → Type (max j s b)} (a : ∀ i, ILay σ P X St i → St i) {i}
+      (z : ILay σ P X T i), fold a (ctor z) = a i (ILay.map (fun _ => fold a) z))
+    (ind : ∀ motive : ∀ i, T i → Prop,
+      (∀ i (z : ILay σ P X T i), (∀ b, motive _ (z.2.2 b)) → motive i (ctor z)) →
+      ∀ {i} (a : T i), motive i a) :
+    IPolyFix P (inITree σ) X T where
+  d := d
+  bisim := iin_bisim ctor d d_ctor ctor_d ind
+  erase := fold fun _ z => Signature.ctorI (σ := σ) ⟨z.1, z.2.2⟩
+  d_erase a := by
+    have h : fold (fun _ z => Signature.ctorI (σ := σ) ⟨z.1, z.2.2⟩) a =
+        Signature.ctorI (σ := σ) ⟨(d a).1, fun b => fold
+          (fun _ z => Signature.ctorI (σ := σ) ⟨z.1, z.2.2⟩) ((d a).2.2 b)⟩ := by
+      conv => lhs; rw [← ctor_d a]
+      exact fold_ctor _ _
+    exact h ▸ Signature.dtorI_ctorI (σ := σ) _
+  fill c f := (Signature.child_wf (σ := σ)).fix
+    (C := fun q => (IPath P (inITree σ) q.1 q.2 → X) → T q.1)
+    (fun q ih f => ctor ⟨(Signature.dtorI q.2).shape, fun r => f (.here r),
+      fun b => ih ⟨_, (Signature.dtorI q.2).child b⟩ ⟨b, rfl⟩ fun r => f (.there b r)⟩)
+    ⟨_, c⟩ f
+  d_fill c f := by
+    rw [WellFounded.fix_eq]
+    exact d_ctor _
+
+variable {I' : Type j'}
+
+/-- The states of an algebra on `σ.I` as states on `I'`, along `ι`: at `i'`, a state at every `i`
+over `i'`. -/
+def Over (ι : σ.I → I') (St : σ.I → Type v) (i' : I') : Type (max j v) :=
+  ∀ i, i' = ι i → St i
+
+/-- The algebra on `I'` of an algebra `a` on `σ.I`, through `toL` from `G` to layers. -/
+def Over.alg (ι : σ.I → I') {St : σ.I → Type v} {G : I' → Type y}
+    (toL : ∀ {i}, G (ι i) → ILay σ P X (fun j => Over ι St (ι j)) i)
+    (a : ∀ i, ILay σ P X St i → St i) (i' : I') (z : G i') : Over ι St i' :=
+  fun i e => a i (ILay.map (fun j g => g j rfl) (toL (e ▸ z)))
+
+theorem Over.alg_apply (ι : σ.I → I') {St : σ.I → Type v} {G : I' → Type y}
+    (toL : ∀ {i}, G (ι i) → ILay σ P X (fun j => Over ι St (ι j)) i)
+    (a : ∀ i, ILay σ P X St i → St i) {i : σ.I} (z : G (ι i)) :
+    Over.alg ι toL a (ι i) z i rfl = a i (ILay.map (fun j g => g j rfl) (toL z)) :=
+  rfl
+
+/-- Induction on a layer, from a contract along `ι`. -/
+theorem iin_ind {T' : I' → Type t} {F : (I' → Type t) → I' → Type t} (K : Data.Contract T' F)
+    (ι : σ.I → I')
+    (toL : ∀ {Y : I' → Type t} {i}, F Y (ι i) → ILay σ P X (fun j => Y (ι j)) i)
+    (ofL : ∀ {Y : I' → Type t} {i}, ILay σ P X (fun j => Y (ι j)) i → F Y (ι i))
+    (ofL_toL : ∀ {Y : I' → Type t} {i} (a : F Y (ι i)), ofL (toL a) = a)
+    (ofL_map : ∀ {Y Y' : I' → Type t} (f : ∀ j, Y j → Y' j) {i}
+      (z : ILay σ P X (fun j => Y (ι j)) i), ofL (ILay.map (fun j => f (ι j)) z) = K.map f (ofL z))
+    (motive : ∀ i, T' (ι i) → Prop)
+    (H : ∀ i (z : ILay σ P X (fun j => T' (ι j)) i), (∀ b, motive _ (z.2.2 b)) →
+      motive i (K.ctor (ofL z)))
+    {i : σ.I} (a : T' (ι i)) : motive i a := by
+  let motive' (i' : I') (x : T' i') : Prop := ∀ i (e : i' = ι i), motive i (e ▸ x)
+  refine K.induction motive' (fun i' y hy => ?_) a i rfl
+  obtain ⟨z, rfl⟩ := hy
+  rintro i rfl
+  let val (j' : I') (x : {x : T' j' // motive' j' x}) : T' j' := x.1
+  have h := H i (ILay.map (fun j => val (ι j)) (toL z)) (fun b => ((toL z).2.2 b).2 _ rfl)
+  rw [ofL_map val, ofL_toL] at h
+  exact h
+
+end In
+
+end Indexed
 
 end Codata

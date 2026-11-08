@@ -117,7 +117,7 @@ NOT DONE:
 * nothing else planned. A `mutual` block mixing `data` and `codata` is rejected; mixed blocks are
   section 5.
 
-## 4. Nested types — DONE; instances for declared types DONE for a single type without indices
+## 4. Nested types — DONE; instances for declared types DONE
 
 `PolyIso.lean` is the interface: `PolyIso F Sh Pos` (`F X ≃ Σ sh, Pos sh → X`) and `PolyMap F F'`
 (the intended action between two instantiations, with naturality), together an isomorphism of
@@ -148,13 +148,21 @@ DONE:
 * generated instances for a single `data` or `codata` without indices, over all parameters that
   may vary, composed with constants and with the identity, so `E (List T) (Option T)`, `E Nat T`
   and `E T T` come from one instance, and a named constructor may take the hole in several
-  arguments (`ColeanTest/Derive.lean`); `data` nests through `codata` and the other way round.
+  arguments (`ColeanTest/Derive.lean`); `data` nests through `codata` and the other way round;
+* generated instances for indexed families, at every index (an argument of the instance), and
+  for the types of `mutual` blocks, at their index of the block, presented per block over the
+  block's index without the parameters that vary (`Blk.Poly.Ix`): `Vec T 3`, `Vec (T n) n`,
+  `Ping T`, `Ev T 2` (`ColeanTest/DeriveIdx.lean`, 2026-11-09). The theory is the plain one on the
+  total spaces (`Model/Poly.lean`).
 
 NOT DONE:
 
 * generating instances on demand, for user-defined structures and inductives (`todo.md`);
-* generated instances for indexed families and for the types of mutual blocks: they are
-  skipped;
+* generated instances for a type of a block whose nested argument has positions at the block's
+  index only after cases on them (`Ping × Pong`, `Ping × Nat`): the step fails with its warning.
+  A fix would cast the children along a generated equation of the indices, or reindex the
+  trees of shapes along `Blk.Poly.ixIn`;
+* `IPolyIso` instances, where the varying parameter is itself a family;
 * a field mentioning two parameters that may vary (`p : α × β`): both then count as constant;
 * holes at different indices in several arguments of a named constructor (`Pair (T i) (T j)`),
   and instances for `×`, `⊕`, `→` inside such arguments (`E (T × Nat) T`);
@@ -192,6 +200,6 @@ are in the git history at `bc6498d`. `mutual` rejects a block that mixes the two
 1. Indices: DONE (front-end leftovers listed above).
 2. `data`: DONE (leftovers listed above).
 3. Mutual blocks: DONE (leftovers listed above).
-4. Nested types: DONE, with generated instances for simple types.
+4. Nested types: DONE, with generated instances for single types, families and blocks.
 5. Mixed blocks: REMOVED, pending a redesign.
 6. Surface items, as they become blocking.

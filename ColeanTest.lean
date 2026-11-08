@@ -31,6 +31,7 @@ import ColeanTest.MRose
 import ColeanTest.EvenOdd
 import ColeanTest.Nest
 import ColeanTest.Derive
+import ColeanTest.DeriveIdx
 import ColeanTest.Failure
 import ColeanTest.PropArg
 import ColeanTest.Info

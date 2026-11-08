@@ -11,7 +11,7 @@ file of theory and one generator file.
 | 2b. Model extras | the model | polymorphic `fold`/`corec`, `T.rec` | instantiated |
 | 3. Framework | `T.contract` only | `ctor`, `dtor_ctor`, `ctor_dtor`, `ctor_injective`, `corec_eq`, `corec_unique` and the data duals | none: instantiation of generic theorems |
 | 4. Surface | the constructor list and steps 2–3 | `T.cᵢ` with their lemmas, `casesOn`, `rec_cᵢ`, `fold_cᵢ`, the characterisation `T.F.Rel`, the types, aliases and per-type recursors of a block | term assembly |
-| 5. Instances | a declared type | `PolyIso`/`PolyMap` instances for it (`T.Poly.*`) | the layer's laws by tactic; the fixpoint instantiated |
+| 5. Instances | a declared type, family or block | `PolyIso`/`PolyMap` instances for it (`T.Poly.*`) | the layer's laws by tactic; the fixpoint instantiated |
 
 ## Files
 
@@ -22,7 +22,7 @@ Theory, in dependency order:
 - `Framework.lean`: `Codata.Rel`, `Codata.Contract`, `Data.All`, `Data.Contract` and every theorem that follows from a contract alone. Depends on Mathlib only.
 - `Model/Cotype.lean`: signatures, the container functor `Obj`, the encoding, the greatest fixpoint `IsWf`, `Cotype`, its contract pieces and the transport theorems to a functor `F ≃ Obj`.
 - `Model/Intype.lean`: the least fixpoint `IsFin`, `Intype`, the dependent recursor by well-founded recursion, fold, and the transports.
-- `Model/Poly.lean`: a least or greatest fixpoint of a layer polynomial in a parameter is polynomial in that parameter: trees of shapes, `Path`, `PolyFix`, `coFix`, `inFix`.
+- `Model/Poly.lean`: a least or greatest fixpoint of a layer polynomial in a parameter is polynomial in that parameter: trees of shapes, `Path`, `PolyFix`, `coFix`, `inFix`; for a family, at every index (`ILay`, `IPath`, `IPolyFix`, `icoFix`, `iinFix`), on the total space of the plain case.
 - `Model/Occ.lean`: occurrence structures `Occ`/`IOcc`, internal to the command: their combinators, laws and computation lemmas; the leaves are `Occ.ofIso F`, from the `PolyIso` instances.
 
 Generators, on `Expr`, in dependency order. `Syntax.lean` holds the command syntax.
@@ -118,4 +118,16 @@ It generates one instance per type, `PolyIso (fun X => T (H₁ X) … (Hₙ X))`
 for `data` and `codata`, from the contract. The structure of a field in a parameter is that of
 `Gen/Occ.lean`, with the premise's structure at the parameter.
 
-Scope: a single type without indices. Mutual blocks and indexed families are skipped.
+A family gets the instances at every index, `PolyIso (fun X => T (H X) idx)` with `idx` arguments
+of the instance; its presentation is a family over the packed index, with the index of each
+position (`T.Poly.idx`, `T.Poly.sig`), and the layer at an index `i` is `ILay`. The types of a
+block get theirs at their index of the block: the presentation is per block (`Blk.Poly.*`), over
+`Blk.Poly.Ix`, which is `Blk.Ix` without the parameters that vary (`Blk.Ix` takes them all, so it
+cannot index trees of shapes that do not depend on them), read in the block's index along
+`Blk.Poly.ixIn`; the instances are per type (`Tₘ.Poly.instPolyIso`), with the eta forms for a
+type without indices. The theory takes the contract along this map (`ico_bisim`, `iin_ind`), and
+`corec` and `fold` on states over the presentation's index through `Along` and `Over`.
+
+Scope: in a block, a position of a nested argument must be at a type of the block by definition,
+through a named type constructor at one type or under binders; through a product or a sum it is
+so only after cases on the position, and the step fails with its warning.

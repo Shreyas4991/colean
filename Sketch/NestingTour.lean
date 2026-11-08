@@ -12,8 +12,8 @@ How the file is checked:
 
 * an example without an error on it works;
 * the failures of Parts II and III are left as they are, so they show as errors in the infoview;
-* in Part II a failed `data`/`codata` declares nothing, so the names of failed types do not exist
-  (a block keeps its index: section 13);
+* in Part II a failed `data`/`codata` declares nothing, so the names of failed types do not
+  exist; a failed instance generation is only a warning, and the type itself is declared;
 * the absence of an instance is shown by a failing `#synth`.
 
 A word used throughout. A *leaf* is a named type constructor applied in a nested argument, such
@@ -176,9 +176,9 @@ data FixInst (G : Type → Type) (Sh : Type) (Pos : Sh → Type) [PolyIso G Sh P
 
 /-! ### 4. Declared types, with generated instances
 
-A single `data` or `codata` without indices gets `PolyIso` and `PolyMap` by itself, in a separate
-step after the declaration (`Colean/Gen/Derive.lean`). Nothing is written by hand from here to
-the end of section 5. -/
+A `data` or `codata` gets `PolyIso` and `PolyMap` by itself, in a separate step after the
+declaration (`Colean/Gen/Derive.lean`); families and the types of blocks too, at every index (the
+end of section 6). Nothing is written by hand from here to the end of section 5. -/
 
 data L (α : Type u)
   | nil
@@ -340,10 +340,9 @@ codata Void (α : Type u)
 
 /-! ### 6. Indexed families and mutual blocks
 
-Here leaves come from sections 2 and 3, or from section 4: generated instances are for the type
-nested *through*, and the enclosing type may be a family or a block. What must not be indexed or
-mutual is the leaf (section 14). A family may have several indices, and so may the types of a
-block. -/
+Here leaves come from sections 2 and 3, or from section 4: the enclosing type may be a family or
+a block. A family may have several indices, and so may the types of a block. At the end of the
+section the leaf is itself a family or a type of a block, with generated instances. -/
 
 -- A family through a plain leaf.
 codata BoxVec (α : Type u) : Nat → Type u
@@ -448,6 +447,119 @@ data TwoFn : Nat → Nat → Type
 data TwoProd : Nat → Nat → Type
   | nil : TwoProd 0 0
   | mk {n m : Nat} (c : Nat × TwoProd n m) : TwoProd (n + 1) m
+
+/-! Families and the types of blocks are leaves too, with generated instances at every index:
+`PolyIso (fun X => Vec (H X) n)` for each `n`, an argument of the instance, and for a type of a
+block at its index of the block. -/
+
+data Vec (α : Type u) : Nat → Type u
+  | nil : Vec α 0
+  | cons {n : Nat} (a : α) (t : Vec α n) : Vec α (n + 1)
+
+/-- info: Vec.Poly.instPolyIso 3 -/
+#guard_msgs in
+#synth PolyIso (fun X : Type => Vec X 3) _ _
+
+-- At a fixed index.
+data ThroughVec
+  | leaf
+  | mk (v : Vec ThroughVec 3)
+
+-- A family through a family, at its own index.
+data VTree : Nat → Type
+  | leaf : VTree 0
+  | node {n : Nat} (cs : Vec (VTree n) n) : VTree (n + 1)
+
+-- The types of a block.
+mutual
+data Ping (α : Type u)
+  | nil
+  | cons (a : α) (b : Pong α)
+data Pong (α : Type u)
+  | cons (a : α) (b : Ping α)
+end
+
+/-- info: Ping.Poly.instPolyIsoEta -/
+#guard_msgs in
+#synth PolyIso Ping.{0} _ _
+
+data ThroughPing
+  | leaf
+  | mk (v : Ping ThroughPing)
+
+-- The types of a block with indices, in `codata`.
+mutual
+codata Ev (α : Type u) : Nat → Type u
+  | zero (a : α) : Ev α 0
+  | succ {n : Nat} (o : Od α n) : Ev α (n + 1)
+codata Od (α : Type u) : Nat → Type u
+  | succ {n : Nat} (a : α) (e : Ev α n) : Od α (n + 1)
+end
+
+data ThroughOd
+  | leaf
+  | mk (o : Od ThroughOd 3)
+
+/-! A hand-written instance still works, and is the one found, being declared after the generated
+one: here a presentation simpler than the trees of shapes. First for a family at a fixed index,
+whichever it is. -/
+
+data Tagged (α : Type u) : Bool → Type u
+  | mk {b : Bool} (a : α) : Tagged α b
+
+def Tagged.val {α : Type u} {b : Bool} (t : Tagged α b) : α :=
+  Tagged.casesOn (motive := fun _ _ => α) t id
+
+@[simp] theorem Tagged.val_mk {α : Type u} {b : Bool} (a : α) :
+    (Tagged.mk a : Tagged α b).val = a := by
+  simp [Tagged.val]
+
+instance (b : Bool) : PolyIso (fun X : Type u => Tagged X b) Unit (fun _ => Unit) where
+  equiv :=
+    { toFun := fun t => ⟨(), fun _ => t.val⟩
+      invFun := fun z => .mk (z.2 ())
+      left_inv := fun t => by cases t with | mk a => simp
+      right_inv := fun _ => by simp }
+
+instance (b : Bool) : PolyMap (fun X : Type u => Tagged X b) (fun X : Type v => Tagged X b) where
+  map f t := .mk (f t.val)
+  equiv_map f t := by simp [Equiv.coe_fn_mk, PolyIso.equiv, Poly.map]
+
+data ThroughTagged
+  | leaf
+  | mk (v : Tagged ThroughTagged true)
+
+/-! Then for a type of a block. -/
+
+mutual
+data Hand (α : Type u)
+  | mk (a : α) (b : Stop α)
+data Stop (α : Type u)
+  | stop
+end
+
+def Hand.val {α : Type u} (t : Hand α) : α :=
+  Hand.casesOn (motive := fun _ => α) t fun a _ => a
+
+@[simp] theorem Hand.val_mk {α : Type u} (a : α) (b : Stop α) : (Hand.mk a b).val = a := by
+  simp [Hand.val]
+
+instance : PolyIso Hand.{u} Unit (fun _ => Unit) where
+  equiv :=
+    { toFun := fun t => ⟨(), fun _ => t.val⟩
+      invFun := fun z => .mk (z.2 ()) .stop
+      left_inv := fun t => by
+        cases t with
+        | mk a b => cases b with | stop => simp
+      right_inv := fun _ => by simp }
+
+instance : PolyMap Hand.{u} Hand.{v} where
+  map f t := .mk (f t.val) .stop
+  equiv_map f t := by simp [Equiv.coe_fn_mk, PolyIso.equiv, Poly.map]
+
+data ThroughHand
+  | leaf
+  | mk (v : Hand ThroughHand)
 
 /-! ### 7. Spellings
 
@@ -673,11 +785,6 @@ data PairB
   | mk (a : PairA)
 end
 
-/-! This failure comes before any declaration of the types, but after the index of the block,
-which stays. -/
-
-#check PairA_PairB.Ix
-
 -- With the built-in form the same data passes, for the family and for the block.
 data TwoIdxProd : Nat → Type
   | zero : TwoIdxProd 0
@@ -693,94 +800,45 @@ data ProdC
   | mk (a : ProdA)
 end
 
-/-! ### 14. Nesting through an indexed family or a mutual block
+/-! ### 14. A type of a block with a product in a nested argument
 
-Only a single type without indices gets instances. A family or a member of a block is skipped
-silently, and nesting through it fails at the missing instance. -/
-
-data Vec (α : Type u) : Nat → Type u
-  | nil : Vec α 0
-  | cons {n : Nat} (a : α) (t : Vec α n) : Vec α (n + 1)
-
-#synth PolyIso (fun X : Type => Vec X 3) _ _
-
-data ThroughVec
-  | leaf
-  | mk (v : Vec ThroughVec 3)
+A type of a block gets its instances at its index of the block, presented over the block's index
+without the parameters that vary. The index of a position of a nested argument must then be a
+type of the block at variables: through a named type constructor at one type, or under binders, it
+is (`Even` and `Odd` of section 6 with a parameter would be fine); through a product or a sum it
+is only after cases on the position, and the generation fails with a warning. The types
+themselves are declared, and a hand-written instance can still be given. -/
 
 mutual
-data Ping (α : Type u)
+data PA (α : Type u)
   | nil
-  | cons (a : α) (b : Pong α)
-data Pong (α : Type u)
-  | cons (a : α) (b : Ping α)
+  | mk (a : α) (p : PA α × Nat)
+data PB (α : Type u)
+  | mk (a : PA α)
 end
 
-#synth PolyIso Ping.{0} _ _
+#synth PolyIso PA.{0} _ _
 
-data ThroughPing
+data ThroughPA
   | leaf
-  | mk (v : Ping ThroughPing)
+  | mk (p : PA ThroughPA)
 
-/-! Hand-written instances do work for these: the restriction is on generation. First a family
-at a fixed index, whichever it is. -/
-
-data Tagged (α : Type u) : Bool → Type u
-  | mk {b : Bool} (a : α) : Tagged α b
-
-def Tagged.val {α : Type u} {b : Bool} (t : Tagged α b) : α :=
-  Tagged.casesOn (motive := fun _ _ => α) t id
-
-@[simp] theorem Tagged.val_mk {α : Type u} {b : Bool} (a : α) :
-    (Tagged.mk a : Tagged α b).val = a := by
-  simp [Tagged.val]
-
-instance (b : Bool) : PolyIso (fun X : Type u => Tagged X b) Unit (fun _ => Unit) where
-  equiv :=
-    { toFun := fun t => ⟨(), fun _ => t.val⟩
-      invFun := fun z => .mk (z.2 ())
-      left_inv := fun t => by cases t with | mk a => simp
-      right_inv := fun _ => by simp }
-
-instance (b : Bool) : PolyMap (fun X : Type u => Tagged X b) (fun X : Type v => Tagged X b) where
-  map f t := .mk (f t.val)
-  equiv_map f t := by simp [Equiv.coe_fn_mk, PolyIso.equiv, Poly.map]
-
-data ThroughTagged
-  | leaf
-  | mk (v : Tagged ThroughTagged true)
-
-/-! Then a member of a mutual block. -/
+/-! The same with two types of the block in one product: the positions of `p` are at `QA` and at
+`QB`, and which one is known only after cases on the position. -/
 
 mutual
-data Hand (α : Type u)
-  | mk (a : α) (b : Stop α)
-data Stop (α : Type u)
-  | stop
+data QA (α : Type u)
+  | nil
+  | mk (a : α) (p : QA α × QB α)
+data QB (α : Type u)
+  | mk (a : α) (q : QA α)
 end
 
-def Hand.val {α : Type u} (t : Hand α) : α :=
-  Hand.casesOn (motive := fun _ => α) t fun a _ => a
+#synth PolyIso QB.{0} _ _
 
-@[simp] theorem Hand.val_mk {α : Type u} (a : α) (b : Stop α) : (Hand.mk a b).val = a := by
-  simp [Hand.val]
-
-instance : PolyIso Hand.{u} Unit (fun _ => Unit) where
-  equiv :=
-    { toFun := fun t => ⟨(), fun _ => t.val⟩
-      invFun := fun z => .mk (z.2 ()) .stop
-      left_inv := fun t => by
-        cases t with
-        | mk a b => cases b with | stop => simp
-      right_inv := fun _ => by simp }
-
-instance : PolyMap Hand.{u} Hand.{v} where
-  map f t := .mk (f t.val) .stop
-  equiv_map f t := by simp [Equiv.coe_fn_mk, PolyIso.equiv, Poly.map]
-
-data ThroughHand
+data ThroughQB
   | leaf
-  | mk (v : Hand ThroughHand)
+  | mk (q : QB ThroughQB)
 
 /-! ### 15. Spellings that mean something else
 

@@ -39,8 +39,9 @@ pairs, which the command handles itself. Named type constructors take the occurr
 argument. `IPolyIso` and `IPolyMap` are the same classes for functors on families
 `(J → Type u) → Type v`, where every position says at which index its child lives.
 
-A type declared by `codata` or `data` gets these instances when it can (`Cmd/Derive.lean`):
-in the arguments that may vary, for the functors `fun X => T (H X)` with `H` itself an instance.
+A type declared by `codata` or `data` gets these instances when it can (`Gen/Derive.lean`):
+in the arguments that may vary, for the functors `fun X => T (H X)` with `H` itself an instance,
+and for a family or a type of a block at every index, `fun X => T (H X) idx`.
 -/
 
 universe u u' v v' s p j

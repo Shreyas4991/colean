@@ -140,8 +140,9 @@ A declared type gets these instances when it can, in a separate step after its d
 being instances too. If that step fails, it logs a warning and leaves no trace: the type is
 declared as usual and can still be given instances by hand. The step works from the contract:
 a value is a tree of shapes with the contents of its slots (`Model/Poly.lean`), and the map on
-the parameter is the structural one (`PolyFix.d_map`). For now it covers a single type without
-indices.
+the parameter is the structural one (`PolyFix.d_map`). A family gets them at every index,
+`fun X => T (H X) idx`, and so do the types of a block, at their index of the block
+(`IPolyFix.d_map`).
 
 
 # Mutual blocks

@@ -14,9 +14,9 @@ and dependent pairs over constant types, and named type constructors with `PolyI
 `children : List (T params idx)`, `p : T params i × T params j`, `k : A → List (T params idx)`,
 `c : Option (T params idx × T params idx)`, `List (Option (T params idx))`, …. The structure of
 the argument type is built by recursion on its elaborated type (`Gen/Occ.lean`), with instance
-search only at the named constructors. A single type without indices is given such instances
-when its parameters allow it (step 5, `Gen/Derive.lean`), so that a later declaration can nest
-through it; for other types the user provides them.
+search only at the named constructors. A declared type, a family or the types of a block, is
+given such instances when its parameters allow it, at every index (step 5, `Gen/Derive.lean`), so
+that a later declaration can nest through it; for other types the user provides them.
 
 ```
 codata ITree (E : Type → Type) (R : Type)

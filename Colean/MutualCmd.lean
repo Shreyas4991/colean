@@ -41,6 +41,12 @@ rules are `Rose.rec_node`, `Forest.rec_cons`, …, stated with the recursors per
 position of a nested argument whose index does not reduce to one type (`p : Own × Nat`, say),
 the induction hypothesis keeps the motive made by cases on `Ix`.
 
+The types get `PolyIso` and `PolyMap` instances at their index of the block, when the parameters
+allow it (step 5, `Gen/Derive.lean`): the presentation is per block, `Tree_Forest.Poly.*`, over
+`Tree_Forest.Poly.Ix`, the block's index without the parameters that vary, and the instances are
+per type, `Tree.Poly.instPolyIso`. A position of a nested argument whose index does not reduce to
+one type (`p : Own × Nat`) is not supported there: the generation fails with a warning.
+
 Constructor names shared by several types of the block are qualified in the block-level
 inductives (`Even_succ`, `Odd_succ` in `Even_Odd.F`), and so are the minor premises of the
 recursors and the alternatives of `induction`; the per-type declarations keep the plain names.
