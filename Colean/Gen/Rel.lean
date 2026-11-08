@@ -14,8 +14,10 @@ import Colean.Gen.Iso
 `T.F.Rel` belongs to the surface (step 4), but the model's `rel_ofC` and the contract's `bisim`
 are stated with it, so it is generated before them (a boundary violation recorded in
 `architecture.md`). The two lemmas are proved by tactic scripts: `cases`,
-then `constructor` and the hypothesis for `rel_map`; for `rel_ofC`, `cases` on both layers and on
-the hypothesis, then the witnesses, with `Occ.rel_ofC` for a nested argument.
+then `constructor` and the hypothesis for `rel_map`; for `rel_ofC`, the layers written as
+`toC a`, `toC a'` (`toC_ofC`), `cases` on the hypothesis, which is then at variables, the layers
+of the nested arguments rewritten with the hypotheses on them, then the witnesses, and the
+positions by cases in general position (`casesPos`).
 -/
 
 open Lean Meta Elab Term
@@ -160,37 +162,49 @@ def genRelOfC : TermElabM Unit := do
     #[← ctx.sigE, X, Y, R, pI, z, z']
   let xs := ctx.params ++ #[X, Y, R] ++ ctx.idx ++ #[z, z', h]
   let type ← withBinderInfo (ctx.params ++ ctx.idx) .implicit do mkForallFVars xs objRel
+  -- The layers are written as `toC a`, `toC a'`, so that the hypothesis is on variables
+  -- `a`, `a'` and at the index variables: `cases` on it needs no unification.
   let ofC := mkCIdent ctx.ofC
-  let common : Array (TSyntax `tactic) := #[← `(tactic| intro z z' h),
-    ← `(tactic| obtain ⟨s, ch⟩ := z), ← `(tactic| obtain ⟨s', ch'⟩ := z'),
-    ← `(tactic| cases s), ← `(tactic| all_goals cases s'),
-    ← `(tactic| all_goals try simp only [$ofC:ident] at h), ← `(tactic| all_goals cases h)]
-  let tail : Array (TSyntax `tactic) := #[← `(tactic| refine ⟨_, _, _, rfl, rfl, fun b => ?_⟩),
-    ← `(tactic| cases b), ← `(tactic| all_goals solve_by_elim)]
-  let script ← if ctx.ctors.any (·.hasNest) then do
-      -- One goal per constructor remains, in order. The hypothesis on a nested pair gives the
-      -- equality of the shapes, substituted, and the relation on the contents.
-      let bullets ← ctx.ctors.mapM fun c => do
-        let recs := c.recArgs
-        let mut steps : Array (TSyntax `tactic) := #[]
-        if !recs.isEmpty then
-          let hs := recs.map fun a => mkIdent (Name.mkSimple s!"h_{a.name}")
-          steps := steps.push (← `(tactic| rename_i $[$hs:ident]*))
-          for hId in hs, a in recs do
-            if a.kind.isNest then
-              let relOfC := mkCIdent
-                (if ctx.idxed then ``Codata.IOcc.rel_ofC else ``Codata.Occ.rel_ofC)
-              -- `rfl` must be the keyword pattern, not a hygienic name.
-              let rflPat := mkIdent `rfl
-              steps := steps.push
-                (← `(tactic| obtain ⟨$rflPat:ident, $hId:ident⟩ := $relOfC _ _ $hId))
-        let all := steps ++ tail
-        `(tactic| · $[$all:tactic]*)
-      pure (common ++ bullets)
-    else pure (common ++ (← tail.mapM fun t => `(tactic| all_goals $t:tactic)))
+  let toC_ofC := mkCIdent ctx.toC_ofC
+  let start ← `(tactic| (
+    intro z z' h
+    rw [← $toC_ofC:ident z, ← $toC_ofC:ident z']
+    generalize $ofC:ident z = a at h ⊢
+    generalize $ofC:ident z' = a' at h ⊢
+    clear z z'
+    cases h))
   let value ← prove type fun g => do
     let (_, g) ← g.introN (xs.size - 3)
-    runTac g (← `(tactic| ($[$script:tactic]*)))
+    let gs ← Tactic.run g (Tactic.evalTactic start)
+    unless gs.length == ctx.ctors.size do
+      throwError "internal error: unexpected cases of `{ctx.Rel}`"
+    for g in gs, c in ctx.ctors do
+      -- `toC (F.c …)` unfolded to its layer, where a nested argument's layer `toC o x` occurs.
+      let g ← g.withContext do
+        let tgt ← instantiateMVars (← g.getType)
+        let args := tgt.getAppArgs
+        g.replaceTargetDefEq (mkAppN tgt.getAppFn
+          (args.extract 0 (args.size - 2) ++ #[← whnf args[args.size - 2]!, ← whnf args.back!]))
+      -- The hypothesis on a nested pair gives its two layers, with one shape, and the relation
+      -- on their contents.
+      let recs := c.recArgs
+      let mut steps : Array (TSyntax `tactic) := #[]
+      if c.hasNest then
+        let hs := recs.map fun a => mkIdent (Name.mkSimple s!"h_{a.name}")
+        steps := steps.push (← `(tactic| rename_i $[$hs:ident]*))
+        for hId in hs, a in recs do
+          if a.kind.isNest then
+            let e := mkIdent (Name.mkSimple s!"e_{a.name}")
+            let e' := mkIdent (Name.mkSimple s!"e'_{a.name}")
+            steps := steps.push
+              (← `(tactic| obtain ⟨_, _, _, $e:ident, $e':ident, $hId:ident⟩ := $hId))
+            steps := steps.push (← `(tactic| rw [$e:ident, $e':ident]))
+      steps := steps.push (← `(tactic| refine ⟨_, _, _, rfl, rfl, fun b => ?_⟩))
+      let [g] ← Tactic.run g (Tactic.evalTactic (← `(tactic| ($[$steps:tactic]*))))
+        | throwError "internal error: expected one goal"
+      -- The positions, by cases in general position.
+      let b ← g.withContext do return (← getLCtx).lastDecl.get!.fvarId
+      for sg in ← casesPos g b do runTac sg.mvarId (← `(tactic| solve_by_elim))
   addThm ctx.rel_ofC (← ctx.levelParamsOf fresh #[type]) type value ctx.ref
 
 end Ctx

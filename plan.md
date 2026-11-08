@@ -40,7 +40,8 @@ DONE:
 * any number of indices, dependent telescopes, propositions as indices (`ColeanTest/Cyc.lean`,
   `ColeanTest/Bounded.lean`);
 * arbitrary index expressions in results and recursive arguments, including bare and repeated
-  binders (`ColeanTest/Diag.lean`);
+  binders (`ColeanTest/Diag.lean`), and result indices that are not patterns, `T (n * 2)`,
+  `T (!b)` (`ColeanTest/ResultIndex.lean`);
 * recursive arguments under any telescope of arrows, dependent or curried, with the index
   depending on the bound variables (`ColeanTest/Tele.lean`);
 * `casesOn` as the `cases` eliminator, refining the indices; injectivity and disjointness lemmas

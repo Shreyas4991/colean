@@ -346,6 +346,33 @@ end
 
 end ManyIndices
 
+-- A result index that is not a pattern, `!b`, as `inductive` accepts. The generated proofs never
+-- invert it. Case analysis on a value at such an index (`p : Pa (!b)`) cannot, as with
+-- `inductive`; at a variable index it can.
+namespace ResultIndex
+
+mutual
+data Pa : Bool → Type
+  | nil : Pa true
+  | mk {b : Bool} (q : Qa b) : Pa (!b)
+data Qa : Bool → Type
+  | mk {b : Bool} (p : Pa b) : Qa b
+end
+
+def Pa.len {b : Bool} (p : Pa b) : Nat :=
+  Pa.rec (motive_2 := fun _ _ => Nat) 0 (fun _ k => k + 1) (fun _ k => k + 1) p
+
+example {b : Bool} (q : Qa b) : (Pa.mk q).len = Qa.rec (motive_1 := fun _ _ => Nat) 0
+    (fun _ k => k + 1) (fun _ k => k + 1) q + 1 := by
+  rw [Pa.len, Pa.rec_mk]
+
+example {b : Bool} (p : Pa b) : p.len = 0 → b = true := by
+  cases p with
+  | nil => intro; rfl
+  | mk q => simp [Pa.len]
+
+end ResultIndex
+
 -- Indices are not compared, so the spelling does not matter, nor does a missing sort.
 namespace Spelling
 
@@ -671,22 +698,6 @@ data Qa
 end
 
 end BlockName
-
-/-! A result index that the pattern matcher cannot invert. `!b` is a function of `b`, and a
-generated proof does a `cases` on the index, which fails at the constructor `mk`. `inductive`
-accepts this. A single type fails likewise. -/
-
-namespace ResultIndex
-
-mutual
-data Pa : Bool → Type
-  | nil : Pa true
-  | mk {b : Bool} (q : Qa b) : Pa (!b)
-data Qa : Bool → Type
-  | mk {b : Bool} (p : Pa b) : Qa b
-end
-
-end ResultIndex
 
 /-! A declared sort of `Prop` is ignored without a word: both types are in `Type`. A single type
 behaves the same. -/

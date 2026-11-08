@@ -11,8 +11,11 @@ signature's layers, for a family `X` on the packed index:
 * their laws `T.ofC_toC`, `T.toC_ofC`, `T.ofC_map`, and for `codata` `T.rel_ofC` (stated with
   `T.F.Rel`, `Gen/Rel.lean`).
 
-`toC` is by cases on `F`; the children of a layer are by cases on the position, with the
-dependent elimination of `MVarId.cases` (a position's type has the shape as its index). The
+`toC` is by cases on `F`; the children of a layer are by cases on the position (`casesPos`), at
+its shape `Shape.c d` and the constructor's index, in general position: the position is
+eliminated at variables, and the equation of the shapes is solved before those of the indices,
+which then hold by definition. So a result index need not be a pattern (`T (n * 2)`), where
+`MVarId.cases` would have to invert it. The laws eliminate positions the same way. The
 layers of the nested arguments are bound by a lambda, `(fun z => ⟨Shape.c d z.1, …⟩) (toC o x)`,
 so that the children are parametric in them and `toC_ofC` can rewrite them. `ofC` is by cases on
 the shape. The laws are proved on goal metavariables: by cases, then `rfl`; for nested arguments
@@ -24,6 +27,77 @@ the goal is first unfolded (`whnf`), then rewritten with the laws of `Model/Occ.
 open Lean Meta Elab Term
 
 namespace Codata.Gen
+
+/-! ### Case analysis on positions -/
+
+/-- A proof of the equation `eq` (`x = x'` or `x ≍ x'`): `rfl` if its sides are definitionally
+equal, else one of the hypotheses `hs` with these sides. -/
+def eqProof (eq : Expr) (hs : Array Expr) : MetaM Expr := do
+  let sides (e : Expr) : Option (Expr × Expr × Bool) :=
+    match e.heq?, e.eq? with
+    | some (_, x, _, x'), _ => some (x, x', true)
+    | _, some (_, x, x') => some (x, x', false)
+    | _, _ => none
+  let some (x, x', heq) := sides eq
+    | throwError "internal error: expected an equation, got{indentExpr eq}"
+  if ← isDefEq x x' then return ← if heq then mkHEqRefl x else mkEqRefl x
+  for h in hs do
+    let some (a, a', hheq) := sides (← whnfR (← inferType h)) | continue
+    if ← isDefEq x a <&&> isDefEq x' a' then
+      return ← if heq == hheq then pure h else if heq then mkHEqOfEq h else mkEqOfHEq h
+  throwError "internal error: no proof of{indentExpr eq}"
+
+/-- `MVarId.cases` on a position `b : T.B params idx s` whose shape `s` is a constructor
+application, in general position: `b` is eliminated at variables (`generalizeIndices`), and in
+each case the equation of the shapes is solved first, by the heterogeneous `noConfusion` of
+`T.Shape`, which closes the cases of other shapes and gives the equations of the shapes'
+arguments; once these are substituted, the equations of the indices hold by definition. So the
+indices need not be patterns: `cases`, which solves them first, fails on `n' * 2 = n * 2` for a
+constructor of `T (n * 2)`. -/
+def casesPos (g : MVarId) (b : FVarId) : MetaM (Array CasesSubgoal) := g.withContext do
+  let ty ← whnf (← b.getType)
+  let .const I _ := ty.getAppFn
+    | throwError "internal error: expected a position, got{indentExpr ty}"
+  -- Without indices besides the shape, there is nothing to solve before it.
+  if (← getConstInfoInduct I).numIndices ≤ 1 then return ← g.cases b
+  if (← constructorApp'? ty.appArg!).isNone then return ← g.cases b
+  let gi ← generalizeIndices g b
+  let ctors := (← getConstInfoInduct I).ctors.toArray
+  let sgs ← gi.mvarId.induction gi.fvarId (mkCasesOnName I)
+  (sgs.zip ctors).filterMapM fun (sg, ctor) => sg.mvarId.withContext do
+    -- The equations of the indices, then of the shapes, then of the positions.
+    let (hs, g) ← sg.mvarId.introNP (gi.numEqs - 1)
+    g.withContext do
+    let hs := hs.map mkFVar
+    let P ← g.getType
+    let hsTy ← inferType hs.back!
+    let (s₀, s') ← match hsTy.heq?, hsTy.eq? with
+      | some (_, s₀, _, s'), _ => pure (s₀, s')
+      | _, some (_, s₀, s') => pure (s₀, s')
+      | _, _ => throwError "internal error: expected an equation of shapes, got{indentExpr hsTy}"
+    let sTy ← whnf (← inferType s₀)
+    let .const S us := sTy.getAppFn
+      | throwError "internal error: expected a shape, got{indentExpr sTy}"
+    let info ← getConstInfoInduct S
+    -- `S.noConfusion`, with the equations of the parameters and indices, then of the shapes.
+    let mut nc := mkAppN (.const (S ++ `noConfusion) ((← getLevel P) :: us))
+      (#[P] ++ sTy.getAppArgs ++ #[s₀] ++ (← whnf (← inferType s')).getAppArgs ++ #[s'])
+    for _ in [0:info.numParams + info.numIndices + 1] do
+      nc := mkApp nc (← eqProof (← whnfForall (← inferType nc)).bindingDomain! hs)
+    let some (c₀, _) ← constructorApp'? s₀ | throwError "internal error: expected a constructor"
+    let some (c', _) ← constructorApp'? s' | throwError "internal error: expected a constructor"
+    if c₀.name != c'.name then
+      g.assign nc
+      return none
+    let .forallE _ K _ _ ← whnf (← inferType nc)
+      | throwError "internal error: unexpected `noConfusion`{indentExpr nc}"
+    let k ← mkFreshExprSyntheticOpaqueMVar K (← g.getTag)
+    g.assign (mkApp nc k)
+    let g ← k.mvarId!.tryClearMany (hs.map (·.fvarId!))
+    -- The equations of the shapes' arguments, then of the positions.
+    let nEqs := K.getNumHeadForalls - P.getNumHeadForalls + 1
+    let some (g, subst) ← Cases.unifyEqs? nEqs g sg.subst ctor | return none
+    return some { mvarId := g, subst, fields := sg.fields.map subst.apply, ctorName := ctor }
 
 namespace Ctx
 
@@ -79,11 +153,11 @@ def fullIdx (I : Name) (nParams : Nat) (args is : Array Expr) : MetaM (Array Exp
 /-! ### `toC` -/
 
 /-- The children of the layer of `F.c` with arguments `ys` and nested layers `zs`, at index `idx`
-and shape `s`: by cases on the position. -/
+and shape `s`: by cases on the position (`casesPos`). -/
 def toCChild (c : Ctor) (X : Expr) (ys zs idx : Array Expr) (s : Expr) : TermElabM Expr := do
   let g ← mkFreshExprSyntheticOpaqueMVar (← ctx.childTy X idx s)
   let (b, g') ← g.mvarId!.intro1
-  for sg in ← g'.cases b do
+  for sg in ← casesPos g' b do
     let some k := c.args.findIdx? fun a => !a.kind.isData && sg.ctorName == some (ctx.bCtor c a)
       | throwError "internal error: unexpected position {sg.ctorName}"
     let a := c.args[k]!
@@ -229,7 +303,7 @@ def casesLayer (hs : Array Expr) (g : MVarId) (z : Expr) (idx : Array Expr)
   return sg.subst
 
 /-- Close `g : A = Obj.mk s c` where `A` reduces to `Obj.mk s' c'`: by `funext`, cases on the
-position, and `rfl`. The position's type is stated as `T.B params idx s` first. -/
+position (`casesPos`), and `rfl`. The position's type is stated as `T.B params idx s` first. -/
 def finishLayer (hs : Array Expr) (g : MVarId) : TermElabM Unit := g.withContext do
   let some (_, _, rhs) := (← instantiateMVars (← g.getType)).eq?
     | throwError "internal error: expected an equation"
@@ -247,7 +321,7 @@ def finishLayer (hs : Array Expr) (g : MVarId) : TermElabM Unit := g.withContext
   g.withContext do
   let b := (← getLCtx).lastDecl.get!.toExpr
   let g ← g.replaceLocalDeclDefEq b.fvarId! (ctx.inProof hs (← ctx.bAt idx s))
-  for sg in ← g.cases b.fvarId! do sg.mvarId.refl
+  for sg in ← casesPos g b.fvarId! do sg.mvarId.refl
 
 /-- `T.ofC_toC`, `T.toC_ofC`, `T.ofC_map`. -/
 def genIsoLaws : TermElabM Unit := do

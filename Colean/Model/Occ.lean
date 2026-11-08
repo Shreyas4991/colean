@@ -121,17 +121,6 @@ theorem rel_intro {R : X → Y → Prop} (sh : Sh) (c : Pos sh → X) (c' : Pos 
     (h : ∀ q, R (c q) (c' q)) : Rel o o' R (o.ofC ⟨sh, c⟩) (o'.ofC ⟨sh, c'⟩) :=
   ⟨sh, c, c', o.toC_ofC _, o'.toC_ofC _, h⟩
 
-/-- Related layers have the same shape and related contents; used by the generated `rel_ofC`,
-where the shapes are pattern variables and the equation is substituted. -/
-theorem rel_ofC {R : X → Y → Prop} {sh sh' : Sh} {f : Pos sh → X} {f' : Pos sh' → Y}
-    (h : Rel o o' R (o.ofC ⟨sh, f⟩) (o'.ofC ⟨sh', f'⟩)) :
-    ∃ e : sh = sh', ∀ q, R (f q) (f' (e ▸ q)) := by
-  obtain ⟨sh₀, c, c', h1, h2, hR⟩ := h
-  rw [toC_ofC] at h1 h2
-  cases h1
-  cases h2
-  exact ⟨rfl, hR⟩
-
 /-- Related values are the two images of one value, once every related pair is: the elimination
 of `Rel`, used by the generated `rel_ctorᵢ` lemmas with the pairs `{p // R p.1 p.2}` and, for
 nested arguments, with the images given by the inner lemma. -/
@@ -213,16 +202,6 @@ theorem rel_intro {R : ∀ j, X j → Y j → Prop} (sh : Sh) (c : (q : Pos sh) 
     (c' : (q : Pos sh) → Y (pidx sh q)) (h : ∀ q, R _ (c q) (c' q)) :
     Rel o o' R (o.ofC ⟨sh, c⟩) (o'.ofC ⟨sh, c'⟩) :=
   ⟨sh, c, c', o.toC_ofC _, o'.toC_ofC _, h⟩
-
-theorem rel_ofC {R : ∀ j, X j → Y j → Prop} {sh sh' : Sh} {f : (q : Pos sh) → X (pidx sh q)}
-    {f' : (q : Pos sh') → Y (pidx sh' q)}
-    (h : Rel o o' R (o.ofC ⟨sh, f⟩) (o'.ofC ⟨sh', f'⟩)) :
-    ∃ e : sh = sh', ∀ q, R _ (f q) ((e ▸ f') q) := by
-  obtain ⟨sh₀, c, c', h1, h2, hR⟩ := h
-  rw [toC_ofC] at h1 h2
-  cases h1
-  cases h2
-  exact ⟨rfl, hR⟩
 
 theorem exists_map_of_rel' {R : ∀ j, X j → Y j → Prop} {W : J → Type u''}
     (fst : ∀ j, W j → X j) (snd : ∀ j, W j → Y j)

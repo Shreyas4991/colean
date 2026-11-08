@@ -69,6 +69,13 @@ painful, the statement is a goal metavariable and a tactic closes it: `MVarId.ca
 instantiated goal. The only syntax left is the command syntax, these tactic scripts, and the
 attributes of the eliminators.
 
+A position `b : T.B idx (Shape.c d)` is eliminated in general position (`casesPos`,
+`Gen/Iso.lean`): at variables, solving the equation of the shapes, by the heterogeneous
+`noConfusion`, before those of the indices, which then hold by definition. So a constructor's
+result index need not be a pattern (`T (n * 2)`, `T (!b)`), as with `inductive`; `MVarId.cases`
+would have to invert it. Other eliminations are at index variables: the layers by cases on `F` or
+on the shape, `rel_ofC` by cases on `F.Rel` after writing the layers as `toC a`.
+
 ## Rules
 
 - Tactic proofs are the laws of the generated inductives: the functor laws (step 1), the isomorphism laws and the lifting laws (steps 2 and 4), and in step 5 the laws of the layer and the rewriting steps of the fixpoint. Everything else instantiates a theorem of `Framework.lean` or `Model/`.
