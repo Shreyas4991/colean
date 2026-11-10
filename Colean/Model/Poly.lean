@@ -13,7 +13,10 @@ finite path to a node with a position `P s` there (`Path`). Both fixpoints go th
 are obtained (`coFill` by corecursion, `inFill` by a fold and well-founded recursion).
 
 This is the construction of `MvPFunctor.wp` and `MvPFunctor.M.Path`, on any type satisfying the
-hypotheses, so that it applies to the types of the commands through their contracts.
+hypotheses, so that it applies to the types of the commands through their contracts. The action
+on the parameter is the structural one (`d_map`); through a constructor it is computed by
+`map_eq_of_d`, and membership, the contents of the slots, is one layer deep (`exists_val_iff`):
+the `simp` lemmas of the instances of declared types (`Gen/Derive.lean`).
 
 The second part is the same for a family: a layer at the index `i` of a signature,
 `ILay σ P X Y i = Σ s : σ.Shape i, (P i s → X) × ((b : σ.B i s) → Y (σ.idx b))`, has fixpoints
@@ -216,6 +219,62 @@ theorem d_map {X' : Type x'} {T' : Type t'} (M' : PolyFix P 𝕎 X' T') (f : X �
     exact ext e (fun _ => rfl)
       (fun i => (M.map_eq M' f (M.erase_child h i)).symm)
   exact key _ rfl
+
+/-- A value is determined by its layer. -/
+theorem d_injective : Function.Injective M.d := by
+  intro a c h
+  refine M.bisim (fun a c => M.d a = M.d c) (fun a c h => ?_) a c h
+  have key : ∀ z z' : Lay P B X T, z = z' → ∃ e : z.1 = z'.1,
+      (∀ q, z.2.1 q = z'.2.1 (castS e q)) ∧ ∀ i, z.2.2 i = z'.2.2 (castS e i) := by
+    rintro _ _ rfl
+    exact ⟨rfl, fun _ => rfl, fun _ => rfl⟩
+  obtain ⟨e, hv, hk⟩ := key _ _ h
+  exact ⟨e, hv, fun i => congrArg M.d (hk i)⟩
+
+/-- The map of a value, through a right inverse `c` of the destructor of the other side: the
+value of its layer with the contents and the children mapped. With `c` a constructor, this
+computes the map on constructors. -/
+theorem map_eq_of_d {X' : Type x'} {T' : Type t'} (M' : PolyFix P 𝕎 X' T') (f : X → X')
+    (c : Lay P B X' T' → T') (hc : ∀ z, M'.d (c z) = z) (a : T) :
+    M.map M' f a =
+      c ⟨(M.d a).1, fun q => f ((M.d a).2.1 q), fun i => M.map M' f ((M.d a).2.2 i)⟩ :=
+  M'.d_injective ((M.d_map M' f a).trans (hc _).symm)
+
+/-- The contents of the slots of equal values are the same, whatever the proof of their tree of
+shapes. -/
+theorem exists_val_congr {a a' : T} (ha : a = a') {c : W} (h : M.erase a = c) (x : X) :
+    (∃ r : Path P 𝕎 c, M.val r a h = x) ↔ ∃ r : Path P 𝕎 (M.erase a'), M.val r a' rfl = x := by
+  subst ha h
+  rfl
+
+/-- The contents of the slots of a value are those of its layer and those of the slots of its
+children, at any proof of its tree of shapes. -/
+theorem exists_val_iff' {a : T} {c : W} (hc : M.erase a = c) (x : X) :
+    (∃ r : Path P 𝕎 c, M.val r a hc = x) ↔ (∃ q, (M.d a).2.1 q = x) ∨
+      ∃ i, ∃ r : Path P 𝕎 (M.erase ((M.d a).2.2 i)), M.val r ((M.d a).2.2 i) rfl = x := by
+  have e := M.erase_fst hc
+  constructor
+  · rintro ⟨r, rfl⟩
+    cases r with
+    | here q => exact .inl ⟨_, rfl⟩
+    | there i r => exact .inr ⟨_, (M.exists_val_congr rfl _ _).1 ⟨r, rfl⟩⟩
+  · rintro (⟨q, rfl⟩ | ⟨i, r, rfl⟩)
+    · refine ⟨.here (castS e q), ?_⟩
+      show (M.d a).2.1 (castS e.symm (castS e q)) = _
+      rw [castS_castS]
+    · obtain ⟨r₁, h₁⟩ := (M.exists_val_congr (a := (M.d a).2.2 (castS e.symm (castS e i)))
+        (by rw [castS_castS]) (M.erase_child hc (castS e i)) _).2 ⟨r, rfl⟩
+      exact ⟨.there (castS e i) r₁, h₁⟩
+
+/-- The contents of the slots of a value are those of its layer and those of the slots of its
+children: membership in one step, for the least and the greatest fixpoint alike, since a slot is
+a finite path. -/
+theorem exists_val_iff {a : T} {s : S} {v : P s → X} {k : B s → T} (h : M.d a = ⟨s, v, k⟩)
+    (x : X) :
+    (∃ r, (M.equiv a).2 r = x) ↔ (∃ q, v q = x) ∨ ∃ i, ∃ r, (M.equiv (k i)).2 r = x := by
+  have := M.exists_val_iff' (a := a) rfl x
+  rw [h] at this
+  exact this
 
 end PolyFix
 
@@ -583,6 +642,29 @@ theorem d_map {X' : Type x'} {T' : σ.I → Type t'} (M' : IPolyFix P 𝕎 X' T'
     M'.d (M.map M' f a) =
       ⟨(M.d a).1, fun q => f ((M.d a).2.1 q), fun b => M.map M' f ((M.d a).2.2 b)⟩ :=
   ILay.total_inj (M.total.d_map M'.total f ⟨i, a⟩)
+
+/-- A value is determined by its layer. -/
+theorem d_injective {i : σ.I} : Function.Injective (M.d (i := i)) := by
+  intro a c h
+  refine M.bisim (fun _ a c => M.d a = M.d c) (fun _ a c h => ?_) a c h
+  rcases hd : M.d a with ⟨s, v, k⟩
+  exact ⟨s, v, k, k, rfl, h ▸ hd, fun _ => rfl⟩
+
+/-- The map of a value, through a right inverse `c` of the destructor of the other side. -/
+theorem map_eq_of_d {X' : Type x'} {T' : σ.I → Type t'} (M' : IPolyFix P 𝕎 X' T') (f : X → X')
+    (c : ∀ {i}, ILay σ P X' T' i → T' i) (hc : ∀ {i} (z : ILay σ P X' T' i), M'.d (c z) = z)
+    {i : σ.I} (a : T i) :
+    M.map M' f a =
+      c ⟨(M.d a).1, fun q => f ((M.d a).2.1 q), fun b => M.map M' f ((M.d a).2.2 b)⟩ :=
+  M'.d_injective ((M.d_map M' f a).trans (hc _).symm)
+
+/-- The contents of the slots of a value at `i` are those of its layer and those of the slots
+of its children. -/
+theorem exists_val_iff {i : σ.I} {a : T i} {s : σ.Shape i} {v : P i s → X}
+    {k : (b : σ.B i s) → T (σ.idx b)} (h : M.d a = ⟨s, v, k⟩) (x : X) :
+    (∃ r, (M.equiv i a).2 r = x) ↔ (∃ q, v q = x) ∨ ∃ b, ∃ r, (M.equiv _ (k b)).2 r = x :=
+  M.total.exists_val_iff (a := ⟨i, a⟩) (s := ⟨i, s⟩) (k := fun b => ⟨_, k b⟩)
+    (show (M.d a).total = _ by rw [h]; rfl) x
 
 end IPolyFix
 

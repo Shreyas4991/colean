@@ -37,6 +37,7 @@ import ColeanTest.PropArg
 import ColeanTest.Info
 import ColeanTest.ResultIndex
 import ColeanTest.RecMem
+import ColeanTest.NestSimp
 -- These use `mixed_mutual`, which is removed pending a redesign, or the generated structures
 -- removed with `Model/Param.lean`.
 -- import ColeanTest.MixedRejected

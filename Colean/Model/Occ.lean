@@ -493,6 +493,13 @@ def reidx {pidx : (sh : Sh) → Pos sh → K} {G : (K → Type u) → Type v} (o
     IOcc Sh Pos (fun sh q => g (pidx sh q)) (fun X : J → Type u => G fun k => X (g k)) :=
   ⟨o.equiv⟩
 
+/-- The map of a plain structure at a fixed index is its map at that index. Not a simp lemma, as
+tests state it for their leaves (`ColeanTest/ResultIndex.lean`); with it, `simp` reaches the
+rules of a declared family nested at its own index (`Vec (T n) n`). -/
+theorem map_ofOcc {G : Type u → Type v} {G' : Type u' → Type v'} (o : Occ Sh Pos G)
+    (o' : Occ Sh Pos G') (i : J) {X : J → Type u} {Y : J → Type u'} (f : ∀ j, X j → Y j)
+    (x : G (X i)) : map (ofOcc o i) (ofOcc o' i) f x = Occ.map o o' (f i) x := rfl
+
 end Reindex
 
 section Combinators
@@ -854,6 +861,15 @@ variable {Sh₁ : Type s} {Pos₁ : Sh₁ → Type p} {Sh₂ : Type s'} {Pos₂ 
 theorem ofIso_id : ofIso (fun X : Type u => X) = hole := rfl
 
 theorem ofIso_const (A : Type v) : ofIso (fun _ : Type u => A) = const A := rfl
+
+/-- The map of the identity's instance is the function: the map of a field `x : α` in the rules
+of a declared type at the identity premise (`Gen/Derive.lean`). -/
+@[simp] theorem map_ofIso_id {X : Type u} {Y : Type u'} (f : X → Y) :
+    map (ofIso fun X : Type u => X) (ofIso fun X : Type u' => X) f = f := rfl
+
+/-- The map of a constant's instance is the identity. -/
+@[simp] theorem map_ofIso_const (A : Type v) {X : Type u} {Y : Type u'} (f : X → Y) (a : A) :
+    map (ofIso fun _ : Type u => A) (ofIso fun _ : Type u' => A) f a = a := rfl
 
 theorem ofIso_prod : ofIso (fun X => G₁ X × G₂ X) = prod (ofIso G₁) (ofIso G₂) := rfl
 

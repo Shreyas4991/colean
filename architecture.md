@@ -11,7 +11,7 @@ file of theory and one generator file.
 | 2b. Model extras | the model | polymorphic `fold`/`corec`, `T.recPos`, `T.rec` | instantiated |
 | 3. Framework | `T.contract` only | `ctor`, `dtor_ctor`, `ctor_dtor`, `ctor_injective`, `corec_eq`, `corec_unique` and the data duals | none: instantiation of generic theorems |
 | 4. Surface | the constructor list and steps 2–3 | `T.cᵢ` with their lemmas, `casesOn`, `rec_cᵢ`, `fold_cᵢ`, the characterisation `T.F.Rel`, the types, aliases and per-type recursors of a block | term assembly |
-| 5. Instances | a declared type, family or block | `PolyIso`/`PolyMap` instances for it (`T.Poly.*`) | the layer's laws by tactic; the fixpoint instantiated |
+| 5. Instances | a declared type, family or block | `PolyIso`/`PolyMap` instances for it (`T.Poly.*`), and the `simp` lemmas `T.Poly.map_cᵢ`, `T.Poly.mem_cᵢ` | the layer's laws by tactic; the fixpoint instantiated; the lemmas by a theorem of `Model/Poly.lean` and definitional unfolding (map), cases on the positions of a layer (membership) |
 
 ## Files
 
@@ -22,7 +22,7 @@ Theory, in dependency order:
 - `Framework.lean`: `Codata.Rel`, `Codata.Contract`, `Data.All`, `Data.Contract` and every theorem that follows from a contract alone. Depends on Mathlib only.
 - `Model/Cotype.lean`: signatures, the container functor `Obj`, the encoding, the greatest fixpoint `IsWf`, `Cotype`, its contract pieces and the transport theorems to a functor `F ≃ Obj`.
 - `Model/Intype.lean`: the least fixpoint `IsFin`, `Intype`, the dependent recursor by well-founded recursion, fold, and the transports.
-- `Model/Poly.lean`: a least or greatest fixpoint of a layer polynomial in a parameter is polynomial in that parameter: trees of shapes, `Path`, `PolyFix`, `coFix`, `inFix`; for a family, at every index (`ILay`, `IPath`, `IPolyFix`, `icoFix`, `iinFix`), on the total space of the plain case.
+- `Model/Poly.lean`: a least or greatest fixpoint of a layer polynomial in a parameter is polynomial in that parameter: trees of shapes, `Path`, `PolyFix`, `coFix`, `inFix`; for a family, at every index (`ILay`, `IPath`, `IPolyFix`, `icoFix`, `iinFix`), on the total space of the plain case. The map through a right inverse of the destructor (`map_eq_of_d`) and membership in one step (`exists_val_iff`), for the `simp` lemmas of step 5.
 - `Model/Occ.lean`: occurrence structures `Occ`/`IOcc`, internal to the command: their combinators, laws and computation lemmas; the leaves are `Occ.ofIso F`, from the `PolyIso` instances, and the instances of the built-in forms are the combinators by definition (`Occ.ofIso_prod`, …).
 
 Generators, on `Expr`, in dependency order. `Syntax.lean` holds the command syntax.
@@ -78,7 +78,7 @@ on the shape, `rel_ofC` by cases on `F.Rel` after writing the layers as `toC a`.
 
 ## Rules
 
-- Tactic proofs are the laws of the generated inductives: the functor laws (step 1), the isomorphism laws and the lifting laws (steps 2 and 4), and in step 5 the laws of the layer and the rewriting steps of the fixpoint. Everything else instantiates a theorem of `Framework.lean` or `Model/`.
+- Tactic proofs are the laws of the generated inductives: the functor laws (step 1), the isomorphism laws and the lifting laws (steps 2 and 4), and in step 5 the laws of the layer, the rewriting steps of the fixpoint and the cases on the positions of a layer (membership). Everything else instantiates a theorem of `Framework.lean` or `Model/`.
 - The framework never mentions a model, a signature or `Raw`; the model never mentions a declaration; the surface never proves anything.
 - A nested argument enters the model as a shape with positions; the user-facing `F` keeps its type.
 - Some generated proofs need the definitional unfolding of Lean before 4.34 (`withUnfolding`, around those proofs only): a term of the signature is the expected one only after unfolding.
@@ -151,3 +151,25 @@ type without indices. The theory takes the contract along this map (`ico_bisim`,
 Scope: in a block, a position of a nested argument must be at a type of the block by definition,
 through a named type constructor at one type or under binders; through a product or a sum it is
 so only after cases on the position, and the step fails with its warning.
+
+With the instances come, per constructor `c` of each type, two `simp` lemmas at the premises
+(`genPolySimp`), so that `simp` computes through the instances in the rules of other types:
+
+- `T.Poly.map_c`: `(Occ.ofIso fun X => T (H X) idx).map (Occ.ofIso fun X => T (H' X) idx) f
+  (T.c args) = T.c args'`, data unchanged, a field at a parameter position mapped by its
+  structure in the premises (`(Occ.ofIso H).map (Occ.ofIso H') f a`, `f a` by `simp` at the
+  identity), a recursive argument by this map, a nested one by the map of its structure. It is
+  stated on the leaf `Occ.ofIso`, as the other types' rules (`fold_c`, `F.map_c`, `dtor_corec`)
+  mention the map: a rule on `PolyMap.map`, whose functor is implicit, would make `simp` solve
+  `?H ?X =?= T` first and not apply at the identity premise. `Occ.map_ofIso` relates the two.
+  The proof is `PolyFix.map_eq_of_d` at `ctor ∘ ofL` after `dtor_c`; the right-hand side is then
+  the result by definition.
+- `T.Poly.mem_c`: `PolyIso.Mem (fun X => T (H X) idx) x (T.c args) ↔ …`, a disjunct per field
+  at a parameter position and per recursive argument (through a nested one, `∃ t, Mem G t c ∧
+  Mem … x t`), `False` without any. It holds for `codata` as well: a slot is a finite path. The
+  proof is `PolyFix.exists_val_iff` after `dtor_c`, then cases on the positions of the layer.
+
+Both are stated on the constructors for `codata` too (a value is the constructor of its `dtor`,
+and `corec_eq` writes a corecursive one so). The functors of the left-hand sides are not indexed,
+since the leaves of other rules are often eta-reduced (`Occ.ofIso Forest`). A failure of the
+lemmas is a warning that rolls back only them.

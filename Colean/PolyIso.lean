@@ -53,7 +53,9 @@ are the other instances here.
 
 A type declared by `codata` or `data` gets these instances when it can (`Gen/Derive.lean`):
 in the arguments that may vary, for the functors `fun X => T (H X)` with `H` itself an instance,
-and for a family or a type of a block at every index, `fun X => T (H X) idx`.
+and for a family or a type of a block at every index, `fun X => T (H X) idx`. With them come
+`simp` lemmas on its constructors, for the map on the leaf `Occ.ofIso` of the instance
+(`T.Poly.map_c`) and for membership (`T.Poly.mem_c`), so that `simp` computes through them.
 -/
 
 universe u u' u'' v v' v'' w w' s s' p p' j k a
@@ -668,8 +670,9 @@ instance [hG : PolyIso G Sh Pos] [hG' : PolyIso G' Sh Pos] [mG : PolyMap G G']
     exact Occ.comp_ext (Sh' := fun _ _ => Sh') (Pos' := fun _ _ s => Pos' s)
       (X := fun _ _ _ _ => Y) _ _ _ _ fun q => PolyMap.equiv_map _ _
 
+/-- The functor is not indexed: with `H` the identity it is `G` up to eta. -/
 @[simp] theorem mem_comp [PolyIso G Sh Pos] [PolyIso H Sh' Pos'] {X : Type u} (x : X)
-    (c : G (H X)) : Mem (fun X => G (H X)) x c ↔ ∃ y, Mem G y c ∧ Mem H x y := by
+    (c : G (H X)) : Mem (no_index (fun X => G (H X))) x c ↔ ∃ y, Mem G y c ∧ Mem H x y := by
   constructor
   · rintro ⟨r, e⟩
     exact ⟨_, ⟨r.1, rfl⟩, r.2, e⟩
