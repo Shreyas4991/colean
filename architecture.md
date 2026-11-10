@@ -8,7 +8,7 @@ file of theory and one generator file.
 |---|---|---|---|
 | 1. Functor | the declaration | `T.F`, `T.F.map`, `map_id`, `map_comp` | tactic, per declaration |
 | 2. Model | `T.F` | `T.contract : Contract T F` (a signature, an isomorphism `F X ≃ σ.Obj X`, the fixpoint on `Raw`) | the isomorphism's laws by tactic; the rest instantiated |
-| 2b. Model extras | the model | polymorphic `fold`/`corec`, `T.rec` | instantiated |
+| 2b. Model extras | the model | polymorphic `fold`/`corec`, `T.recPos`, `T.rec` | instantiated |
 | 3. Framework | `T.contract` only | `ctor`, `dtor_ctor`, `ctor_dtor`, `ctor_injective`, `corec_eq`, `corec_unique` and the data duals | none: instantiation of generic theorems |
 | 4. Surface | the constructor list and steps 2–3 | `T.cᵢ` with their lemmas, `casesOn`, `rec_cᵢ`, `fold_cᵢ`, the characterisation `T.F.Rel`, the types, aliases and per-type recursors of a block | term assembly |
 | 5. Instances | a declared type, family or block | `PolyIso`/`PolyMap` instances for it (`T.Poly.*`) | the layer's laws by tactic; the fixpoint instantiated |
@@ -18,12 +18,12 @@ file of theory and one generator file.
 Theory, in dependency order:
 
 - `Raw.lean`: the general type `Raw I L := List I → Option L` (the model's carrier).
-- `PolyIso.lean`: the user interface for nesting: `PolyIso` and `PolyMap` (and `IPolyIso`, `IPolyMap` for functors on families) say that a functor is isomorphic to a polynomial functor. Instances for `List`, `Option`, `Array`. Depends on Mathlib only.
+- `PolyIso.lean`: the user interface for nesting: `PolyIso` and `PolyMap` (and `IPolyIso`, `IPolyMap` for functors on families) say that a functor is isomorphic to a polynomial functor, and `PolyIso.Mem` (`IPolyIso.Mem`, at an index) says what the members of a value are. Instances for constants, the identity, `List`, `Option`, `Array`, and for products, sums, functions, dependent pairs and composites of functors with instances, with `simp` lemmas for membership through all of them. Depends on Mathlib only.
 - `Framework.lean`: `Codata.Rel`, `Codata.Contract`, `Data.All`, `Data.Contract` and every theorem that follows from a contract alone. Depends on Mathlib only.
 - `Model/Cotype.lean`: signatures, the container functor `Obj`, the encoding, the greatest fixpoint `IsWf`, `Cotype`, its contract pieces and the transport theorems to a functor `F ≃ Obj`.
 - `Model/Intype.lean`: the least fixpoint `IsFin`, `Intype`, the dependent recursor by well-founded recursion, fold, and the transports.
 - `Model/Poly.lean`: a least or greatest fixpoint of a layer polynomial in a parameter is polynomial in that parameter: trees of shapes, `Path`, `PolyFix`, `coFix`, `inFix`; for a family, at every index (`ILay`, `IPath`, `IPolyFix`, `icoFix`, `iinFix`), on the total space of the plain case.
-- `Model/Occ.lean`: occurrence structures `Occ`/`IOcc`, internal to the command: their combinators, laws and computation lemmas; the leaves are `Occ.ofIso F`, from the `PolyIso` instances.
+- `Model/Occ.lean`: occurrence structures `Occ`/`IOcc`, internal to the command: their combinators, laws and computation lemmas; the leaves are `Occ.ofIso F`, from the `PolyIso` instances, and the instances of the built-in forms are the combinators by definition (`Occ.ofIso_prod`, …).
 
 Generators, on `Expr`, in dependency order. `Syntax.lean` holds the command syntax.
 
@@ -35,7 +35,7 @@ Generators, on `Expr`, in dependency order. `Syntax.lean` holds the command synt
 - `Gen/Signature.lean`, `Gen/Iso.lean`, `Gen/Model.lean`: step 2 (the signature; the isomorphism and its laws; the type and the contract).
 - `Gen/Rel.lean`: `T.F.Rel`, `rel_map`, `rel_ofC` (step 4, generated before the model, see below).
 - `Gen/Framework.lean`: step 3.
-- `Gen/Extras.lean`: step 2b (`T.rec`).
+- `Gen/Extras.lean`: step 2b (`T.recPos`, `T.rec`), and the instance of an occurrence structure (`isoOf`).
 - `Gen/Surface.lean`: step 4 (constructors and their lemmas, `casesOn`, `rec_cᵢ`, `fold_cᵢ`; in a block, the types `Tₘ`, the aliases and, for `data`, the recursors `Tₘ.rec` per type).
 - `Gen/Derive.lean`: step 5, separate from the pipeline (see below).
 - `Gen/Command.lean`: the pipeline. `CodataCmd.lean`, `DataCmd.lean`: the commands; `MutualCmd.lean`: `mutual` blocks of them.
@@ -83,9 +83,26 @@ on the shape, `rel_ofC` by cases on `F.Rel` after writing the layers as `toC a`.
 - A nested argument enters the model as a shape with positions; the user-facing `F` keeps its type.
 - Some generated proofs need the definitional unfolding of Lean before 4.34 (`withUnfolding`, around those proofs only): a term of the signature is the expected one only after unfolding.
 
+## Recursors
+
+The recursor `T.rec` is user-facing, so its type mentions only the user's types and the
+user-facing classes. Its induction hypothesis for a nested argument `c` is by membership,
+`∀ t, PolyIso.Mem (fun X => G X) t c → motive t`, with the argument's type `G` as a function of
+the occurrences and, as its instance, the occurrence structure of the argument read as an
+instance (`isoOf`): a leaf is `Occ.ofIso` of its instance, and the instances of the built-in
+forms are the combinators by definition. In a family the hypothesis is by `IPolyIso.Mem` at an
+index unless every position is at one index (the index of a position at variables mentions
+neither the shape nor the position); then the instance is a `PolyIso` at that index (`flat`).
+
+`T.recPos` is the recursor of the model, with the hypotheses at the positions of the structures.
+`T.rec` is `T.recPos` at minor premises that turn these hypotheses into membership
+(`PolyIso.memRec`, by `Classical.choose`, with no proof in between since the instance is the
+structure), and its rules `T.rec_cᵢ` are `T.recPos_ctor` followed by `PolyIso.memRec_pos` at
+each nested argument.
+
 ## Known boundary violations
 
-- `T.corec`, `T.fold` (universe-polymorphic in the state) and `T.rec` come from the model, because `Contract` fixes one universe for `F`. Fix: a universe-polymorphic framework interface, after which `T.rec` derives from `fold` and `induction`.
+- `T.corec`, `T.fold` (universe-polymorphic in the state) and `T.recPos` come from the model, because `Contract` fixes one universe for `F`. Fix: a universe-polymorphic framework interface, after which the recursor derives from `fold` and `induction`.
 - `T.F.Rel` (surface) is generated before the model, because `rel_ofC` and the contract's `bisim` are stated with it. Fix: state `bisim` with the canonical `Rel`, derive the inductive characterisation in step 4 by term-level introduction and elimination lemmas.
 
 ## Blocks
@@ -99,7 +116,10 @@ type: the constructors and their lemmas are stated with the types `Tₘ`, `Tₘ.
 constructors of `Tₘ`, and `Tₘ.corec`, `Tₘ.bisim`, `Tₘ.fold` restrict the block-level declarations.
 For `data`, `Tₘ.rec` has a motive per type, as Lean's mutual recursors: it is `Blk.rec` at the
 motive `fun i x => Blk.Ix.casesOn i motive_1 … x`, whose minor premises are the per-type ones by
-unfolding, and its rules `Tₘ.rec_cᵢ` are the block-level rules `Blk.rec_cᵢ` by unfolding.
+unfolding, and its rules `Tₘ.rec_cᵢ` are the block-level rules `Blk.rec_cᵢ` by unfolding. A
+hypothesis by membership at an index of the block (`IPolyIso.Mem`) is one per type of the
+argument in `Tₘ.rec`, each at its type's motive, and `Blk.rec`'s is given to each at its
+constructor of `Blk.Ix`.
 
 A block mixing `data` and `codata` is a nested fixpoint, whose order is a choice. The
 `mixed_mutual` command that stated the order is removed, pending a redesign; `mutual` rejects

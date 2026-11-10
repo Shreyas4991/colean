@@ -30,11 +30,15 @@ generated. The command then produces, from the generic theory (`Framework.lean`,
   `T.ctor_ctorᵢ`, `T.fold_ctorᵢ`, injectivity and disjointness, and `T.casesOn`, as for `codata`;
 * the dependent recursor `T.rec : {motive : ∀ i, T i → Sort v} → minors → ∀ {i} (t : T i),
   motive i t`, with one minor premise per constructor carrying an induction hypothesis for each
-  recursive argument (`∀ ys, motive _ (k ys)` under a telescope), registered as the
-  `induction` eliminator, and its computation rules `T.rec_ctorᵢ` as simp lemmas. It is
-  `Signature.rec_of` at the packed index, with the minor premises assembled by `casesOn` on
-  `F T i` (`T.recAux`); its computation rules are propositional, since the generic recursor is
-  built from `WellFounded.fix`.
+  recursive argument (`∀ ys, motive _ (k ys)` under a telescope; for a nested argument `c`, by
+  membership, `∀ t, PolyIso.Mem (fun X => G X) t c → motive _ t`, or `IPolyIso.Mem` at an index
+  when its positions are at several indices), registered as the `induction` eliminator, and its
+  computation rules `T.rec_ctorᵢ` as simp lemmas, with the hypothesis of a nested argument
+  `fun t _ => T.rec … t`. It is `T.recPos`, the recursor with the hypotheses of nested arguments
+  at the positions of their structures, with these turned into membership (`PolyIso.memRec`);
+  `T.recPos` is `Signature.rec_of` at the packed index, with the minor premises assembled by
+  `casesOn` on `F T i` (`T.recAux`). The computation rules are propositional, since the generic
+  recursor is built from `WellFounded.fix`.
 
 The `Prop` instance of `T.rec` is induction with per-constructor hypotheses; the contract's
 `induction` with the `Data.All` hypothesis is not curried for the user.

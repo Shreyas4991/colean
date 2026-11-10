@@ -401,8 +401,9 @@ def ctor : Name := ctx.gen "ctor"
 def fold : Name := ctx.gen "fold"
 def fold_ctor : Name := ctx.gen "fold_ctor"
 def recAux : Name := ctx.gen "recAux"
+def recPos : Name := ctx.gen "recPos"
+def recPos_ctor : Name := ctx.gen "recPos_ctor"
 def recN : Name := ctx.gen "rec"
-def rec_ctor : Name := ctx.gen "rec_ctor"
 
 /-- The framework. -/
 def dtor_ctor : Name := ctx.gen "dtor_ctor"

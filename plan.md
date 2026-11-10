@@ -78,8 +78,8 @@ DONE:
   `T.fold_unique`; derived `T.dtor` with `dtor_ctor`, `ctor_dtor`; constructors, injectivity,
   disjointness, `casesOn` as for `codata`;
 * the dependent recursor `T.rec`, one minor premise per constructor with induction hypotheses,
-  registered as the `induction` eliminator, with computation rules `T.rec_ctorᵢ` (propositional,
-  by design);
+  those of nested arguments by membership (`PolyIso.Mem`, `IPolyIso.Mem`), registered as the
+  `induction` eliminator, with computation rules `T.rec_ctorᵢ` (propositional, by design);
 * isomorphisms with the native types: `List`, a native tree, `Nat`, Mathlib's `WType`.
 
 NOT DONE:
@@ -164,10 +164,15 @@ NOT DONE:
   trees of shapes along `Blk.Poly.ixIn`;
 * `IPolyIso` instances, where the varying parameter is itself a family;
 * a field mentioning two parameters that may vary (`p : α × β`): both then count as constant;
-* holes at different indices in several arguments of a named constructor (`Pair (T i) (T j)`),
-  and instances for `×`, `⊕`, `→` inside such arguments (`E (T × Nat) T`);
-* constructor-level lemmas for the generated map, and for the positions in `T.rec`'s induction
-  hypotheses: `PolyFix.d_map` states the map on layers only;
+* holes at different indices in several arguments of a named constructor (`Pair (T i) (T j)`);
+* constructor-level lemmas for the generated map, and `simp` lemmas for membership through
+  generated instances: `PolyFix.d_map` states the map on layers only;
+* in a family or a block, a nested argument through a product or a sum gets the hypothesis by
+  `IPolyIso.Mem` even when all its occurrences are at one index (`Own × Nat` in a block): its
+  positions are at that index only after cases on them;
+* `PolyMap`/`IPolyMap` instances for the composites across plain functors and functors on
+  families (`fun X => G fun _ => X`, `fun X => G fun k => H k X`, reindexing): their
+  `PolyIso`/`IPolyIso` instances exist;
 * `rel_*` characterisations of `Occ.Rel` through `prod`, `pi`, `comp` as iffs (only the
   introductions exist), and user-facing `T.map`/`T.Rel` abbreviations.
 

@@ -177,8 +177,35 @@ declarations in the order written, is removed, pending a redesign.
 # Recursors
 
 Beyond the contract, the command generates the dependent recursor `T.rec` into any `Sort`, with
-one minor premise per constructor carrying an induction hypothesis for each recursive argument.
-It is derivable from the contract (a fold into `Σ t, motive t`, with `induction` showing the
-first component is the identity), but the command takes it from the encoding, by well-founded
-recursion on the immediate-child relation, so its computation rules `T.rec_ctorᵢ` hold
-propositionally and not by `rfl`.
+one minor premise per constructor carrying an induction hypothesis for each recursive argument:
+`motive x` for a plain one, `∀ ys, motive (k ys)` under a telescope, and for a nested argument
+one by membership,
+
+```
+data Rose
+  | node (n : Nat) (cs : List Rose)
+
+Rose.rec : {motive : Rose → Sort u} →
+  ((n : Nat) → (cs : List Rose) → ((t : Rose) → PolyIso.Mem (fun X => List X) t cs → motive t) →
+    motive (Rose.node n cs)) →
+  (t : Rose) → motive t
+```
+
+`PolyIso.Mem F x c` says that some position of `c`, in the presentation of `F`, holds `x`
+(`PolyIso.lean`). The functor is the argument's type with the occurrences abstracted, written
+out (`fun X => E (List X) X`), at the instance that is its occurrence structure: products, sums,
+functions and dependent pairs of functors with instances have instances, so every nested
+argument's functor has one, and `simp` turns membership into the container's own (`mem_list`,
+`mem_option`, `mem_array`) or into components (`mem_prod`, `mem_comp`, …). In a family, when the
+positions of a nested argument are all at one index, its members are of the type at that index
+and the hypothesis is as above (`List (T n)`); otherwise it is by membership at an index,
+`∀ j (t : T j), IPolyIso.Mem (fun X => G X) j t c → motive j t` (`T n × T (n + 1)`). The
+recursors per type of a block are the same at the motive of each type, with a hypothesis by
+`IPolyIso.Mem` for each type of the block in the argument.
+
+The computation rules `T.rec_ctorᵢ` give each hypothesis as the recursor itself:
+`Rose.rec node (Rose.node n cs) = node n cs fun t _ => Rose.rec node t`. The recursor is
+derivable from the contract (a fold into `Σ t, motive t`, with `induction` showing the first
+component is the identity), but the command takes it from the encoding, by well-founded
+recursion on the immediate-child relation, so its computation rules hold propositionally and not
+by `rfl`.

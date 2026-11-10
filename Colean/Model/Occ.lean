@@ -34,7 +34,10 @@ universe and `G'` at another (`List.{u}` and `List.{v}`): this is what keeps the
 and `fold` in any universe. The simp lemmas `map_list`, `map_prod`, `map_comp`, … compute `map`
 through the combinators back to the usual maps (`List.map`, pairs, composition), the `rel_*`
 lemmas do the same for `Rel`, and `forall_toC_*` turn "for every position" into membership or
-components, for induction hypotheses.
+components. The instances of `PolyIso.lean` for products, sums, functions, dependent pairs and
+composites are these combinators by definition (`ofIso_prod`, …, at the end), so a hypothesis at
+every position of a structure is one by membership for the instance (`PolyIso.memRec`): this is
+how the recursor states the induction hypotheses of nested arguments.
 
 The indexed version `IOcc` is for occurrences of a *family*: every position carries an index,
 `G X ≃ Σ sh, (q : Pos sh) → X (pidx sh q)`, so that occurrences at different indices may live
@@ -299,53 +302,9 @@ abbrev array : Occ Nat Fin Array.{u} := ofIso Array
 
 Every combinator is defined by its two maps directly, so that `toC`, `ofC` and `map` compute
 through it by `rfl` (the `toC_*` and `map_*` lemmas below). The inverse laws rewrite
-`toC (ofC z)` in dependent positions, which `rw` cannot do; the layer is generalised first. -/
-
-/-- Extensionality for the layers of a function: a family of layers is a shape function and a
-contents function. -/
-theorem pi_ext {A : Type a} {ShA : A → Type s} {PosA : ∀ x, ShA x → Type p}
-    {X : ∀ x (sh : ShA x), PosA x sh → Type u}
-    (T : ∀ x, Σ sh : ShA x, (q : PosA x sh) → X x sh q) (sh : ∀ x, ShA x)
-    (c : (q : Σ x, PosA x (sh x)) → X q.1 (sh q.1) q.2)
-    (h : ∀ x, T x = ⟨sh x, fun q => c ⟨x, q⟩⟩) :
-    (⟨fun x => (T x).1, fun q => (T q.1).2 q.2⟩ :
-      Σ sh : ∀ x, ShA x, (q : Σ x, PosA x (sh x)) → X q.1 (sh q.1) q.2) = ⟨sh, c⟩ := by
-  have : T = fun x => ⟨sh x, fun q => c ⟨x, q⟩⟩ := funext h
-  subst this
-  rfl
-
-/-- The same over a proposition. -/
-theorem piP_ext {P : Prop} {ShP : P → Type s} {PosP : ∀ h, ShP h → Type p}
-    {X : ∀ h (sh : ShP h), PosP h sh → Type u}
-    (T : ∀ h, Σ sh : ShP h, (q : PosP h sh) → X h sh q) (sh : ∀ h, ShP h)
-    (c : (q : Σ' h, PosP h (sh h)) → X q.1 (sh q.1) q.2)
-    (h : ∀ h, T h = ⟨sh h, fun q => c ⟨h, q⟩⟩) :
-    (⟨fun h => (T h).1, fun q => (T q.1).2 q.2⟩ :
-      Σ sh : ∀ h, ShP h, (q : Σ' h, PosP h (sh h)) → X q.1 (sh q.1) q.2) = ⟨sh, c⟩ := by
-  have : T = fun h => ⟨sh h, fun q => c ⟨h, q⟩⟩ := funext h
-  subst this
-  rfl
-
-/-- Extensionality for the layers of a composite: the inner layers at the positions of an
-outer shape. -/
-theorem comp_ext {Sh : Type s} {Pos : Sh → Type p} {Sh' : ∀ sh, Pos sh → Type s'}
-    {Pos' : ∀ sh (q : Pos sh), Sh' sh q → Type p'}
-    {X : ∀ sh (q : Pos sh) (sh' : Sh' sh q), Pos' sh q sh' → Type u} (sh : Sh)
-    (T : ∀ q : Pos sh, Σ sh' : Sh' sh q, (r : Pos' sh q sh') → X sh q sh' r) (t : ∀ q, Sh' sh q)
-    (c : (r : Σ q, Pos' sh q (t q)) → X sh r.1 (t r.1) r.2)
-    (h : ∀ q, T q = ⟨t q, fun r => c ⟨q, r⟩⟩) :
-    (⟨⟨sh, fun q => (T q).1⟩, fun r => (T r.1).2 r.2⟩ :
-      Σ z : Σ sh, (q : Pos sh) → Sh' sh q, (r : Σ q, Pos' z.1 q (z.2 q)) → X z.1 r.1 (z.2 r.1) r.2) =
-      ⟨⟨sh, t⟩, c⟩ := by
-  have : T = fun q => ⟨t q, fun r => c ⟨q, r⟩⟩ := funext h
-  subst this
-  rfl
-
-/-- Dependent case analysis on a sum, for the positions of a product. -/
-def sumRec {α : Type u} {β : Type v} {γ : α ⊕ β → Sort s} (f : ∀ a, γ (.inl a))
-    (g : ∀ b, γ (.inr b)) : ∀ x, γ x
-  | .inl a => f a
-  | .inr b => g b
+`toC (ofC z)` in dependent positions, which `rw` cannot do; the layer is generalised first, or
+the extensionality lemmas `pi_ext`, `piP_ext`, `comp_ext` apply. These, `sumRec` and `SumPos`
+are in `PolyIso.lean`, shared with the instances of the same forms. -/
 
 /-- A constant: the value is the shape, there are no positions. -/
 def const (A : Type v) : Occ A (fun _ => Empty) (fun _ : Type u => A) where
@@ -386,11 +345,6 @@ def prod (o₁ : Occ Sh₁ Pos₁ G₁) (o₂ : Occ Sh₂ Pos₂ G₂) :
       rw [toC_ofC] at h₁ h₂
       subst h₁ h₂
       exact congrArg (Sigma.mk (s₁, s₂)) (funext fun q => by cases q <;> rfl) }
-
-/-- The positions of a sum, lifted to one universe. -/
-def SumPos (Pos₁ : Sh₁ → Type p) (Pos₂ : Sh₂ → Type p') : Sh₁ ⊕ Sh₂ → Type (max p p')
-  | .inl sh => ULift.{p'} (Pos₁ sh)
-  | .inr sh => ULift.{p} (Pos₂ sh)
 
 /-- A sum of two expressions with occurrences: a shape of either side, its positions. -/
 def sum (o₁ : Occ Sh₁ Pos₁ G₁) (o₂ : Occ Sh₂ Pos₂ G₂) :
@@ -565,12 +519,6 @@ def prod (o₁ : IOcc Sh₁ Pos₁ pidx₁ G₁) (o₂ : IOcc Sh₂ Pos₂ pidx�
       rw [toC_ofC] at h₁ h₂
       subst h₁ h₂
       exact congrArg (Sigma.mk (s₁, s₂)) (funext fun q => by cases q <;> rfl) }
-
-/-- The indices of the positions of a sum. -/
-def sumIdx (pidx₁ : (sh : Sh₁) → Pos₁ sh → J) (pidx₂ : (sh : Sh₂) → Pos₂ sh → J) :
-    (sh : Sh₁ ⊕ Sh₂) → Occ.SumPos Pos₁ Pos₂ sh → J
-  | .inl sh, q => pidx₁ sh q.down
-  | .inr sh, q => pidx₂ sh q.down
 
 /-- A sum: a shape of either side, its positions (lifted to one universe). -/
 def sum (o₁ : IOcc Sh₁ Pos₁ pidx₁ G₁) (o₂ : IOcc Sh₂ Pos₂ pidx₂ G₂) :
@@ -888,6 +836,112 @@ theorem forall_toC_comp {P : X → Prop} (x : G (H X)) :
 end ComputeComp
 
 end Occ
+
+/-! ### The instances of the forms are the combinators
+
+The instances of `PolyIso.lean` for products, sums, functions, dependent pairs and composites
+are, by definition, the structures the command builds for these forms from the instances of the
+parts. So a nested argument's induction hypothesis at the positions of its structure is one by
+membership for the instance of its type (`PolyIso.memRec`), with no proof in between. -/
+
+namespace Occ
+
+section Agree
+
+variable {Sh₁ : Type s} {Pos₁ : Sh₁ → Type p} {Sh₂ : Type s'} {Pos₂ : Sh₂ → Type p'}
+  {G₁ : Type u → Type v} {G₂ : Type u → Type v'} [PolyIso G₁ Sh₁ Pos₁] [PolyIso G₂ Sh₂ Pos₂]
+
+theorem ofIso_id : ofIso (fun X : Type u => X) = hole := rfl
+
+theorem ofIso_const (A : Type v) : ofIso (fun _ : Type u => A) = const A := rfl
+
+theorem ofIso_prod : ofIso (fun X => G₁ X × G₂ X) = prod (ofIso G₁) (ofIso G₂) := rfl
+
+theorem ofIso_sum : ofIso (fun X => G₁ X ⊕ G₂ X) = sum (ofIso G₁) (ofIso G₂) := rfl
+
+variable {A : Type a} {ShA : A → Type s} {PosA : ∀ x, ShA x → Type p} {GA : A → Type u → Type v}
+  [∀ x, PolyIso (GA x) (ShA x) (PosA x)]
+
+theorem ofIso_pi : ofIso (fun X => ∀ x, GA x X) = pi A fun x => ofIso (GA x) := rfl
+
+theorem ofIso_sigma : ofIso (fun X => Σ x, GA x X) = sigma A fun x => ofIso (GA x) := rfl
+
+theorem ofIso_piP {P : Prop} {ShP : P → Type s} {PosP : ∀ h, ShP h → Type p}
+    {GP : P → Type u → Type v} [∀ h, PolyIso (GP h) (ShP h) (PosP h)] :
+    ofIso (fun X => ∀ h, GP h X) = piP P fun h => ofIso (GP h) := rfl
+
+theorem ofIso_comp {Sh : Type s} {Pos : Sh → Type p} {Sh' : Type s'} {Pos' : Sh' → Type p'}
+    {G : Type u' → Type v} {H : Type u → Type u'} [PolyIso G Sh Pos] [PolyIso H Sh' Pos'] :
+    ofIso (fun X => G (H X)) = comp (ofIso G) (ofIso H) := rfl
+
+theorem ofIso_ofI {J : Type j} {Sh : Type s} {Pos : Sh → Type p} {pidx : (sh : Sh) → Pos sh → J}
+    {G : (J → Type u) → Type v} [IPolyIso G Sh Pos pidx] :
+    ofIso (fun X : Type u => G fun _ => X) = ofI (IOcc.ofIso G) := rfl
+
+theorem ofIso_compI {J : Type j} {Sh : Type s} {Pos : Sh → Type p}
+    {pidx : (sh : Sh) → Pos sh → J} {G : (J → Type u') → Type v} [IPolyIso G Sh Pos pidx]
+    {Sh' : J → Type s'} {Pos' : ∀ j, Sh' j → Type p'} {H : J → Type u → Type u'}
+    [∀ j, PolyIso (H j) (Sh' j) (Pos' j)] :
+    ofIso (fun X => G fun j => H j X) = compI (IOcc.ofIso G) fun j => ofIso (H j) := rfl
+
+end Agree
+
+end Occ
+
+namespace IOcc
+
+section Agree
+
+variable {J : Type j} {K : Type k}
+
+theorem ofIso_hole (i : J) : ofIso (fun X : J → Type u => X i) = hole i := rfl
+
+theorem ofIso_const (A : Type v) : ofIso (fun _ : J → Type u => A) = const A := rfl
+
+theorem ofIso_at {F : Type u → Type v} {Sh : Type s} {Pos : Sh → Type p} [PolyIso F Sh Pos]
+    (i : J) : ofIso (fun X : J → Type u => F (X i)) = ofOcc (Occ.ofIso F) i := rfl
+
+variable {Sh₁ : Type s} {Pos₁ : Sh₁ → Type p} {pidx₁ : (sh : Sh₁) → Pos₁ sh → J}
+  {Sh₂ : Type s'} {Pos₂ : Sh₂ → Type p'} {pidx₂ : (sh : Sh₂) → Pos₂ sh → J}
+  {G₁ : (J → Type u) → Type v} {G₂ : (J → Type u) → Type v'} [IPolyIso G₁ Sh₁ Pos₁ pidx₁]
+  [IPolyIso G₂ Sh₂ Pos₂ pidx₂]
+
+theorem ofIso_prod : ofIso (fun X => G₁ X × G₂ X) = prod (ofIso G₁) (ofIso G₂) := rfl
+
+theorem ofIso_sum : ofIso (fun X => G₁ X ⊕ G₂ X) = sum (ofIso G₁) (ofIso G₂) := rfl
+
+variable {A : Type a} {ShA : A → Type s} {PosA : ∀ x, ShA x → Type p}
+  {pidxA : ∀ x (sh : ShA x), PosA x sh → J} {GA : A → (J → Type u) → Type v}
+  [∀ x, IPolyIso (GA x) (ShA x) (PosA x) (pidxA x)]
+
+theorem ofIso_pi : ofIso (fun X => ∀ x, GA x X) = pi A fun x => ofIso (GA x) := rfl
+
+theorem ofIso_sigma : ofIso (fun X => Σ x, GA x X) = sigma A fun x => ofIso (GA x) := rfl
+
+theorem ofIso_piP {P : Prop} {ShP : P → Type s} {PosP : ∀ h, ShP h → Type p}
+    {pidxP : ∀ h (sh : ShP h), PosP h sh → J} {GP : P → (J → Type u) → Type v}
+    [∀ h, IPolyIso (GP h) (ShP h) (PosP h) (pidxP h)] :
+    ofIso (fun X => ∀ h, GP h X) = piP P fun h => ofIso (GP h) := rfl
+
+variable {Sh : Type s} {Pos : Sh → Type p} {Sh' : Type s'} {Pos' : Sh' → Type p'}
+
+theorem ofIso_compC {G : Type u' → Type v} [PolyIso G Sh Pos] {pidx' : (sh : Sh') → Pos' sh → J}
+    {H : (J → Type u) → Type u'} [IPolyIso H Sh' Pos' pidx'] :
+    ofIso (fun X => G (H X)) = compC (Occ.ofIso G) (ofIso H) := rfl
+
+theorem ofIso_reidx {pidx : (sh : Sh) → Pos sh → K} {G : (K → Type u) → Type v}
+    [IPolyIso G Sh Pos pidx] (g : K → J) :
+    ofIso (fun X : J → Type u => G fun k => X (g k)) = reidx (ofIso G) g := rfl
+
+theorem ofIso_compI {pidx : (sh : Sh) → Pos sh → K} {G : (K → Type u') → Type v}
+    [IPolyIso G Sh Pos pidx] {Sh' : K → Type s'} {Pos' : ∀ k, Sh' k → Type p'}
+    {pidx' : ∀ k (sh : Sh' k), Pos' k sh → J} {H : K → (J → Type u) → Type u'}
+    [∀ k, IPolyIso (H k) (Sh' k) (Pos' k) (pidx' k)] :
+    ofIso (fun X => G fun k => H k X) = compI (ofIso G) fun k => ofIso (H k) := rfl
+
+end Agree
+
+end IOcc
 
 /-- Images under a function of a family of values, chosen pointwise: the elimination of the
 hypotheses on arguments under a telescope in the generated `rel_ctorᵢ` lemmas. -/

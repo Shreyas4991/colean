@@ -4,7 +4,7 @@ import Colean.MutualCmd
 # A tour of nested types
 
 What the `data` and `codata` commands accept as a nested argument today, and what they do not.
-Read it top to bottom. Part I (sections 1 to 8) is what works, Part II (sections 9 to 15) what does
+Read it top to bottom. Part I (sections 1 to 8) is what works, Part II (sections 9 to 14) what does
 not work yet but could, and Part III failures that look like bugs of the commands rather than
 limits; there are none at the moment.
 
@@ -35,7 +35,9 @@ noncomputable section
 
 Products, sums, functions and dependent pairs are recognised by their head once elaborated, so
 they need no instance and may be combined at any depth. The domain of a function and the first
-component of a dependent pair must be constant. -/
+component of a dependent pair must be constant. They have instances all the same, built from
+those of their parts (`PolyIso.lean`): the induction hypotheses are stated with them
+(section 8), and a leaf with several holes can take them (`EProdBoth`, section 5). -/
 
 -- `T × T`: two recursive occurrences in one argument.
 data BinT
@@ -283,10 +285,21 @@ data EDecl
   | mk (p : E (L EDecl) (Str EDecl))
 
 -- With one argument mentioning `T`, that argument may be anything: `×` is fine here, since the
--- leaf is `fun X => E X Nat` and the command goes on inside the argument. Compare section 12.
+-- leaf is `fun X => E X Nat` and the command goes on inside the argument.
 data EProd
   | leaf
   | mk (p : E (EProd × Nat) Nat)
+
+-- With `T` in both arguments, the leaf is the whole `fun X => E (X × Nat) X`, found by instance
+-- search, which needs an instance at `fun X => X × Nat`: products, sums, functions and dependent
+-- pairs of functors with instances have instances (`PolyIso.lean`).
+data EProdBoth
+  | leaf
+  | mk (p : E (EProdBoth × Nat) EProdBoth)
+
+/-- info: PolyIso.instProd -/
+#guard_msgs in
+#synth PolyIso (fun X : Type => X × Nat) _ _
 
 /-! A parameter may vary when it sits in fields with an occurrence structure in it. All these
 kinds of field count, and the parameters may live in different universes. -/
@@ -628,6 +641,41 @@ theorem URose.size_pos {α : Type u} (t : URose α) : 0 < t.size := by
   cases t with
   | node a cs => simp
 
+/-! The recursor states the induction hypothesis of a nested argument by membership, for the
+functor of the argument's type: `∀ t, PolyIso.Mem (fun X => List X) t cs → motive t` here,
+`PolyIso.Mem (fun X => X × Option X) t children` for `UTree` below, and by `IPolyIso.Mem` at an
+index when the positions of a family's argument are at several indices. The `simp` lemmas of
+`PolyIso.lean` turn membership into the container's own (`mem_list`, `mem_option`) or into
+components (`mem_prod`, `mem_comp`, …), so a function by the recursor can use `List.attach`. -/
+
+/--
+info: @URose.rec : {α : Type u_1} →
+  {motive : URose α → Sort u_2} →
+    ((a : α) →
+        (cs : List (URose α)) →
+          ((t : URose α) → PolyIso.Mem (fun X => List X) t cs → motive t) → motive (URose.node a cs)) →
+      (t : URose α) → motive t
+-/
+#guard_msgs in
+#check @URose.rec
+
+/-- The number of nodes again, by the recursor. -/
+def URose.size' {α : Type u} : URose α → Nat :=
+  URose.rec (motive := fun _ => Nat) fun _ cs ih =>
+    (cs.attach.map fun x => ih x.1 ((PolyIso.mem_list _ _).mpr x.2)).sum + 1
+
+/-- The rule `URose.rec_node` gives the hypothesis as `fun t _ => URose.rec … t`. -/
+@[simp] theorem URose.size'_node {α : Type u} (a : α) (cs : List (URose α)) :
+    (URose.node a cs).size' = (cs.map URose.size').sum + 1 := by
+  simp [URose.size', List.map_attach_eq_pmap]
+
+/-- Induction: the hypothesis at the members of the list. -/
+theorem URose.size'_eq {α : Type u} (t : URose α) : t.size' = t.size := by
+  induction t with
+  | node a cs ih =>
+    simp only [PolyIso.mem_list] at ih
+    rw [URose.size'_node, URose.size_node, List.map_congr_left ih]
+
 codata UTree (α : Type u)
   | node (a : α) (children : UTree α × Option (UTree α))
 
@@ -739,30 +787,7 @@ data ThroughSplit
   | leaf
   | mk (x : Split ThroughSplit Nat)
 
-/-! ### 12. A built-in form inside an argument of a leaf with several holes
-
-With `T` in several arguments of `E`, the leaf is the whole `fun X => E (X × Nat) X`, found by
-instance search. The search needs an instance at `fun X => X × Nat`, and `×`, `⊕` and `→` have
-none: they are built-in forms of the command, not instances. -/
-
-data EProdBoth
-  | leaf
-  | mk (p : E (EProdBoth × Nat) EProdBoth)
-
-/-- The missing instance can be written by hand for a given constant; then the same argument
-goes through. So the gap is only that none exists in general. -/
-instance : PolyIso (fun X : Type u => X × Nat) Nat (fun _ => Unit) :=
-  ⟨⟨fun x => ⟨x.2, fun _ => x.1⟩, fun z => (z.2 (), z.1), fun _ => rfl, fun _ => rfl⟩⟩
-
-instance : PolyMap (fun X : Type u => X × Nat) (fun X : Type v => X × Nat) where
-  map f x := (f x.1, x.2)
-  equiv_map _ _ := rfl
-
-data EProdHand
-  | leaf
-  | mk (p : E (EProdHand × Nat) EProdHand)
-
-/-! ### 13. Holes at different indices in several arguments of a leaf
+/-! ### 12. Holes at different indices in several arguments of a leaf
 
 A leaf found by instance search is a functor of one variable, so all its holes must be one type.
 `Pair (T i) (T j)` has two. The built-in forms do not have this limit. -/
@@ -800,7 +825,7 @@ data ProdC
   | mk (a : ProdA)
 end
 
-/-! ### 14. A type of a block with a product in a nested argument
+/-! ### 13. A type of a block with a product in a nested argument
 
 A type of a block gets its instances at its index of the block, presented over the block's index
 without the parameters that vary. The index of a position of a nested argument must then be a
@@ -840,7 +865,7 @@ data ThroughQB
   | leaf
   | mk (q : QB ThroughQB)
 
-/-! ### 15. Spellings that mean something else
+/-! ### 14. Spellings that mean something else
 
 `×'` is a named constructor, hence a leaf, and it has no instance. -/
 

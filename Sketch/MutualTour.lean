@@ -667,6 +667,46 @@ example : (Pa.mk (.mk .nil)).depth = 2 := by simp [Pa.depth]
 
 end PerType
 
+/-! The hypothesis of a nested argument is by membership, at the motive of the type of its
+members: `∀ t, PolyIso.Mem (fun X => List X) t fs → motive_2 t` for a list of forests. When the
+positions of an argument are at several types of the block, through a product or a sum, it is
+by `IPolyIso.Mem` at the block's index, one hypothesis per type of the argument. -/
+
+namespace NestedPerType
+
+mutual
+data Tr
+  | node (n : Nat) (fs : List Fo)
+data Fo
+  | mk (t : Tr) (next : Option Fo)
+end
+
+/--
+info: @Tr.rec : {motive_1 : Tr → Sort u_1} →
+  {motive_2 : Fo → Sort u_1} →
+    ((n : ℕ) →
+        (fs : List Fo) → ((t : Fo) → PolyIso.Mem (fun X => List X) t fs → motive_2 t) → motive_1 (Tr.node n fs)) →
+      ((t : Tr) →
+          (next : Option Fo) →
+            motive_1 t → ((t : Fo) → PolyIso.Mem (fun X => Option X) t next → motive_2 t) → motive_2 (Fo.mk t next)) →
+        (t : Tr) → motive_1 t
+-/
+#guard_msgs in
+#check @Tr.rec
+
+-- The sum of the labels, by the recursors; `List.attach` gives the members of the list with
+-- their memberships.
+def Tr.sum : Tr → Nat :=
+  Tr.rec (motive_2 := fun _ => Nat)
+    (fun n fs ih => n + (fs.attach.map fun x => ih x.1 ((PolyIso.mem_list _ _).mpr x.2)).sum)
+    (fun _ next t ih =>
+      t + (next.attach.map fun x => ih x.1 ((PolyIso.mem_option _ _).mpr x.2)).getD 0)
+
+example : (Tr.node 1 [.mk (.node 2 []) none]).sum = 3 := by
+  simp [Tr.sum, List.map_attach_eq_pmap]
+
+end NestedPerType
+
 /-! ## Part II: what does not work yet
 
 Nothing at present: the last item, recursors per type, is section 7. What should stay refused is

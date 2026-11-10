@@ -12,15 +12,16 @@ tactic proofs from what exists:
   make sense;
 * the case analysis `T.casesOn` (by cases on `F` after `dtor`, cast along `ctor_dtor`; the
   `cases` eliminator), `T.casesOnAux`, `T.casesOn_ctor` and the simp lemmas `T.casesOn_cᵢ`;
-* for `data`, the computation rules `T.rec_cᵢ` and `T.fold_cᵢ` (simp lemmas); in a block the
-  rules of the block-level recursor are `Blk.rec_cᵢ`, with the block-level names of the
-  constructors;
+* for `data`, the computation rules `T.rec_cᵢ` and `T.fold_cᵢ` (simp lemmas), the hypothesis of
+  a nested argument given as `fun t _ => T.rec … t` on its members; in a block the rules of the
+  block-level recursor are `Blk.rec_cᵢ`, with the block-level names of the constructors;
 * in a block, the types `Tₘ params idx := Blk params (.Tₘ idx)` (`genTypes`, before everything
   that mentions them), and the aliases `Tₘ.corec`, `Tₘ.bisim` (`codata`) or `Tₘ.fold` (`data`)
   restricting the block-level declarations to a type;
 * in a `data` block, the recursors per type `Tₘ.rec`, in the shape of Lean's mutual inductives
   (a motive per type), as `Blk.rec` at the motive made of them, and their rules `Tₘ.rec_cᵢ`,
-  which are the block-level rules by unfolding;
+  which are the block-level rules by unfolding; a hypothesis by `IPolyIso.Mem` is one per type
+  of the argument there;
 * the info tree for the names of the types and the constructors in the declaration
   (`addDeclInfo`), once everything else is declared.
 
@@ -295,20 +296,33 @@ def addDeclInfo : TermElabM Unit := withSaveInfoContext do
 
 /-- The induction hypotheses of `c` with arguments `ys` (as those of `T.c`) as values, the
 recursor applied to the recursive arguments: `recAt idx x` at the family-level index arguments
-`idx`. The right-hand side of `rec_cᵢ` is the minor premise applied to `ys` and these. -/
+`idx`; for a nested argument, `fun t _ => recAt idx t` on its members, or with `pos` the
+recursor at every position of its structure (`T.recPos`), with `split` one per type as in
+`recIHsWith`. The right-hand side of `rec_cᵢ` is the minor premise applied to `ys` and these. -/
 def recIHVals (recAt : Array Expr → Expr → TermElabM Expr) (c : Ctor) (ys : Array Expr)
-    (σ : Expr → Expr) : TermElabM (Array Expr) := do
+    (σ : Expr → Expr) (pos split : Bool := false) : TermElabM (Array Expr) := do
   let L ← ctx.tLvl
-  (c.args.zip ys).filterMapM fun (a, y) => do
+  let mut out := #[]
+  for a in c.args, y in ys do
     match a.kind with
-    | .data => return none
-    | .plain idx => return some (← recAt (idx.map σ) y)
-    | .fn n => some <$> ctx.openTFn n (← inferType y) fun zs idx => do
-      mkLambdaFVars zs (← recAt idx (mkAppN y zs))
+    | .data => pure ()
+    | .plain idx => out := out.push (← recAt (idx.map σ) y)
+    | .fn n =>
+      out := out.push (← ctx.openTFn n (← inferType y) fun zs idx => do
+        mkLambdaFVars zs (← recAt idx (mkAppN y zs)))
     | .nest n =>
-      let t ← ctx.nestToC (ctx.nestAt n L σ) y
-      some <$> ctx.withNestPos n σ t fun q idx => do
-        mkLambdaFVars #[q] (← recAt idx (mkApp (← mkAppM ``Sigma.snd #[t]) q))
+      if pos then
+        let t ← ctx.nestToC (ctx.nestAt n L σ) y
+        out := out.push (← ctx.withNestPos n σ t fun q idx => do
+          mkLambdaFVars #[q] (← recAt idx (mkApp (← mkAppM ``Sigma.snd #[t]) q)))
+      else
+        let nm ← ctx.nestMem a n σ
+        if split && ctx.isBlock && nm.idx?.isNone then
+          for m in ctx.occTypes a.type do
+            out := out.push (← ctx.withTypeMember nm y m (h := `_) fun uidx t h => do
+              mkLambdaFVars (uidx ++ #[t, h]) (← recAt (ctx.wrap m uidx) t))
+        else out := out.push (← ctx.memVal nm y recAt)
+  return out
 
 /-- The name of the computation rule of the family's `rec` for `c`: `T.rec_cᵢ`, or in a block
 `Blk.rec_cᵢ` with the block-level name of `c` (`Even_Odd.rec_Even_succ`), since `Tₘ.rec_cᵢ` is
@@ -316,7 +330,9 @@ the rule of the per-type recursor. -/
 def recRuleN (c : Ctor) : Name :=
   if ctx.isBlock then ctx.gen ("rec_" ++ c.fname.toString) else ctx.tName' c "rec_" ""
 
-/-- `T.rec_cᵢ` (in a block `Blk.rec_cᵢ`) and `T.fold_cᵢ`. -/
+/-- `T.rec_cᵢ` (in a block `Blk.rec_cᵢ`) and `T.fold_cᵢ`. The rule of `rec` is that of
+`recPos` (`T.recPos_ctor`, at the minor premises of `rec`), followed by `PolyIso.memRec_pos` at
+each nested argument (`memValEq`). -/
 def genRecLemmas : TermElabM Unit := do
   let L ← ctx.tLvl
   let T ← ctx.tFam
@@ -331,11 +347,24 @@ def genRecLemmas : TermElabM Unit := do
       ctx.withTArgs c fun ys σ => do
       ctx.withMinors (·.fname) (ctx.recMinorTy motive) fun minors => do
       let idx := c.idx.map σ
-      let ihs ← ctx.recIHVals (recAt minors) c ys σ
       let lhs ← recAt minors idx (← ctx.tCtorApp c ys)
-      let rhs := mkAppN minors[k]! (ys ++ ihs)
-      let value := mkAppN (← ctx.constWith ctx.rec_ctor [v])
-        (ctx.params ++ #[motive] ++ minors ++ idx ++ #[← ctx.fCtorApp c L T ys])
+      let rhs := mkAppN minors[k]! (ys ++ (← ctx.recIHVals (recAt minors) c ys σ))
+      -- The proof, with `recPos` at the minor premises of `rec`.
+      let pminors ← ctx.posMinors motive minors
+      let recPosAt (idx : Array Expr) (t : Expr) : TermElabM Expr := do
+        ctx.genAt ctx.recPos [v] (#[motive] ++ pminors ++ idx ++ #[t])
+      let h₁ := mkAppN (← ctx.constWith ctx.recPos_ctor [v])
+        (ctx.params ++ #[motive] ++ pminors ++ idx ++ #[← ctx.fCtorApp c L T ys])
+      let mid := pminors[k]!.beta (ys ++ (← ctx.recIHVals recPosAt c ys σ (pos := true)))
+      let vals ← ctx.recIHVals recPosAt c ys σ
+      let mut h₂ ← mkEqRefl (mkAppN minors[k]! ys)
+      for ((a, y), x) in ((c.args.zip ys).filter (!·.1.kind.isData)).zip vals do
+        let e ← match a.kind with
+          | .nest n => ctx.memValEq (← ctx.nestMem a n σ) y recPosAt
+          | _ => mkEqRefl x
+        h₂ ← mkCongr h₂ e
+      let value := mkAppN (.const ``Eq.trans [v]) #[← inferType lhs,
+        (← inferType h₁).appFn!.appArg!, mid, mkAppN minors[k]! (ys ++ vals), h₁, h₂]
       let xs := ctx.params ++ #[motive] ++ ys ++ minors
       let (type, value) ← withBinderInfo ctx.params .implicit do
         return (← mkForallFVars xs (← mkEq lhs rhs), ← mkLambdaFVars xs value)
@@ -419,8 +448,9 @@ def withTypeMotives (v : Level) (k : Array Expr → Expr → TermElabM α) : Ter
 inductives: a motive per type (`motive_1`, … in block order), the minor premises of every
 constructor of the block (with their block-level names), then `Tₘ`'s indices and the target. It
 is `Blk.rec` at the motive `fun i x => Blk.Ix.casesOn i motive_1 … x`, whose minor premises are
-these by unfolding; an induction hypothesis at a position of a nested argument whose index does
-not reduce to a type keeps that motive. Also the computation rules `Tₘ.rec_cᵢ` of the
+these by unfolding, but for a hypothesis by `IPolyIso.Mem` (a nested argument with positions at
+several types): that one is given to each type of the argument at its constructor of `Blk.Ix`,
+where the motive is the type's (`splitMinors`). Also the computation rules `Tₘ.rec_cᵢ` of the
 constructors of each type, with the induction hypotheses by the recursors of their types: they
 are the block-level rules `Blk.rec_cᵢ` by unfolding. -/
 def genTypeRecs : TermElabM Unit := do
@@ -432,13 +462,14 @@ def genTypeRecs : TermElabM Unit := do
     match ← ctx.typeAt? idx[0]! with
     | some (k, uidx) => return mkAppN motives[k]! (uidx.push x)
     | none => return (mkAppN M (idx.push x)).headBeta
-  ctx.withMinors (·.fname) (ctx.recMinorTyWith app) fun minors => do
+  ctx.withMinors (·.fname) (ctx.recMinorTyWith app (split := true)) fun minors => do
+  let bminors ← ctx.splitMinors M minors
   -- `Tₘ.rec`
   for m in [0:ctx.types.size] do
     let t := ctx.types[m]!
     withLocalDeclD `t (← ctx.tyAt m t.idx) fun tv => do
     let xs := ctx.params ++ motives ++ minors ++ t.idx ++ #[tv]
-    let value ← ctx.genAt ctx.recN [v] (#[M] ++ minors ++ ctx.wrap m t.idx ++ #[tv])
+    let value ← ctx.genAt ctx.recN [v] (#[M] ++ bminors ++ ctx.wrap m t.idx ++ #[tv])
     let (type, value) ← withBinderInfo (ctx.params ++ t.idx) .implicit do
       return (← mkForallFVars xs (mkAppN motives[m]! (t.idx.push tv)), ← mkLambdaFVars xs value)
     let n := ctx.tyGen m "rec"
@@ -448,13 +479,13 @@ def genTypeRecs : TermElabM Unit := do
   let recAt (idx : Array Expr) (x : Expr) : TermElabM Expr := do
     match ← ctx.typeAt? idx[0]! with
     | some (k, uidx) => ctx.genAt (ctx.tyGen k "rec") [v] (motives ++ minors ++ uidx.push x)
-    | none => ctx.genAt ctx.recN [v] (#[M] ++ minors ++ idx.push x)
+    | none => ctx.genAt ctx.recN [v] (#[M] ++ bminors ++ idx.push x)
   for c in ctx.ctors, k in [0:ctx.ctors.size] do
     ctx.withTArgs c fun ys σ => do
     let lhs ← recAt (c.idx.map σ) (← ctx.tCtorApp c ys)
-    let rhs := mkAppN minors[k]! (ys ++ (← ctx.recIHVals recAt c ys σ))
+    let rhs := mkAppN minors[k]! (ys ++ (← ctx.recIHVals recAt c ys σ (split := true)))
     let stmt ← mkEq lhs rhs
-    let value := mkAppN (← ctx.constWith (ctx.recRuleN c) [v]) (ctx.params ++ #[M] ++ ys ++ minors)
+    let value := mkAppN (← ctx.constWith (ctx.recRuleN c) [v]) (ctx.params ++ #[M] ++ ys ++ bminors)
     unless ← isDefEq stmt (← inferType value) do
       throwError "internal error: the rule of the block is not{indentExpr stmt}"
     let xs := ctx.params ++ motives ++ ys ++ minors

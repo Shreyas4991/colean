@@ -2,7 +2,7 @@ import Colean.DataCmd
 
 /-! # Test: nested occurrences, inductively
 
-Finite rose trees, with the induction hypothesis for the children at the positions of the list,
+Finite rose trees, with the induction hypothesis for the children by membership in the list,
 and a binary tree with optional subtrees. -/
 
 universe u
@@ -18,8 +18,8 @@ data Rose (α : Type u)
 #check @Rose.rec_node
 #check @Rose.fold_node
 
--- Through a composite: the induction hypothesis at the positions of the
--- composite, a position of the list with a position of the option there.
+-- Through a composite: the induction hypothesis by membership in the composite, a member of
+-- an option in the list.
 data Rose₂ (α : Type u)
   | node (a : α) (children : List (Option (Rose₂ α)))
 
@@ -46,14 +46,13 @@ def Rose.mirror {α : Type u} (t : Rose α) : Rose α :=
     (Rose.node a cs).mirror = .node a (cs.map Rose.mirror).reverse := by
   simp [Rose.mirror]
 
-/-- Induction with a nested list: the hypothesis holds at every position of the list, which
-`forall_toC_list` turns into membership. -/
+/-- Induction with a nested list: the hypothesis holds at every member of the list, which
+`PolyIso.mem_list` turns into the list's own membership. -/
 theorem Rose.mirror_mirror {α : Type u} (t : Rose α) : t.mirror.mirror = t := by
   induction t with
   | node a cs ih =>
-    have ih' : ∀ x ∈ cs, x.mirror.mirror = x := fun x hx => by
-      obtain ⟨q, rfl⟩ := Codata.Occ.mem_toC_list hx
-      exact ih q
+    have ih' : ∀ x ∈ cs, x.mirror.mirror = x := fun x hx =>
+      ih x ((Codata.PolyIso.mem_list x cs).mpr hx)
     simp only [Rose.mirror_node, List.map_reverse, List.reverse_reverse, List.map_map]
     exact congrArg (Rose.node a) ((List.map_congr_left fun x hx => ih' x hx).trans (List.map_id cs))
 
