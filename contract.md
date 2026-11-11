@@ -68,10 +68,12 @@ in the families of functions and relations. A plain type is the case `I = Unit`.
 before: `ctor : ∀ {i}, F T i → T i` with `dtor_ctor`, and `corec_eq`. With several indices
 `(i₁ : I₁) → I₂ → Type u`, `I` is their `PSigma` and every statement above is curried.
 
-Universes: `u` is arbitrary, but the encoding stores the index in the tree, so the family lives
-in a universe at least that of `I` (and of the constructors' data), `u ≥ w`; `inductive` has no
-such constraint. The command writes `Type _` for the family and lets Lean compute the level, so
-a declaration with `u` too small comes out one level higher rather than failing.
+Universes: the encoding stores the index in the tree, so the family lives in the universe of its
+encoding, the largest of those of `I` and of the constructors' data, `u = max w …`; `inductive`
+has no such constraint, and accepts any `u` large enough. A universe written in the declared sort
+must be that one: otherwise the command fails before declaring anything, with an error at the
+sort that gives the right universe (a declared `Prop` too, since the commands define types).
+`Type _`, or no sort, leaves the universe to the command.
 
 
 # Inductive types
@@ -137,7 +139,15 @@ are `IPolyIso` and `IPolyMap`, with `G X ≃ Σ sh, (q : Pos sh) → X (pidx sh 
 A declared type gets these instances when it can, in a separate step after its declaration
 (`Gen/Derive.lean`): for `fun X => T (H₁ X) … (Hₙ X)` over the parameters that may vary, with the
 `Hᵢ` themselves instances, so that one instance covers every use, constants and the identity
-being instances too. If that step fails, it logs a warning and leaves no trace: the type is
+being instances too. A parameter may vary when its fields have an occurrence structure in it,
+also with other parameters (`p : α × β`) or with the type itself, through products and sums
+(`p : α × T α`, `f : T α ⊕ α`), and under a named type constructor or a function too, where the
+field has a structure in both, the parameter and the type (`p : List (α × T α)`,
+`k : Nat → α × T α`, `p : List (α ⊕ T α)`; `Occ₂`, and for a family or a block `IOcc₂`, whose
+positions in the type carry its index: `p : List (α × T n)`). In a block, a field with the block's
+types inside a named type constructor has such a structure too when its positions are at one type
+after cases on them (`p : List (A α × Nat)`). If that step fails, it logs a warning and leaves no
+trace: the type is
 declared as usual and can still be given instances by hand. The step works from the contract:
 a value is a tree of shapes with the contents of its slots (`Model/Poly.lean`), and the map on
 the parameter is the structural one (`PolyFix.d_map`). A family gets them at every index,
@@ -162,7 +172,10 @@ inductive `Even_Odd.Ix`, with a constructor per type whose arguments are the ind
 (`Ix.Even n`, `Ix.Odd n`), so the contract is the one of indexed families, over `I = Ix`. The types
 are `Even n := Even_Odd (.Even n)`. All types of a block have the same parameters, on which `Ix`
 may depend. Their indices may differ, and a type may have none. As for any family, the family
-lives in a universe at least that of `Ix`, so the largest index of the block counts for every type.
+lives in a universe at least that of `Ix`, so the largest index of the block counts for every type,
+and a universe written in a type's sort must be the block's. The block declares its name and
+`Even_Odd.Ix`, made of the types' names: these must be free, as the types' own names, and no type
+may occur twice; the command checks this before declaring anything.
 
 
 # Mixed blocks
@@ -216,12 +229,16 @@ inner one has its hypothesis by membership in the closed type: `Membership (Tree
 is `PolyIso.Mem (fun X => Forest.Open α X)`, and `simp` computes it on the constructors
 (`Forest.mem_cons : x ∈ Forest.cons t f ↔ x = t ∨ x ∈ f`).
 
-Not supported: a run outside another whose types have indices or form a block (the open type's
-parameter is then a family, and nesting through it needs `IPolyIso` instances), a field
-mentioning an outer type together with the run's own type (`Tree α × Forest α`), and, in a block
-with parameters, a run passing an outer type on to a run further inside (its field `C.Open α X`
-mentions two parameters): the open types then have no instances in their parameter, and the
-block stops with that error. Without parameters such a block is accepted.
+A field may mention an outer type together with the run's own type through products and sums
+(`Tree α × Forest α`), or under a named type constructor or a function where the field has a
+structure in both (`List (Tree α × Forest α)`, `List (Tree α ⊕ Forest α)`), and a run may pass an
+outer type on to a run
+further inside (its field `C.Open α X` mentions the block's parameters and the outer one). Not
+supported: a run outside another whose types have indices or form a block (the open type's
+parameter is then a family, and nesting through it needs `IPolyIso` instances), and an outer type
+with the run's own type in a field without such a structure (in two arguments of a type
+constructor, `Two (Tree α) (Forest α)`): the open types then have no instances in their
+parameter, and the block stops with that error.
 
 
 # Recursors
@@ -248,8 +265,11 @@ functions and dependent pairs of functors with instances have instances, so ever
 argument's functor has one, and `simp` turns membership into the container's own (`mem_list`,
 `mem_option`, `mem_array`) or into components (`mem_prod`, `mem_comp`, …). In a family, when the
 positions of a nested argument are all at one index, its members are of the type at that index
-and the hypothesis is as above (`List (T n)`); otherwise it is by membership at an index,
-`∀ j (t : T j), IPolyIso.Mem (fun X => G X) j t c → motive j t` (`T n × T (n + 1)`). The
+and the hypothesis is as above (`List (T n)`, `T n × T n`, `T n × Nat`); otherwise it is by
+membership at an index, `∀ j (t : T j), IPolyIso.Mem (fun X => G X) j t c → motive j t`
+(`T n × T (n + 1)`). The instance is the one instance search finds for the functor
+(`fun X => Vec (List X) n` is `Vec`'s instance at `List`, `fun X => E (X × Nat) Nat` is `E`'s at
+the product), so a hypothesis written by hand is the recursor's. The
 recursors per type of a block are the same at the motive of each type, with a hypothesis by
 `IPolyIso.Mem` for each type of the block in the argument.
 

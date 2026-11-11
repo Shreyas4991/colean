@@ -121,16 +121,6 @@ def Ctor.fvars (c : Ctor) : Array Expr := c.args.map (·.fvar)
 
 def Ctor.hasNest (c : Ctor) : Bool := c.args.any (·.kind.isNest)
 
-/-- Does the type of an argument of `c` mention an earlier one? Then injectivity is not stated.
--/
-def Ctor.dependent (c : Ctor) : Bool :=
-  c.args.any fun a => c.args.any fun b => a.type.containsFVar b.fvar.fvarId!
-
-/-- Does the result index of `c` mention its arguments? Then neither injectivity nor
-disjointness is stated. -/
-def Ctor.idxDependent (c : Ctor) : Bool :=
-  c.idx.any fun e => c.args.any fun b => e.containsFVar b.fvar.fvarId!
-
 /-- A binder name users may refer to: `n` itself, unless a name of the declaration, `used`, is
 `n`; then an inaccessible one, so that the declaration's own `n` is not shadowed. -/
 def plainOr (used : Array Name) (n : Name) : CoreM Name :=
@@ -371,6 +361,18 @@ where
     | .proj s i b => .proj s i (go b)
     | e => e
 
+/-- A declared sort with a universe written: the types' universe must be that one. -/
+structure WrittenSort where
+  /-- The position of the declaration in the block (of the whole `mixed_mutual` block in a run of
+  one), and the name of its type as written. -/
+  decl : Nat
+  T : Name
+  /-- The sort as written, and as elaborated: `∀ idx, Sort lvl`, without `_` in `lvl`. -/
+  stx : Syntax
+  sort : Expr
+  lvl : Level
+  deriving Inhabited
+
 /-- Everything the generators need: see the header. -/
 structure Ctx extends Block where
   /-- `codata` (`true`) or `data`. -/
@@ -391,6 +393,9 @@ structure Ctx extends Block where
   /-- `J : Type Jlvl`. -/
   Jlvl : Level
   ctors : Array Ctor
+  /-- The declared sorts with a universe written, checked against the types' universe before
+  anything is declared (`checkSorts`); in a run of a `mixed_mutual` block, those of the block. -/
+  written : Array WrittenSort := #[]
   /-- In a `mixed_mutual` block, the run. -/
   mix? : Option MixCtx := none
   /-- In the outermost run of a `mixed_mutual` block, once its types exist: the closed types of

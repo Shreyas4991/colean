@@ -3,9 +3,9 @@
 ## The family's universe should not depend on the index universe
 
 Today `Signature.Cotype σ : I → Type (max w u v)` with `I : Type w`: the index enters the
-universe of the family, so `codata Foo : Type 1 → Type` comes out in `Type 1`, whereas
-`inductive Foo : Type 1 → Type` is fine. The data universes `u`, `v` are necessary (as for
-`inductive`); `w` is not.
+universe of the family, so `codata Foo : Type 1 → Type` is refused (the family is in `Type 1`,
+and the command says so at the sort), whereas `inductive Foo : Type 1 → Type` is fine. The data
+universes `u`, `v` are necessary (as for `inductive`); `w` is not.
 
 Cause: the tree alphabet is `Lbl := Σ i, Shape i`, and `Raw Idx Lbl` lives where its alphabet
 lives. The index is only *needed* in `IsWf` (a `Prop`, so it may mention `Σ i, Shape i` at any

@@ -345,13 +345,23 @@ def genSig (rShape rB : Level) : TermElabM Unit := do
     return (← mkForallFVars ctx.params ty, ← mkLambdaFVars ctx.params value)
   addDef ctx.sig (← ctx.levelParamsOf [] #[type, value]) type value ctx.ref (reducible := true)
 
+/-- The model's universe at the universes `rShape` of the shapes and `rB` of the positions: the
+largest of these and the packed index's. -/
+def modelLevelAt (rShape rB : Level) : Level :=
+  (mkLevelMax' (mkLevelMax' ctx.Jlvl rShape) rB).normalize
+
+/-- The universe `L` of the types, `Type L`, before anything is declared: the model's (`tLvl`,
+once `T.sig` is declared). -/
+def modelLevel : TermElabM Level := do
+  return ctx.modelLevelAt (← ctx.shapeLevel) (← ctx.bLevel)
+
 /-- Step 2, the signature. The model's universe, `tLvl` once `T.sig` is declared, must be the
 one the constructors fixed, if they did: checked before anything is declared. -/
 def genSignature : TermElabM Unit := do
   let rShape ← ctx.shapeLevel
   let rB ← ctx.bLevel
   if let some l := ctx.fixedLvl? then
-    let L := (mkLevelMax' (mkLevelMax' ctx.Jlvl rShape) rB).normalize
+    let L := ctx.modelLevelAt rShape rB
     unless ← isLevelDefEq L l do
       throwError "the constructors fix the universe of `{ctx.name}` to `{l}`, through a type \
         constructor at one universe, but its model lives in `{L}`"

@@ -21,7 +21,10 @@ single family over the inductive `Tree_Forest.Ix`, which has a constructor per t
 type case is generated for the block (`Tree_Forest.F`, `Tree_Forest.corec`, `Tree_Forest.bisim`,
 `Tree_Forest.rec`, …). This is how Lean itself elaborates mutual fixpoints, and the generic
 theory needs nothing new. The types need not agree on their indices, since each has its own
-constructor of `Ix`; where their universe is written, it must be the same. Then, per type:
+constructor of `Ix`; where their universe is written, it must be the same, the block's
+(`checkSorts`, `Gen/Command.lean`). The names the block declares, its types', its own and its
+`Ix`, must be free, and no type may occur twice (`checkNames`, `Gen/Front.lean`): both are checked
+before the types are declared. Then, per type:
 `Tree α := Tree_Forest α .Tree`, and `Even n := Even_Odd (.Even n)` with an index, its
 constructors `Tree.node` with their lemmas under `Tree`, `Tree.casesOn` with only the
 constructors of `Tree`, registered as the `cases` eliminator, and aliases `Tree.corec`,
@@ -75,10 +78,11 @@ A block with both kinds is a nested fixpoint, and a cyclic system has several ne
 (`Tree` outside `Forest` is the finitely branching infinite trees, `Forest` outside `Tree` the
 finite trees), so the block says the order: *the textual order is the nesting order, the first
 declaration outermost*. All declarations share their parameters, names included, and their
-universe where it is written, as in `mutual`; the section variables any of them uses are
-parameters of all. A *run* is a maximal sequence of adjacent declarations of the same kind; it is
-declared as one type, or as one `mutual` block (a family over its index `Blk.Ix`). The runs
-`R₁ ⊃ R₂ ⊃ … ⊃ Rₖ` are declared from the innermost out:
+universe where it is written, as in `mutual`, which must be that of the closed types; the section
+variables any of them uses are parameters of all. The names the block declares, the internal ones
+below included, must be free, and no type may occur twice. A *run* is a maximal sequence of
+adjacent declarations of the same kind; it is declared as one type, or as one `mutual` block (a
+family over its index `Blk.Ix`). The runs `R₁ ⊃ R₂ ⊃ … ⊃ Rₖ` are declared from the innermost out:
 
 * a run inside the first is declared *open*, under internal names: `Forest.Open` for a single
   type, with its whole interface under `Forest.Open.*`, and for a block `Rose.Open`,
@@ -120,13 +124,13 @@ the closed type; `cases` and `induction` find their eliminators by the head of t
 so they take the closed ones (`Forest.casesOn`).
 
 Scope: the instances of an open run in its extra parameters are those of step 5, so a run inside
-another needs extra parameters that are types, each used in fields on its own: an outer run with
-indices, or a block, makes the parameter a family (`IPolyIso` instances, not generated), and a
-field mentioning an outer type together with the run's own type (`p : Tree α × Forest α`), and,
-with parameters, a run passing an outer type on to a run further inside, which puts the block's
-parameters and the outer one in one field (`c : C.Open α X`), are beyond step 5. These blocks stop
-with the error of step 5 for the inner run. Without parameters the second is accepted.
-A `mixed_mutual` block of one kind is a `mutual` block, with a warning.
+another needs extra parameters that are types, used in fields with an occurrence structure in
+them, with the block's parameters (`c : C.Open α X`, a run passing an outer type on to a run
+further inside) or with the run's own type through products and sums (`p : Tree α × Forest α`).
+An outer run with indices, or a block, makes the parameter a family (`IPolyIso` instances, not
+generated), and an outer type with the run's own type inside a named type constructor
+(`List (Tree α × Forest α)`) cannot vary: these blocks stop with the error of step 5 for the
+inner run. A `mixed_mutual` block of one kind is a `mutual` block, with a warning.
 -/
 
 open Lean Elab Command

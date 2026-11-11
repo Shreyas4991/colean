@@ -4,9 +4,9 @@ import Colean.MutualCmd
 # A tour of mixed blocks
 
 What the `mixed_mutual` command does with a block of `data` and `codata` declarations, and what it
-does not do yet. Read it top to bottom. Part I (sections 1 to 9) is what works, Part II (sections
-10 to 12) what does not work yet but could, and Part III (sections 13 and 14) what looks like a bug
-of the command rather than a limit.
+does not do yet. Read it top to bottom. Part I (sections 1 to 11) is what works, Part II (section
+12) what does not work yet but could, and Part III (sections 13 and 14) what looks like a bug of
+the command rather than a limit.
 
 How the file is checked:
 
@@ -469,17 +469,139 @@ example {α : Type u} (a : α) (f : Forest α) :
 
 end Other
 
+/-! ### 10. An outer type in a field with the recursion
+
+A field `p : Tree α × Forest α` becomes `p : X × Forest.Open α X` in the open forests: the
+parameter for the trees sits in the same field as the forests' own recursion. Step 5 splits such a
+field through its products and sums (`NestingTour.lean`, section 9), so `X` varies, and the
+membership of the trees is that of the components. -/
+
+namespace Pair
+
+mixed_mutual
+codata Tree (α : Type u)
+  | node (a : α) (children : Forest α)
+data Forest (α : Type u)
+  | nil
+  | cons (p : Tree α × Forest α)
+end
+
+#check @Forest.mem_cons
+
+/-- The tree with two copies of itself as children. -/
+def Tree.bin {α : Type u} (a : α) : Tree α :=
+  Tree.corec (S := Unit) (fun _ => .node a (.cons ((), .cons ((), .nil)))) ()
+
+theorem Tree.bin_eq {α : Type u} (a : α) :
+    Tree.bin a = .node a (.cons (.bin a, .cons (.bin a, .nil))) := by
+  conv_lhs => rw [← Tree.ctor_dtor (Tree.bin a), Tree.bin, Tree.dtor_corec]
+  simp [Tree.bin]
+
+example {α : Type u} (s t : Tree α) : t ∈ Forest.cons (s, .cons (t, .nil)) := by simp
+
+end Pair
+
+/-! Inside a named type constructor the split stops: `List (Tree α × Forest α)` becomes
+`List (X × Forest.Open α X)`, with positions of both kinds in one field. The field has an
+occurrence structure in two variables (`NestingTour.lean`, section 9), so `X` varies here too,
+and the membership of the trees is that of the pairs in the list. -/
+
+namespace ListPair
+
+mixed_mutual
+codata Tree (α : Type u)
+  | node (a : α) (children : Forest α)
+data Forest (α : Type u)
+  | nil
+  | cons (p : List (Tree α × Forest α))
+end
+
+#check @Forest.mem_cons
+
+/-- The tree with one copy of itself as its child. -/
+def Tree.loop {α : Type u} (a : α) : Tree α :=
+  Tree.corec (S := Unit) (fun _ => .node a (.cons [((), .nil)])) ()
+
+theorem Tree.loop_eq {α : Type u} (a : α) : Tree.loop a = .node a (.cons [(.loop a, .nil)]) := by
+  conv_lhs => rw [← Tree.ctor_dtor (Tree.loop a), Tree.loop, Tree.dtor_corec]
+  simp [Tree.loop]
+
+example {α : Type u} (s t : Tree α) : t ∈ Forest.cons [(s, .nil), (t, .nil)] := by simp
+
+end ListPair
+
+/-! Across a sum inside the named type constructor too: `List (Tree α ⊕ Forest α)` becomes
+`List (X ⊕ Forest.Open α X)`, whose members in each variable `simp` computes through the sum
+(`NestingTour.lean`, section 9). -/
+
+namespace ListSum
+
+mixed_mutual
+codata Tree (α : Type u)
+  | node (a : α) (children : Forest α)
+data Forest (α : Type u)
+  | nil
+  | cons (p : List (Tree α ⊕ Forest α))
+end
+
+#check @Forest.mem_cons
+
+example {α : Type u} (s t : Tree α) : t ∈ Forest.cons [.inl s, .inr (.cons [.inl t])] := by simp
+
+end ListSum
+
+/-! ### 11. A run that mentions a run two levels out, with a parameter
+
+`C` mentions `A`, so `B`, between them, takes a parameter `X` for `A` and passes it on: its field
+`c : C α` becomes `c : C.Open α X`, which mentions two parameters, `α` and `X`. Step 5 lets a field
+mention several parameters, each at its premise (`NestingTour.lean`, section 5), and keeps the
+first ones constant when they cannot vary with the others: only `X` needs to vary. The membership
+instances of such a block are not the right ones, though (section 14). -/
+
+namespace Distant
+
+mixed_mutual
+codata A (α : Type u)
+  | mk (b : B α)
+data B (α : Type u)
+  | nil
+  | cons (c : C α) (b : B α)
+codata C (α : Type u)
+  | mk (a : A α) (c : C α)
+end
+
+#check @B.cons
+#check @C.mk
+
+end Distant
+
+-- `α` is a function domain in `C`: it is constant in `C.Open` and `B.Open`, and `X` still varies.
+namespace DistantDomain
+
+mixed_mutual
+codata A (α : Type)
+  | mk (b : B α)
+data B (α : Type)
+  | nil
+  | cons (c : C α) (b : B α)
+codata C (α : Type)
+  | mk (a : α → A α) (c : C α)
+end
+
+end DistantDomain
+
 /-! ## Part II: what does not work yet
 
 What should stay refused is not listed: the declarations share their parameters and universe, as
-in `mutual`, and a plain `mutual` block does not mix kinds.
+in `mutual`, a plain `mutual` block does not mix kinds, and the names a block declares must be
+free, its internal ones (`Forest.Open`) included, which is checked before anything is declared.
 
 The outer runs nest through the open types of the runs inside by the instances generated for them
 (`NestingTour.lean`, section 4), in the parameter for the outer types. The blocks below need
 instances that are not generated, and stop with the error for the run inside; nothing is
 declared. -/
 
-/-! ### 10. An outer run with indices, or an outer block
+/-! ### 12. An outer run with indices, or an outer block
 
 When the outer run is a family or a block, the open type's parameter for it is a family too, over
 the run's index. Nesting through a functor on families needs `IPolyIso` instances, which are not
@@ -511,49 +633,6 @@ end
 
 end OuterBlock
 
-/-! ### 11. An outer type in a field with the recursion
-
-A field `p : Tree α × Forest α` becomes `p : X × Forest.Open α X` in the open forests: the
-parameter for the trees sits in the same field as the forests' own recursion. This is the limit of
-`NestingTour.lean`, section 10 (gap 2): the generator takes a field as positions of one kind, so
-`X` cannot vary. Fields with positions of both kinds would fix it. The block fails the same way
-without the parameter `α`. -/
-
-namespace Pair
-
-mixed_mutual
-codata Tree (α : Type u)
-  | node (a : α) (children : Forest α)
-data Forest (α : Type u)
-  | nil
-  | cons (p : Tree α × Forest α)
-end
-
-end Pair
-
-/-! ### 12. A run that mentions a run two levels out, with a parameter
-
-`C` mentions `A`, so `B`, between them, takes a parameter `X` for `A` and passes it on: its field
-`c : C α` becomes `c : C.Open α X`. That field mentions two parameters that vary, `α` and `X`,
-which is the limit of `NestingTour.lean`, section 11 (gap 3), not of section 10: `X` is not in a
-field with the recursion of `B`. The same block without `α` is accepted (section 14). Accepting
-several parameters in one field, each at its own holes, would fix it. So would letting step 5
-keep the block's parameters constant, since only `X` needs to vary. -/
-
-namespace Distant
-
-mixed_mutual
-codata A (α : Type u)
-  | mk (b : B α)
-data B (α : Type u)
-  | nil
-  | cons (c : C α) (b : B α)
-codata C (α : Type u)
-  | mk (a : A α) (c : C α)
-end
-
-end Distant
-
 /-! ## Part III: what looks like a bug
 
 Each of these either deserves a clear error or should simply work. -/
@@ -581,27 +660,10 @@ end
 
 end CtorOpen
 
-/-! An internal name already declared is not checked: the block below fails in the kernel, with
-"constant has already been declared". It deserves a clear error before anything is declared. -/
-
-namespace OpenTaken
-
-def Forest.Open := Nat
-
-mixed_mutual
-codata Tree
-  | node (cs : Forest)
-data Forest
-  | nil
-  | cons (t : Tree) (f : Forest)
-end
-
-end OpenTaken
-
 /-! ### 14. Membership with a run two levels out
 
-Without parameters, the block of section 12 is accepted. Its membership instances are not the
-right ones. They are generated for the runs that reach a run inside, here `B` in `C`, while what
+The block of section 11 is accepted, here without its parameter. Its membership instances are
+not the right ones. They are generated for the runs that reach a run inside, here `B` in `C`, while what
 `C` holds are the members of the runs it takes a parameter for, here `A`. So `B` in `C` is always
 false (`C.mem_mk`, with `False` on the right), and there is no instance for `A` in `C`: `B.mem_cons`
 falls back to `PolyIso.Mem C.Open`. -/

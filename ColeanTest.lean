@@ -33,11 +33,16 @@ import ColeanTest.Nest
 import ColeanTest.Derive
 import ColeanTest.DeriveIdx
 import ColeanTest.Failure
+import ColeanTest.Errors
 import ColeanTest.PropArg
 import ColeanTest.Info
 import ColeanTest.ResultIndex
+import ColeanTest.IndexedInj
 import ColeanTest.RecMem
 import ColeanTest.NestSimp
+import ColeanTest.NestGaps
+import ColeanTest.NestGaps2
+import ColeanTest.NestGaps3
 import ColeanTest.Param
 import ColeanTest.Mixed
 import ColeanTest.MixedOrder

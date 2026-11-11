@@ -35,16 +35,17 @@ and `fold` in any universe. The simp lemmas `map_list`, `map_prod`, `map_comp`, 
 through the combinators back to the usual maps (`List.map`, pairs, composition), the `rel_*`
 lemmas do the same for `Rel`, and `forall_toC_*` turn "for every position" into membership or
 components. The instances of `PolyIso.lean` for products, sums, functions, dependent pairs and
-composites are these combinators by definition (`ofIso_prod`, …, at the end), so a hypothesis at
-every position of a structure is one by membership for the instance (`PolyIso.memRec`): this is
-how the recursor states the induction hypotheses of nested arguments.
+composites are these combinators by definition (`ofIso_prod`, …, at the end, simp lemmas too), so
+a hypothesis at every position of a structure is one by membership for the instance
+(`PolyIso.memRec`): this is how the recursor states the induction hypotheses of nested arguments.
 
 The indexed version `IOcc` is for occurrences of a *family*: every position carries an index,
 `G X ≃ Σ sh, (q : Pos sh) → X (pidx sh q)`, so that occurrences at different indices may live
 in one argument (`T i × T j`), and a functor on families with an `IPolyIso` instance is an
 indexed leaf (`IOcc.ofIso`). `Occ` is the case of a single index; `IOcc.ofOcc` puts a plain
 structure at a fixed index, `IOcc.reidx` and `Occ.ofI` reindex a family leaf, and `compC`,
-`compI`, `Occ.compI` are the compositions across the two kinds.
+`compI`, `Occ.compI` are the compositions across the two kinds. `simp` computes `IOcc.map` through
+the combinators as `Occ.map` (`IOcc.map_prod`, …).
 -/
 
 universe u u' u'' v v' v'' w w' s s' p p' j k a
@@ -493,10 +494,9 @@ def reidx {pidx : (sh : Sh) → Pos sh → K} {G : (K → Type u) → Type v} (o
     IOcc Sh Pos (fun sh q => g (pidx sh q)) (fun X : J → Type u => G fun k => X (g k)) :=
   ⟨o.equiv⟩
 
-/-- The map of a plain structure at a fixed index is its map at that index. Not a simp lemma, as
-tests state it for their leaves (`ColeanTest/ResultIndex.lean`); with it, `simp` reaches the
-rules of a declared family nested at its own index (`Vec (T n) n`). -/
-theorem map_ofOcc {G : Type u → Type v} {G' : Type u' → Type v'} (o : Occ Sh Pos G)
+/-- The map of a plain structure at a fixed index is its map at that index: with it, `simp`
+reaches the rules of a declared family nested at its own index (`Vec (T n) n`). -/
+@[simp] theorem map_ofOcc {G : Type u → Type v} {G' : Type u' → Type v'} (o : Occ Sh Pos G)
     (o' : Occ Sh Pos G') (i : J) {X : J → Type u} {Y : J → Type u'} (f : ∀ j, X j → Y j)
     (x : G (X i)) : map (ofOcc o i) (ofOcc o' i) f x = Occ.map o o' (f i) x := rfl
 
@@ -720,6 +720,10 @@ variable {X : Type u} {Y : Type u'}
 
 @[simp] theorem map_hole (f : X → Y) (x : X) : map hole hole f x = f x := rfl
 
+/-- The map through the hole is the function, also where it is not applied: as the function of
+another map (`List.map`). -/
+@[simp] theorem map_hole_hole (f : X → Y) : map hole hole f = f := rfl
+
 theorem toC_hole (x : X) : hole.toC x = ⟨(), fun _ => x⟩ := rfl
 
 theorem forall_toC_hole {P : X → Prop} (x : X) : (∀ q, P ((hole.toC x).2 q)) ↔ P x :=
@@ -844,12 +848,103 @@ end ComputeComp
 
 end Occ
 
+/-! ### The computation of `map` through the indexed combinators
+
+The same lemmas as for `Occ`, so that `simp` computes the rules of a family whose nested argument
+has an indexed structure (`T n × T (n + 1)`, `IOcc.prod`). -/
+
+namespace IOcc
+
+section Compute
+
+variable {J : Type j} {K : Type k} {X : J → Type u} {Y : J → Type u'}
+
+@[simp] theorem map_const {A : Type v} (f : ∀ j, X j → Y j) (x : A) :
+    map (const A) (const A) f x = x := rfl
+
+@[simp] theorem map_hole (i : J) (f : ∀ j, X j → Y j) (x : X i) :
+    map (hole i) (hole i) f x = f i x := rfl
+
+/-- The map through a hole is the function at its index, also where it is not applied. -/
+@[simp] theorem map_hole_hole (i : J) (f : ∀ j, X j → Y j) : map (hole i) (hole i) f = f i :=
+  rfl
+
+variable {Sh₁ : Type s} {Pos₁ : Sh₁ → Type p} {pidx₁ : (sh : Sh₁) → Pos₁ sh → J}
+  {Sh₂ : Type s'} {Pos₂ : Sh₂ → Type p'} {pidx₂ : (sh : Sh₂) → Pos₂ sh → J}
+  {G₁ : (J → Type u) → Type v} {G₂ : (J → Type u) → Type v'}
+  {G₁' : (J → Type u') → Type w} {G₂' : (J → Type u') → Type w'}
+  (o₁ : IOcc Sh₁ Pos₁ pidx₁ G₁) (o₂ : IOcc Sh₂ Pos₂ pidx₂ G₂)
+  (o₁' : IOcc Sh₁ Pos₁ pidx₁ G₁') (o₂' : IOcc Sh₂ Pos₂ pidx₂ G₂')
+
+@[simp] theorem map_prod (f : ∀ j, X j → Y j) (x : G₁ X × G₂ X) :
+    map (prod o₁ o₂) (prod o₁' o₂') f x = (map o₁ o₁' f x.1, map o₂ o₂' f x.2) := rfl
+
+@[simp] theorem map_sum_inl (f : ∀ j, X j → Y j) (x : G₁ X) :
+    map (sum o₁ o₂) (sum o₁' o₂') f (.inl x) = .inl (map o₁ o₁' f x) := rfl
+
+@[simp] theorem map_sum_inr (f : ∀ j, X j → Y j) (x : G₂ X) :
+    map (sum o₁ o₂) (sum o₁' o₂') f (.inr x) = .inr (map o₂ o₂' f x) := rfl
+
+end Compute
+
+section ComputeDep
+
+variable {J : Type j} {X : J → Type u} {Y : J → Type u'}
+variable {A : Type a} {ShA : A → Type s} {PosA : ∀ x, ShA x → Type p}
+  {pidxA : ∀ x (sh : ShA x), PosA x sh → J} {GA : A → (J → Type u) → Type v}
+  {GA' : A → (J → Type u') → Type w}
+  (o : ∀ x, IOcc (ShA x) (PosA x) (pidxA x) (GA x))
+  (o' : ∀ x, IOcc (ShA x) (PosA x) (pidxA x) (GA' x))
+
+@[simp] theorem map_pi (f : ∀ j, X j → Y j) (k : ∀ x, GA x X) :
+    map (pi A o) (pi A o') f k = fun x => map (o x) (o' x) f (k x) := rfl
+
+@[simp] theorem map_sigma (f : ∀ j, X j → Y j) (z : Σ x, GA x X) :
+    map (sigma A o) (sigma A o') f z = ⟨z.1, map (o z.1) (o' z.1) f z.2⟩ := rfl
+
+end ComputeDep
+
+section ComputeComp
+
+variable {J : Type j} {K : Type k} {X : J → Type u} {Y : J → Type u'}
+  {Sh : Type s} {Pos : Sh → Type p} {Sh' : Type s'} {Pos' : Sh' → Type p'}
+
+/-- The map through a plain constructor applied to an indexed expression is the map of the map.
+-/
+@[simp] theorem map_compC {G : Type u'' → Type v} {G' : Type v'' → Type v'}
+    {pidx' : (sh : Sh') → Pos' sh → J} {H : (J → Type u) → Type u''}
+    {H' : (J → Type u') → Type v''} (oG : Occ Sh Pos G) (oG' : Occ Sh Pos G')
+    (oH : IOcc Sh' Pos' pidx' H) (oH' : IOcc Sh' Pos' pidx' H') (f : ∀ j, X j → Y j)
+    (x : G (H X)) :
+    map (compC oG oH) (compC oG' oH') f x = Occ.map oG oG' (map oH oH' f) x := rfl
+
+/-- The map through a functor of families applied to a family of indexed expressions is the map
+of the maps. -/
+@[simp] theorem map_compI {pidx : (sh : Sh) → Pos sh → K} {G : (K → Type u'') → Type v}
+    {G' : (K → Type v'') → Type v'} (oG : IOcc Sh Pos pidx G) (oG' : IOcc Sh Pos pidx G')
+    {Sh'' : K → Type s'} {Pos'' : ∀ k, Sh'' k → Type p'}
+    {pidx'' : ∀ k (sh : Sh'' k), Pos'' k sh → J}
+    {H : K → (J → Type u) → Type u''} {H' : K → (J → Type u') → Type v''}
+    (oH : ∀ k, IOcc (Sh'' k) (Pos'' k) (pidx'' k) (H k))
+    (oH' : ∀ k, IOcc (Sh'' k) (Pos'' k) (pidx'' k) (H' k)) (f : ∀ j, X j → Y j)
+    (x : G fun k => H k X) :
+    map (compI oG oH) (compI oG' oH') f x = map oG oG' (fun k => map (oH k) (oH' k) f) x := rfl
+
+end ComputeComp
+
+end IOcc
+
 /-! ### The instances of the forms are the combinators
 
 The instances of `PolyIso.lean` for products, sums, functions, dependent pairs and composites
 are, by definition, the structures the command builds for these forms from the instances of the
 parts. So a nested argument's induction hypothesis at the positions of its structure is one by
-membership for the instance of its type (`PolyIso.memRec`), with no proof in between. -/
+membership for the instance of its type (`PolyIso.memRec`), with no proof in between.
+
+They are `simp` lemmas, so that `simp` computes the map of a leaf that is a built-in form, as the
+premise of a declared type's rules (`(Occ.ofIso fun X => X × Nat).map …`). The identity's leaf
+becomes `hole`, whose map `map_hole_hole` makes the function also where it is not applied, as the
+function of another map (`List.map`). -/
 
 namespace Occ
 
@@ -858,9 +953,9 @@ section Agree
 variable {Sh₁ : Type s} {Pos₁ : Sh₁ → Type p} {Sh₂ : Type s'} {Pos₂ : Sh₂ → Type p'}
   {G₁ : Type u → Type v} {G₂ : Type u → Type v'} [PolyIso G₁ Sh₁ Pos₁] [PolyIso G₂ Sh₂ Pos₂]
 
-theorem ofIso_id : ofIso (fun X : Type u => X) = hole := rfl
+@[simp] theorem ofIso_id : ofIso (fun X : Type u => X) = hole := rfl
 
-theorem ofIso_const (A : Type v) : ofIso (fun _ : Type u => A) = const A := rfl
+@[simp] theorem ofIso_const (A : Type v) : ofIso (fun _ : Type u => A) = const A := rfl
 
 /-- The map of the identity's instance is the function: the map of a field `x : α` in the rules
 of a declared type at the identity premise (`Gen/Derive.lean`). -/
@@ -871,22 +966,22 @@ of a declared type at the identity premise (`Gen/Derive.lean`). -/
 @[simp] theorem map_ofIso_const (A : Type v) {X : Type u} {Y : Type u'} (f : X → Y) (a : A) :
     map (ofIso fun _ : Type u => A) (ofIso fun _ : Type u' => A) f a = a := rfl
 
-theorem ofIso_prod : ofIso (fun X => G₁ X × G₂ X) = prod (ofIso G₁) (ofIso G₂) := rfl
+@[simp] theorem ofIso_prod : ofIso (fun X => G₁ X × G₂ X) = prod (ofIso G₁) (ofIso G₂) := rfl
 
-theorem ofIso_sum : ofIso (fun X => G₁ X ⊕ G₂ X) = sum (ofIso G₁) (ofIso G₂) := rfl
+@[simp] theorem ofIso_sum : ofIso (fun X => G₁ X ⊕ G₂ X) = sum (ofIso G₁) (ofIso G₂) := rfl
 
 variable {A : Type a} {ShA : A → Type s} {PosA : ∀ x, ShA x → Type p} {GA : A → Type u → Type v}
   [∀ x, PolyIso (GA x) (ShA x) (PosA x)]
 
-theorem ofIso_pi : ofIso (fun X => ∀ x, GA x X) = pi A fun x => ofIso (GA x) := rfl
+@[simp] theorem ofIso_pi : ofIso (fun X => ∀ x, GA x X) = pi A fun x => ofIso (GA x) := rfl
 
-theorem ofIso_sigma : ofIso (fun X => Σ x, GA x X) = sigma A fun x => ofIso (GA x) := rfl
+@[simp] theorem ofIso_sigma : ofIso (fun X => Σ x, GA x X) = sigma A fun x => ofIso (GA x) := rfl
 
-theorem ofIso_piP {P : Prop} {ShP : P → Type s} {PosP : ∀ h, ShP h → Type p}
+@[simp] theorem ofIso_piP {P : Prop} {ShP : P → Type s} {PosP : ∀ h, ShP h → Type p}
     {GP : P → Type u → Type v} [∀ h, PolyIso (GP h) (ShP h) (PosP h)] :
     ofIso (fun X => ∀ h, GP h X) = piP P fun h => ofIso (GP h) := rfl
 
-theorem ofIso_comp {Sh : Type s} {Pos : Sh → Type p} {Sh' : Type s'} {Pos' : Sh' → Type p'}
+@[simp] theorem ofIso_comp {Sh : Type s} {Pos : Sh → Type p} {Sh' : Type s'} {Pos' : Sh' → Type p'}
     {G : Type u' → Type v} {H : Type u → Type u'} [PolyIso G Sh Pos] [PolyIso H Sh' Pos'] :
     ofIso (fun X => G (H X)) = comp (ofIso G) (ofIso H) := rfl
 
@@ -910,46 +1005,47 @@ section Agree
 
 variable {J : Type j} {K : Type k}
 
-theorem ofIso_hole (i : J) : ofIso (fun X : J → Type u => X i) = hole i := rfl
+@[simp] theorem ofIso_hole (i : J) : ofIso (fun X : J → Type u => X i) = hole i := rfl
 
-theorem ofIso_const (A : Type v) : ofIso (fun _ : J → Type u => A) = const A := rfl
+@[simp] theorem ofIso_const (A : Type v) : ofIso (fun _ : J → Type u => A) = const A := rfl
 
-theorem ofIso_at {F : Type u → Type v} {Sh : Type s} {Pos : Sh → Type p} [PolyIso F Sh Pos]
-    (i : J) : ofIso (fun X : J → Type u => F (X i)) = ofOcc (Occ.ofIso F) i := rfl
+@[simp] theorem ofIso_at {F : Type u → Type v} {Sh : Type s} {Pos : Sh → Type p}
+    [PolyIso F Sh Pos] (i : J) :
+    ofIso (fun X : J → Type u => F (X i)) = ofOcc (Occ.ofIso F) i := rfl
 
 variable {Sh₁ : Type s} {Pos₁ : Sh₁ → Type p} {pidx₁ : (sh : Sh₁) → Pos₁ sh → J}
   {Sh₂ : Type s'} {Pos₂ : Sh₂ → Type p'} {pidx₂ : (sh : Sh₂) → Pos₂ sh → J}
   {G₁ : (J → Type u) → Type v} {G₂ : (J → Type u) → Type v'} [IPolyIso G₁ Sh₁ Pos₁ pidx₁]
   [IPolyIso G₂ Sh₂ Pos₂ pidx₂]
 
-theorem ofIso_prod : ofIso (fun X => G₁ X × G₂ X) = prod (ofIso G₁) (ofIso G₂) := rfl
+@[simp] theorem ofIso_prod : ofIso (fun X => G₁ X × G₂ X) = prod (ofIso G₁) (ofIso G₂) := rfl
 
-theorem ofIso_sum : ofIso (fun X => G₁ X ⊕ G₂ X) = sum (ofIso G₁) (ofIso G₂) := rfl
+@[simp] theorem ofIso_sum : ofIso (fun X => G₁ X ⊕ G₂ X) = sum (ofIso G₁) (ofIso G₂) := rfl
 
 variable {A : Type a} {ShA : A → Type s} {PosA : ∀ x, ShA x → Type p}
   {pidxA : ∀ x (sh : ShA x), PosA x sh → J} {GA : A → (J → Type u) → Type v}
   [∀ x, IPolyIso (GA x) (ShA x) (PosA x) (pidxA x)]
 
-theorem ofIso_pi : ofIso (fun X => ∀ x, GA x X) = pi A fun x => ofIso (GA x) := rfl
+@[simp] theorem ofIso_pi : ofIso (fun X => ∀ x, GA x X) = pi A fun x => ofIso (GA x) := rfl
 
-theorem ofIso_sigma : ofIso (fun X => Σ x, GA x X) = sigma A fun x => ofIso (GA x) := rfl
+@[simp] theorem ofIso_sigma : ofIso (fun X => Σ x, GA x X) = sigma A fun x => ofIso (GA x) := rfl
 
-theorem ofIso_piP {P : Prop} {ShP : P → Type s} {PosP : ∀ h, ShP h → Type p}
+@[simp] theorem ofIso_piP {P : Prop} {ShP : P → Type s} {PosP : ∀ h, ShP h → Type p}
     {pidxP : ∀ h (sh : ShP h), PosP h sh → J} {GP : P → (J → Type u) → Type v}
     [∀ h, IPolyIso (GP h) (ShP h) (PosP h) (pidxP h)] :
     ofIso (fun X => ∀ h, GP h X) = piP P fun h => ofIso (GP h) := rfl
 
 variable {Sh : Type s} {Pos : Sh → Type p} {Sh' : Type s'} {Pos' : Sh' → Type p'}
 
-theorem ofIso_compC {G : Type u' → Type v} [PolyIso G Sh Pos] {pidx' : (sh : Sh') → Pos' sh → J}
-    {H : (J → Type u) → Type u'} [IPolyIso H Sh' Pos' pidx'] :
+@[simp] theorem ofIso_compC {G : Type u' → Type v} [PolyIso G Sh Pos]
+    {pidx' : (sh : Sh') → Pos' sh → J} {H : (J → Type u) → Type u'} [IPolyIso H Sh' Pos' pidx'] :
     ofIso (fun X => G (H X)) = compC (Occ.ofIso G) (ofIso H) := rfl
 
-theorem ofIso_reidx {pidx : (sh : Sh) → Pos sh → K} {G : (K → Type u) → Type v}
+@[simp] theorem ofIso_reidx {pidx : (sh : Sh) → Pos sh → K} {G : (K → Type u) → Type v}
     [IPolyIso G Sh Pos pidx] (g : K → J) :
     ofIso (fun X : J → Type u => G fun k => X (g k)) = reidx (ofIso G) g := rfl
 
-theorem ofIso_compI {pidx : (sh : Sh) → Pos sh → K} {G : (K → Type u') → Type v}
+@[simp] theorem ofIso_compI {pidx : (sh : Sh) → Pos sh → K} {G : (K → Type u') → Type v}
     [IPolyIso G Sh Pos pidx] {Sh' : K → Type s'} {Pos' : ∀ k, Sh' k → Type p'}
     {pidx' : ∀ k (sh : Sh' k), Pos' k sh → J} {H : K → (J → Type u) → Type u'}
     [∀ k, IPolyIso (H k) (Sh' k) (Pos' k) (pidx' k)] :

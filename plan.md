@@ -4,7 +4,8 @@
 
 The layout follows `architecture.md`: `Framework.lean` (the contracts and what follows from
 them), `PolyIso.lean` (the user interface for nesting), `Model/` (`Cotype`, `Intype`, `Occ`,
-`Poly`: the fixpoints on `Raw`, occurrence structures, fixpoints as polynomial functors),
+`Occ2`, `IOcc2`, `Poly`: the fixpoints on `Raw`, occurrence structures in one and two variables,
+plain and indexed, fixpoints as polynomial functors),
 `Syntax.lean` (the command syntax), `Gen/` (the generators by step, on `Expr`: `Decl`, `Occ`,
 `Ctx`, `Front`, `Functor`, `Signature`, `Iso`, `Model`, `Rel`, `Framework`, `Extras`, `Surface`,
 `Derive`, the pipeline `Command`, and `Mixed` for mixed blocks), `CodataCmd.lean`/`DataCmd.lean` (the commands),
@@ -155,21 +156,70 @@ DONE:
   `Ping T`, `Ev T 2` (`ColeanTest/DeriveIdx.lean`, 2026-11-09). The theory is the plain one on the
   total spaces (`Model/Poly.lean`).
 
+DONE (2026-11-11, `ColeanTest/NestGaps.lean`):
+
+* a field mentioning several parameters that vary (`p : α × β`), each at its premise; a parameter
+  that cannot vary with the others in a field is kept constant, the first ones first;
+* a parameter in the same field as the type through products and sums (`p : α × T α`,
+  `f : T α ⊕ α`): step 5 splits the argument into parts, a constructor of the presentation per
+  side of a sum, with the `simp` rules per part and per side;
+* in a block, a nested argument with positions at the block's index only after cases on them,
+  through products and sums (`Ping × Pong`, `Ping × Nat`, `Ping ⊕ Pong`): split the same way; in a
+  family the same split states the rules of step 5 by components (`T n × T (n + 1)`);
+* in a family or a block, a nested argument at one index only after cases on its positions
+  (`T n × T n`, `Own × Nat`): the recursor's hypothesis by `PolyIso.Mem`, by cases on the
+  positions;
+* a leaf applied to an occurrence in an argument other than its last (`Vec (List T) n`): the
+  structure is the instance that instance search finds, so the recursor's hypothesis is too.
+
+DONE (2026-11-11, `ColeanTest/NestGaps2.lean`):
+
+* `simp` computes the rules of a family whose nested argument has an indexed structure
+  (`T.fold_c` through `IOcc.prod`, the `IOcc.map_*` lemmas, `IOcc.map_ofOcc`), and the
+  hypothesis by membership at several indices to one per component
+  (`IPolyIso.forall_eq_heq_or_imp`, `forall_or_eq_heq_imp`, `forall_forall_eq_heq_imp`,
+  `forall_eq_heq_imp`: plain `simp at ih`);
+* `simp` computes the map of a leaf that is a built-in form (`Occ.ofIso_prod`, …), so the whole
+  type is the leaf in an argument other than its last whatever that argument (`E (T × Nat) Nat`);
+* a parameter in the same field as the type under a named type constructor or a function
+  (`List (α × T α)`, `Nat → α × T α`), without indices: the field has an occurrence structure in
+  two variables (`Occ₂`, `Model/Occ2.lean`), with the `simp` rules through it; in a mixed block,
+  `List (Tree α × Forest α)`.
+* `Occ.ofIso_id` is a `simp` lemma, with `Occ.map_hole_hole`/`IOcc.map_hole_hole` (the map
+  through a hole not applied is the function), so the map of a list field is `List.map f l`.
+
+DONE (2026-11-11, `ColeanTest/NestGaps3.lean`):
+
+* membership in each variable of a structure in two variables (`Occ₂.MemX`, `Occ₂.MemY`, with
+  `simp` lemmas through the combinators, and for a member with a property first, `simp ↓`), so
+  that a parameter with the type across a sum inside a named type constructor is supported
+  (`List (α ⊕ T α)`; in a mixed block `List (Tree α ⊕ Forest α)`): the rules of membership state
+  such a field by them;
+* the indexed structure in two variables (`IOcc₂`, `Model/IOcc2.lean`), over the index of the
+  presentation, with its combinators, laws, map, `AgreeY` with the indexed structure in one
+  variable along a map of the indices, and membership: a parameter in the same field as the
+  recursion of a family (`List (α × T n)`, and at several indices `List (α × T n × T (n + 1))`),
+  and in a block a type of the block inside a named type constructor at one type after cases
+  (`List (RA α × Nat)`); at one index the structure is a plain one there (`IOcc₂.ofOcc₂`), and the
+  rules are stated as without indices;
+* `forall_or_eq_imp` (Lean's) is a `simp` lemma, so `∀ t, t ∈ p.1 ∨ t = p.2 → P t` splits.
+
 NOT DONE:
 
 * generating instances on demand, for user-defined structures and inductives (`todo.md`);
-* generated instances for a type of a block whose nested argument has positions at the block's
-  index only after cases on them (`Ping × Pong`, `Ping × Nat`): the step fails with its warning.
-  A fix would cast the children along a generated equation of the indices, or reindex the
-  trees of shapes along `Blk.Poly.ixIn`;
-* `IPolyIso` instances, where the varying parameter is itself a family;
-* a field mentioning two parameters that may vary (`p : α × β`): both then count as constant;
-* holes at different indices in several arguments of a named constructor (`Pair (T i) (T j)`);
+* in a block, a nested argument at several types of the block inside a named type constructor
+  (`List (Ping × Pong)`): the instances are generated, but not the `simp` lemmas, which state the
+  members by the type of each (the family of the block's types at a variable index is not one the
+  rules can state at reducible transparency);
+* a parameter with the type in a field without a structure in two variables: in another argument
+  of a leaf than the type (`List (E α (T α))`), or under a functor on families: the parameter is
+  constant there;
+* `IPolyIso` instances, where the varying parameter is itself a family: needs the fixpoint of
+  `Model/Poly.lean` for a parameter that is a family;
+* holes at different indices in several arguments of a named constructor (`Pair (T i) (T j)`):
+  needs `IPolyIso` instances of `Pair` (previous item);
 * constructor-level lemmas for the generated map, and `simp` lemmas for membership through
   generated instances: `PolyFix.d_map` states the map on layers only;
-* in a family or a block, a nested argument through a product or a sum gets the hypothesis by
-  `IPolyIso.Mem` even when all its occurrences are at one index (`Own × Nat` in a block): its
-  positions are at that index only after cases on them;
 * `PolyMap`/`IPolyMap` instances for the composites across plain functors and functors on
   families (`fun X => G fun _ => X`, `fun X => G fun k => H k X`, reindexing): their
   `PolyIso`/`IPolyIso` instances exist;
@@ -205,14 +255,13 @@ NOT DONE:
 * outer runs with indices, or of several types: the open types' parameter is then a family, and
   nesting through it needs `IPolyIso` instances, not generated (section 4); the block stops at the
   error of step 5 (`ColeanTest/MixedRejected.lean`);
-* a field mentioning an outer type together with the run's own type (`p : Tree α × Forest α`):
-  step 5 does not generate instances in a parameter used so (gap 2 of section 4); the same error;
-* with parameters, a run passing an outer type on to a run further inside (A ⊃ B ⊃ C, `C`
-  mentioning `A`): the middle run's field `c : C.Open α X` has no recursion of `B`, but it
-  mentions two parameters, `α` and `X`, and step 5 drops both although only `X` needs to vary
-  (gap 3 of section 4); the same error. Several parameters in one field would fix it, and so
-  would letting step 5 keep the block's parameters constant. Without parameters the block is
-  accepted;
+* a field mentioning an outer type together with the run's own type without a structure in both
+  (`p : Two (Tree α) (Forest α)`, section 4); the same error. Through products and sums
+  (`Tree α × Forest α`) and inside a named type constructor (`List (Tree α × Forest α)`,
+  `List (Tree α ⊕ Forest α)`) it is DONE, and so is, with parameters, a run passing an outer type
+  on to a run further inside (`c : C.Open α X`);
+* with a run two levels out, the membership instances are not the right ones
+  (`Sketch/MixedTour.lean`, section 14);
 * the functor of an outer run at its state, and the rules mapping through inner runs
   (`Tree.F.node : α → Forest.Open α X → Tree.F α X`, `T.fold_c`), mention the open types: they are
   the inner types at a state, with no closed form;

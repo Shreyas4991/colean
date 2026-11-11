@@ -13,7 +13,9 @@ step 2b):
   `∀ t, PolyIso.Mem (fun X => G X) t c → motive _ t`, with the argument's type `G` as a function
   of the occurrences and the instance of `PolyIso.lean` that is its occurrence structure; when
   its positions are at several indices of a family, `∀ j t, IPolyIso.Mem G j t c → motive j t`.
-  It is the `induction` eliminator;
+  When they are at one index only after cases on them, through a product (`T n × T n`,
+  `T n × Nat`), the hypothesis is by `PolyIso.Mem` at that index, the hypothesis at the positions
+  brought to it by these cases (`bridgeIH`). It is the `induction` eliminator;
 * `T.recPos`, the same with the hypothesis of a nested argument at every position of its
   structure, `∀ q, motive _ ((toC o c).2 q)`: it is `Signature.rec_of` at the packed index, the
   minor premises assembled by cases on `F T i` (`T.recAux`), with its computation rule
@@ -124,6 +126,8 @@ partial def isoOf (o : Expr) (mode : IsoMode) : MetaM Expr := do
   | .flat, ``Codata.IOcc.pi => app ``Codata.PolyIso.instPi #[← under ex[1]! .flat]
   | .flat, ``Codata.IOcc.piP => app ``Codata.PolyIso.instPiP #[← under ex[1]! .flat]
   | .flat, ``Codata.IOcc.sigma => app ``Codata.PolyIso.instSigma #[← under ex[1]! .flat]
+  | .flat, ``Codata.IOcc.prod =>
+    app ``Codata.PolyIso.instProd #[← isoOf ex[0]! .flat, ← isoOf ex[1]! .flat]
   | .flat, ``Codata.IOcc.compC =>
     app ``Codata.PolyIso.instComp #[← isoOf ex[0]! .plain, ← isoOf ex[1]! .flat]
   | .flat, ``Codata.IOcc.compI =>
@@ -144,6 +148,9 @@ structure NestMem where
   inst : Expr
   /-- The members' type `Tₘ params idx`, or their family on the packed index. -/
   elem : Expr
+  /-- At one index only after cases on the positions, through products (`T n × T n`): the
+  hypothesis at the positions is turned into one at that index by these cases (`bridgeIH`). -/
+  bridged : Bool := false
 
 /-- The application of a family-level motive at index arguments. -/
 def motiveApp (motive : Expr) (idx : Array Expr) (x : Expr) : TermElabM Expr :=
@@ -199,6 +206,73 @@ def withNestPos (n : Nest) (σ : Expr → Expr) (t : Expr)
 
 /-! ### Hypotheses by membership -/
 
+/-- Is the index of a position of the indexed structure `o` the same at variables, mentioning
+neither the shape nor the position? That index. -/
+def constIdx (o : Expr) : MetaM (Option Expr) := do
+  let args := (← whnfR (← inferType o)).getAppArgs
+  let (sh, pos, pidx) := (args[1]!, args[2]!, args[3]!)
+  withLocalDeclD `s sh fun s => do
+  withLocalDeclD `q (mkApp pos s).headBeta fun q => do
+    let i ← Core.betaReduce (mkApp2 pidx s q)
+    return if i.containsFVar s.fvarId! || i.containsFVar q.fvarId! then none else some i
+
+/-- Are the positions of the indexed structure `o` at one index after cases on them, through
+products, functions and composites down to structures at one index at variables, or without
+positions (`some none`)? That index. -/
+partial def oneAfterCases (o : Expr) : MetaM (Option (Option Expr)) := do
+  let head := o.getAppFn.constName?.getD .anonymous
+  if head == ``Codata.IOcc.const then return some none
+  if let some i ← constIdx o then return some (some i)
+  let ex ← explicitArgs o
+  match head with
+  | ``Codata.IOcc.prod =>
+    let some i ← oneAfterCases ex[0]! | return none
+    let some j ← oneAfterCases ex[1]! | return none
+    match i, j with
+    | some i, some j => return if ← isDefEq i j then some (some i) else none
+    | some i, none | none, some i => return some (some i)
+    | none, none => return some none
+  | ``Codata.IOcc.pi =>
+    lambdaBoundedTelescope ex[1]! 1 fun xs b => do
+      let some i ← oneAfterCases b | return none
+      return if i.any fun i => xs.any (i.containsFVar ·.fvarId!) then none else some i
+  | ``Codata.IOcc.compC => oneAfterCases ex[1]!
+  | _ => return none
+
+/-- `fun q => ih q` at the type `ty`, `∀ q, motive idx (child q)`, from `ih` at the indices of the
+positions, `∀ q, motive (pidx q) (child q)`, which are `idx` only after cases on `q`: by these
+cases, as deep as needed. -/
+partial def bridgeIH (ty ih : Expr) : MetaM Expr := do
+  let g ← mkFreshExprSyntheticOpaqueMVar ty
+  let (q, g') ← g.mvarId!.intro1
+  let rec go (g : MVarId) (pos : Expr) (x : FVarId) : MetaM Unit := g.withContext do
+    let v := mkApp ih pos
+    if ← withUnfolding <| isDefEq (← g.getType) (← inferType v) then
+      g.assign v
+      return
+    for sg in ← g.cases x do
+      let some y := sg.fields.back? | throwError "internal error: cases on a position"
+      go sg.mvarId (sg.subst.apply pos) y.fvarId!
+  go g' (mkFVar q) q
+  instantiateMVars g
+
+/-- `bridgeIH ty ih = f` for `f` equal to `ih` at every position, by the same cases: an
+equation of functions on the positions. -/
+partial def bridgeEq (ty ih f : Expr) : MetaM Expr := do
+  let b ← bridgeIH ty ih
+  let eqTy ← forallTelescope ty fun qs _ => do
+    mkForallFVars qs (← mkEq (mkApp b qs[0]!).headBeta (mkApp f qs[0]!).headBeta)
+  let g ← mkFreshExprSyntheticOpaqueMVar eqTy
+  let (q, g') ← g.mvarId!.intro1
+  let rec go (g : MVarId) (x : FVarId) : MetaM Unit := g.withContext do
+    let ok ← try withUnfolding g.refl; pure true catch _ => pure false
+    if ok then return
+    for sg in ← g.cases x do
+      let some y := sg.fields.back? | throwError "internal error: cases on a position"
+      go sg.mvarId y.fvarId!
+  go g' q
+  mkFunExt (← instantiateMVars g)
+
 /-- The membership data of the nested argument `a` of `c` with structure `n`, for the arguments
 `ys` of `T.c` (`σ` the substitution of the analysis' arguments by them). The positions are at
 one index when the index of a position, at variables, mentions neither: then the members are
@@ -215,7 +289,10 @@ def nestMem (a : ArgInfo) (n : Nest) (σ : Expr → Expr) : TermElabM NestMem :=
       withLocalDeclD `q (mkApp (sub n.pos) s).headBeta fun q => do
         let i ← Core.betaReduce (mkApp2 (sub pidx) s q)
         return !i.containsFVar s.fvarId! && !i.containsFVar q.fvarId!
-  if one then
+  -- At one index after cases on the positions, through products.
+  let bridged ← if one || n.pidx?.isNone then pure false else
+    pure ((← oneAfterCases o).join).isSome
+  if one || bridged then
     let some e := ty.find? fun e => (ctx.occ? e).isSome
       | throwError "internal error: no occurrence in a nested argument{indentExpr ty}"
     let some (m, idx) := ctx.occ? e | unreachable!
@@ -223,7 +300,7 @@ def nestMem (a : ArgInfo) (n : Nest) (σ : Expr → Expr) : TermElabM NestMem :=
     let fn ← withLocalDeclD `X (mkSort L.succ) fun X => do
       mkLambdaFVars #[X] (ctx.replaceOccU ty (fun _ _ => X) L)
     let inst ← isoOf o (if ctx.idxed then .flat else .plain)
-    return { idx? := some (ctx.wrap m idx), fn, inst, elem }
+    return { idx? := some (ctx.wrap m idx), fn, inst, elem, bridged }
   else
     let J := ctx.J
     let fn ← withLocalDeclD `X (← mkArrow J (mkSort L.succ)) fun X => do
@@ -297,12 +374,20 @@ def memMotive (nm : NestMem) (app : Array Expr → Expr → TermElabM Expr) : Te
   | none => lam `p ctx.J fun p => do
       lam `t (mkApp nm.elem p).headBeta fun t => do app (← ctx.projs p) t
 
+/-- The type of the hypothesis at the positions of `y` that `PolyIso.memRec` takes, at the motive
+`motive` of `memMotive`: `∀ q, motive ((equiv y).2 q)`. -/
+def memPosTy (nm : NestMem) (y motive : Expr) : TermElabM Expr := do
+  let r ← withUnfolding <| mkAppOptM ``Codata.PolyIso.memRec
+    #[nm.fn, none, none, nm.inst, nm.elem, y, motive]
+  return (← whnf (← inferType r)).bindingDomain!
+
 /-- The hypothesis by membership of `y`, from the one at the positions of its structure, `ih`:
 `PolyIso.memRec ih`, curried over the indices with `IPolyIso.memRec`. -/
 def memOfPos (nm : NestMem) (y : Expr) (app : Array Expr → Expr → TermElabM Expr) (ih : Expr) :
     TermElabM Expr := do
   let motive ← ctx.memMotive nm app
   if nm.idx?.isSome then
+    let ih ← if nm.bridged then bridgeIH (← memPosTy nm y motive) ih else pure ih
     let args : Array (Option Expr) := #[nm.fn, none, none, nm.inst, nm.elem, y, motive, ih]
     withUnfolding <| mkAppOptM ``Codata.PolyIso.memRec args
   else
@@ -322,12 +407,19 @@ def memVal (nm : NestMem) (y : Expr) (recAt : Array Expr → Expr → TermElabM 
 
 /-- `memOfPos` of the hypothesis at the positions given by `recAt` is `memVal`: from
 `PolyIso.memRec_pos`, curried over the indices. -/
-def memValEq (nm : NestMem) (y : Expr) (recAt : Array Expr → Expr → TermElabM Expr) :
-    TermElabM Expr := do
+def memValEq (nm : NestMem) (y : Expr) (recAt : Array Expr → Expr → TermElabM Expr)
+    (ihPos : Expr) : TermElabM Expr := do
   let g ← ctx.memMotive nm fun idx t => recAt idx t
   if nm.idx?.isSome then
     let args : Array (Option Expr) := #[nm.fn, none, none, nm.inst, nm.elem, y, none, g]
-    withUnfolding <| mkAppOptM ``Codata.PolyIso.memRec_pos args
+    let e ← withUnfolding <| mkAppOptM ``Codata.PolyIso.memRec_pos args
+    if !nm.bridged then return e
+    -- `memRec (bridgeIH ihPos) = memRec (fun q => g …)` first, from the hypothesis at the
+    -- positions `ihPos`, by cases on the positions.
+    let some (_, lhs, _) := (← inferType e).eq? | throwError "internal error: not an equation"
+    let f := lhs.appArg!
+    let hb ← bridgeEq (← inferType f) ihPos f
+    mkEqTrans (← mkCongrArg lhs.appFn! hb) e
   else
     let args : Array (Option Expr) :=
       #[none, nm.fn, none, none, none, nm.inst, nm.elem, y, none, g]

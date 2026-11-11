@@ -6,9 +6,9 @@ A plain `mutual` block may not mix `data` and `codata`; a `mixed_mutual` block o
 `mutual` block, with a warning. The other blocks here fail at the instances of an open run
 (step 5): the outer run nests through the open type in its parameter for the outer types, and no
 instance is generated for it when that parameter is a family (an outer run with indices, or a
-block) or occurs in a field together with the type itself or another varying parameter (a
-field `Tree α × Forest α`, or a run passing an outer type on to a run further inside). A failed
-block declares nothing. -/
+block), occurs in a field without an occurrence structure in it (a function domain), or in a
+field together with the type itself without a structure in both (`Two (Tree α) (Forest α)`, the
+two in two arguments of a type constructor). A failed block declares nothing. -/
 
 universe u
 
@@ -74,10 +74,15 @@ data Forest₂ (α : Type u)
   | cons (t : Tree₂ α) (s : Str₂ α) (f : Forest₂ α)
 end
 
--- A field with an outer type and the open type itself.
+data Two (α β : Type u)
+  | mk (a : α) (b : β)
+
+-- An outer type in a field with the run's own type, in two arguments of a type constructor: the
+-- field has no structure in both (`List (Tree α ⊕ Forest α)` has one,
+-- `ColeanTest/NestGaps3.lean`).
 /--
 error: `Forest₃` cannot be nested through in this `mixed_mutual` block: no `Codata.PolyIso` instance was generated for `Forest₃.Open`, the open form that `Tree₃` nests through.
-its parameter `X`, standing for `Tree₃`, cannot vary: it occurs in a field together with another parameter that varies or with the type itself, or in a field without an occurrence structure in it
+its parameter `X`, standing for `Tree₃`, cannot vary: it occurs in a field without an occurrence structure in it, or together with the type itself in a field without a structure in both, as in two arguments of a type constructor
 -/
 #guard_msgs in
 mixed_mutual
@@ -85,32 +90,28 @@ codata Tree₃ (α : Type u)
   | node (a : α) (children : Forest₃ α)
 data Forest₃ (α : Type u)
   | nil
-  | cons (p : Tree₃ α × Forest₃ α)
+  | cons (p : Two (Tree₃ α) (Forest₃ α))
 end
 
--- A distant mention: `C'` mentions `A'`, so `B'` passes its parameter for `A'` on to `C'`, in a
--- field with the block's parameter (`c : C'.Open α X`).
+-- An outer type in a function domain.
 /--
-error: `B'` cannot be nested through in this `mixed_mutual` block: no `Codata.PolyIso` instance was generated for `B'.Open`, the open form that `A'` nests through.
-its parameter `X`, standing for `A'`, cannot vary: it occurs in a field together with another parameter that varies or with the type itself, or in a field without an occurrence structure in it
+error: `Forest₄` cannot be nested through in this `mixed_mutual` block: no `Codata.PolyIso` instance was generated for `Forest₄.Open`, the open form that `Tree₄` nests through.
+its parameter `X`, standing for `Tree₄`, cannot vary: it occurs in a field without an occurrence structure in it, or together with the type itself in a field without a structure in both, as in two arguments of a type constructor
 -/
 #guard_msgs in
 mixed_mutual
-codata A' (α : Type u)
-  | mk (b : B' α)
-data B' (α : Type u)
+codata Tree₄ (α : Type u)
+  | node (a : α) (children : Forest₄ α)
+data Forest₄ (α : Type u)
   | nil
-  | cons (c : C' α) (b : B' α)
-codata C' (α : Type u)
-  | mk (a : A' α) (c : C' α)
+  | cons (k : Tree₄ α → Nat) (f : Forest₄ α)
 end
 
 -- Nothing of a failed block is declared, the open types of the runs inside neither.
 open Lean in
 run_cmd do
   for n in [`RejectedTest.VTree, `RejectedTest.VForest.Open, `RejectedTest.Forest₂.Open,
-      `RejectedTest.Tree₂_Str₂.Ix, `RejectedTest.Forest₃.Open, `RejectedTest.C'.Open,
-      `RejectedTest.B'.Open] do
+      `RejectedTest.Tree₂_Str₂.Ix, `RejectedTest.Forest₃.Open, `RejectedTest.Forest₄.Open] do
     if (← getEnv).contains n then throwError "unexpected declaration `{n}`"
 
 end

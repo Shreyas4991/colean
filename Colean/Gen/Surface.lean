@@ -7,9 +7,13 @@ import Colean.Gen.Extras
 tactic proofs from what exists:
 
 * the constructors `T.cᵢ := T.ctor (T.F.cᵢ …)` with the simp lemmas `T.dtor_cᵢ`, `T.ctor_cᵢ`,
-  injectivity `T.cᵢ_inj` (`Codata.inj_of` at `T.F.cᵢ.injEq`, without the proof arguments, as
-  `injEq`) and disjointness `T.cᵢ_ne_cⱼ` (`Codata.ne_of`), the last two when their statements
-  make sense;
+  injectivity `T.cᵢ_inj` (`Codata.inj_of` at `T.F.cᵢ.injEq`) and disjointness `T.cᵢ_ne_cⱼ`
+  (`Codata.ne_of`). As in `injEq`, injectivity shares between its two sides the arguments that
+  occur in the result index or in the type of an argument occurring there, and leaves the proofs
+  out of the conjunction; it is stated when something is left, and the other arguments are
+  explicit and mentioned by no type. Disjointness is stated where the result indices of the two
+  constructors unify, with the arguments of one at which they meet those of the other
+  (`withMeet`);
 * the case analysis `T.casesOn` (by cases on `F` after `dtor`, cast along `ctor_dtor`; the
   `cases` eliminator), `T.casesOnAux`, `T.casesOn_ctor` and the simp lemmas `T.casesOn_cᵢ`;
 * for `data`, the computation rules `T.rec_cᵢ` and `T.fold_cᵢ` (simp lemmas), the hypothesis of
@@ -35,9 +39,66 @@ open Lean Meta Elab Term
 
 namespace Codata.Gen
 
+/-- Which of the arguments `ys` of a constructor its injectivity lemma shares by the two sides,
+as Lean's `mkInjectiveTheorems` does: those that occur in the result index arguments `idx`, or
+in the type of a local variable occurring there. -/
+def sharedArgs (ys idx : Array Expr) : MetaM (Array Bool) := do
+  let lctx ← getLCtx
+  return ys.map fun y => idx.any (occursOrInType lctx y)
+
+/-- Run `k` on the local variables `ys` with a primed copy of each but those marked `shared`:
+the arguments of the other side of an equation, kept or copied, and the copies. -/
+def withPrimed (ys : Array Expr) (shared : Array Bool)
+    (k : Array Expr → Array Expr → TermElabM α) : TermElabM α := do
+  let rec go (i : Nat) (ys' new : Array Expr) : TermElabM α := do
+    if h : i < ys.size then
+      if shared[i]! then go (i + 1) (ys'.push ys[i]) new else
+      let d ← ys[i].fvarId!.getDecl
+      withLocalDecl (d.userName.appendAfter "'") d.binderInfo
+          (d.type.replaceFVars (ys.extract 0 i) ys') fun y =>
+        go (i + 1) (ys'.push y) (new.push y)
+    else k ys' new
+  go 0 #[] #[]
+
 namespace Ctx
 
 variable (ctx : Ctx)
+
+/-- Run `k` where the results of the constructors `a` and `b` of a type meet: on the arguments
+of `a` (as those of `T.a`), and those of `b` at which its result index unifies with that of `a`,
+by reducible unification with a metavariable for each argument of `b`. The arguments left
+unassigned are new local variables, primed. `k` receives the arguments of `a` and of `b`, the
+new variables and the family-level index arguments of `a`. Nothing is run when the indices do
+not unify. -/
+def withMeet (a b : Ctor)
+    (k : Array Expr → Array Expr → Array Expr → Array Expr → TermElabM α) :
+    TermElabM (Option α) := do
+  let tel ← ctx.withTArgs b (rename := (·.appendAfter "'")) fun zs σ => do
+    mkForallFVars zs (← ctx.tyAt b.owner (b.uidx.map σ))
+  let names := tel.getForallBinderNames.toArray
+  ctx.withTArgs a fun ys σ => do
+  let (ms, bis, tyB) ← forallMetaTelescope tel
+  let idxB := tyB.getAppArgs.extract ctx.params.size tyB.getAppNumArgs
+  let meet ← withReducible <| ((a.uidx.map σ).zip idxB).allM fun (i, j) => isDefEq i j
+  unless meet do return none
+  -- The metavariables left unassigned become local variables, in order. An argument that
+  -- needs a later one is not supported.
+  let rec go (i : Nat) (sub : Array (Expr × Expr)) (args new : Array Expr) :
+      TermElabM (Option α) := do
+    let rep (e : Expr) : MetaM (Option Expr) := do
+      let e := (← instantiateMVars e).replace fun x => (sub.find? (·.1 == x)).map (·.2)
+      return if e.hasExprMVar then none else some e
+    if h : i < ms.size then
+      let m := ms[i]
+      if ← m.mvarId!.isAssigned then
+        let some v ← rep m | return none
+        go (i + 1) sub (args.push v) new
+      else
+        let some ty ← rep (← inferType m) | return none
+        withLocalDecl names[i]! bis[i]! ty fun x =>
+          go (i + 1) (sub.push (m, x)) (args.push x) (new.push x)
+    else some <$> k ys args new (a.idx.map σ)
+  go 0 #[] #[] #[]
 
 /-! ### The constructors -/
 
@@ -65,41 +126,51 @@ def genCtors : TermElabM Unit := do
       (← ctx.appAt ctx.dtor_ctor idx #[fapp])
     thm c (ctx.tName' c "ctor_" "") ys (← mkEq (← ctx.appAt ctx.ctor idx #[fapp]) capp)
       (← mkEqRefl capp)
-  -- Injectivity, for constructors with explicit, independent arguments. As in `T.F.c.injEq`,
-  -- the proofs are left out of the conjunction, and there is no lemma if nothing is left.
+  -- Injectivity, as `T.F.c.injEq`: the arguments the result index needs are shared by the two
+  -- sides (`sharedArgs`), the proofs are left out of the conjunction, and there is no lemma if
+  -- nothing is left. The other arguments must be explicit, and no type may mention them.
   for c in ctx.ctors do
-    if c.args.isEmpty || c.args.any (!·.bi.isExplicit) || c.dependent || c.idxDependent then
-      continue
     ctx.withTArgs c fun ys σ => do
-    ctx.withTArgs c (rename := (·.appendAfter "'")) fun ys' _ => do
+    let shared ← sharedArgs ys (c.uidx.map σ)
+    let fresh := (ys.zip shared).filterMap fun (y, s) => if s then none else some y
+    if fresh.isEmpty then return
+    if ← fresh.anyM fun y => return !(← y.fvarId!.getBinderInfo).isExplicit then return
+    if ← ys.anyM fun y => do
+        let ty ← inferType y
+        return fresh.any fun z => ty.containsFVar z.fvarId! then
+      return
+    withPrimed ys shared fun ys' new => do
     let idx := c.idx.map σ
     let eqs ← (ys.zip ys').filterMapM fun (y, y') => do
-      if ← isProof y then return none
+      if y == y' || (← isProof y) then return none
       return some (← mkEq y y')
     if eqs.isEmpty then return
     let conj := eqs.pop.foldr (init := eqs.back!) mkAnd
     let stmt := mkIff (← mkEq (← ctx.tCtorApp c ys) (← ctx.tCtorApp c ys')) conj
-    let injEq ← ctx.genAt (ctx.fCtor c ++ `injEq) [L] (#[T] ++ ys ++ ys')
+    let injEq ← ctx.genAt (ctx.fCtor c ++ `injEq) [L] (#[T] ++ ys ++ new)
     let value ← mkAppOptM ``Codata.inj_of #[none, none, ← ctx.appAt ctx.ctor idx #[],
       ← ctx.appAt ctx.ctor_injective idx #[], ← ctx.fCtorApp c L T ys, ← ctx.fCtorApp c L T ys',
       none, injEq]
-    thm c (ctx.tName' c "" "_inj") (ys ++ ys') stmt value
-  -- Disjointness, for constructors of the same type at the same, independent, index.
+    thm c (ctx.tName' c "" "_inj") (ys ++ new) stmt value
+  -- Disjointness, for constructors of the same type whose results meet (`withMeet`): the
+  -- arguments of `c` are variables and those of `c'` are where the indices unify, or, when they
+  -- do not unify so, the other way round. The variables come first, and the others are primed.
   for c in ctx.ctors do
     for c' in ctx.ctors do
       if c.name == c'.name || c.owner != c'.owner then continue
-      if c.idxDependent || c'.idxDependent || c.idx != c'.idx then continue
-      ctx.withTArgs c fun ys σ => do
-      ctx.withTArgs c' (rename := (·.appendAfter "'")) fun ys' _ => do
-      let idx := c.idx.map σ
-      let stmt ← mkAppM ``Ne #[← ctx.tCtorApp c ys, ← ctx.tCtorApp c' ys']
-      let (fa, fb) := (← ctx.fCtorApp c L T ys, ← ctx.fCtorApp c' L T ys')
-      let hab ← lam `h (← mkEq fa fb) fun h => mkNoConfusion (mkConst ``False) h
-      let value ← mkAppOptM ``Codata.ne_of #[none, none, ← ctx.appAt ctx.dtor idx #[], none,
-        none, none, none, mkAppN (← ctx.constWith (ctx.tName' c "dtor_" "") []) (ctx.params ++ ys),
-        mkAppN (← ctx.constWith (ctx.tName' c' "dtor_" "") []) (ctx.params ++ ys'), hab]
-      thm c (ctx.tyName c.owner ++ Name.mkSimple (c.name.toString ++ "_ne_" ++ c'.name.toString))
-        (ys ++ ys') stmt value
+      let disj (ys ys' xs : Array Expr) (idx : Array Expr) : TermElabM Unit := do
+        let stmt ← mkAppM ``Ne #[← ctx.tCtorApp c ys, ← ctx.tCtorApp c' ys']
+        let (fa, fb) := (← ctx.fCtorApp c L T ys, ← ctx.fCtorApp c' L T ys')
+        let hab ← lam `h (← mkEq fa fb) fun h => mkNoConfusion (mkConst ``False) h
+        let value ← mkAppOptM ``Codata.ne_of #[none, none, ← ctx.appAt ctx.dtor idx #[], none,
+          none, none, none,
+          mkAppN (← ctx.constWith (ctx.tName' c "dtor_" "") []) (ctx.params ++ ys),
+          mkAppN (← ctx.constWith (ctx.tName' c' "dtor_" "") []) (ctx.params ++ ys'), hab]
+        thm c (ctx.tyName c.owner ++ Name.mkSimple (c.name.toString ++ "_ne_" ++ c'.name.toString))
+          xs stmt value
+      let done ← ctx.withMeet c c' fun ys ys' new idx => disj ys ys' (ys ++ new) idx
+      if done.isNone then
+        discard <| ctx.withMeet c' c fun ys' ys new idx => disj ys ys' (ys' ++ new) idx
 
 /-! ### Case analysis -/
 
@@ -355,12 +426,14 @@ def genRecLemmas : TermElabM Unit := do
         ctx.genAt ctx.recPos [v] (#[motive] ++ pminors ++ idx ++ #[t])
       let h₁ := mkAppN (← ctx.constWith ctx.recPos_ctor [v])
         (ctx.params ++ #[motive] ++ pminors ++ idx ++ #[← ctx.fCtorApp c L T ys])
-      let mid := pminors[k]!.beta (ys ++ (← ctx.recIHVals recPosAt c ys σ (pos := true)))
+      let posVals ← ctx.recIHVals recPosAt c ys σ (pos := true)
+      let mid := pminors[k]!.beta (ys ++ posVals)
       let vals ← ctx.recIHVals recPosAt c ys σ
       let mut h₂ ← mkEqRefl (mkAppN minors[k]! ys)
-      for ((a, y), x) in ((c.args.zip ys).filter (!·.1.kind.isData)).zip vals do
+      for (((a, y), x), p) in (((c.args.zip ys).filter (!·.1.kind.isData)).zip vals).zip
+          posVals do
         let e ← match a.kind with
-          | .nest n => ctx.memValEq (← ctx.nestMem a n σ) y recPosAt
+          | .nest n => ctx.memValEq (← ctx.nestMem a n σ) y recPosAt p
           | _ => mkEqRefl x
         h₂ ← mkCongr h₂ e
       let value := mkAppN (.const ``Eq.trans [v]) #[← inferType lhs,

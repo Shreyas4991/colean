@@ -7,6 +7,8 @@ import Colean.Model.Cotype
 import Colean.Model.Intype
 import Colean.Model.Occ
 import Colean.Model.Poly
+import Colean.Model.Occ2
+import Colean.Model.IOcc2
 import Colean.Syntax
 import Colean.Gen.Decl
 import Colean.Gen.Occ

@@ -4,7 +4,7 @@ import Colean.MutualCmd
 # A tour of nested types
 
 What the `data` and `codata` commands accept as a nested argument today, and what they do not.
-Read it top to bottom. Part I (sections 1 to 8) is what works, Part II (sections 9 to 14) what does
+Read it top to bottom. Part I (sections 1 to 9) is what works, Part II (sections 10 to 13) what does
 not work yet but could, and Part III failures that look like bugs of the commands rather than
 limits; there are none at the moment.
 
@@ -284,8 +284,9 @@ data EDecl
   | leaf
   | mk (p : E (L EDecl) (Str EDecl))
 
--- With one argument mentioning `T`, that argument may be anything: `×` is fine here, since the
--- leaf is `fun X => E X Nat` and the command goes on inside the argument.
+-- With one argument mentioning `T`, other than the last, the leaf is the whole
+-- `fun X => E (X × Nat) Nat`, found by instance search: `E`'s instance at the premise
+-- `fun X => X × Nat` (section 8).
 data EProd
   | leaf
   | mk (p : E (EProd × Nat) Nat)
@@ -336,6 +337,42 @@ data FinFn (n : Nat) (α : Type u)
 data UseFinFn
   | leaf
   | mk (x : FinFn 3 UseFinFn)
+
+/-! A field may mention several parameters that vary: its structure is then in all of them, each
+at its premise, `fun X => H₁ X × H₂ X` for `p : α × β`. A third parameter in a field of its own
+varies as well. -/
+
+data P2 (α β : Type u)
+  | mk (p : α × β)
+
+/-- info: P2.Poly.instPolyIso -/
+#guard_msgs in
+#synth PolyIso (fun X : Type => P2 X Nat) _ _
+
+/-- info: P2.Poly.instPolyIsoEta ℕ -/
+#guard_msgs in
+#synth PolyIso (P2 Nat) _ _
+
+data ThroughP2
+  | leaf
+  | mk (p : P2 ThroughP2 Nat)
+
+data P3 (α β γ : Type u)
+  | mk (p : α × β) (c : γ)
+
+data ThroughP3
+  | leaf
+  | mk (x : P3 Nat Nat ThroughP3)
+
+/-! When the parameters of a field cannot vary together, the first ones are kept constant until the
+others can: `A` is a domain in `Fn`, so `FnBoth` varies in `β` only. -/
+
+data FnBoth (α β : Type)
+  | mk (x : Fn α β)
+
+/-- info: FnBoth.Poly.instPolyIsoEta -/
+#guard_msgs in
+#synth PolyIso (FnBoth Nat) _ _
 
 /-! Degenerate cases are fine too: a parameter that is never used, and no constructors at all. -/
 
@@ -574,6 +611,68 @@ data ThroughHand
   | leaf
   | mk (v : Hand ThroughHand)
 
+/-! In a block, a nested argument through a product or a sum has its positions at a type of the
+block only after cases on them. For the presentation it is split into its components, so these
+types are leaves too. -/
+
+mutual
+data PA (α : Type u)
+  | nil
+  | mk (a : α) (p : PA α × Nat)
+data PB (α : Type u)
+  | mk (a : PA α)
+end
+
+/-- info: PA.Poly.instPolyIsoEta -/
+#guard_msgs in
+#synth PolyIso PA.{0} _ _
+
+data ThroughPA
+  | leaf
+  | mk (p : PA ThroughPA)
+
+-- Two types of the block in one product.
+mutual
+data QA (α : Type u)
+  | nil
+  | mk (a : α) (p : QA α × QB α)
+data QB (α : Type u)
+  | mk (a : α) (q : QA α)
+end
+
+/-- info: QB.Poly.instPolyIsoEta -/
+#guard_msgs in
+#synth PolyIso QB.{0} _ _
+
+data ThroughQB
+  | leaf
+  | mk (q : QB ThroughQB)
+
+/-! Inside a named type constructor the split stops, and the positions of `p : List (RA α × Nat)`
+are at `RA` only after cases on them. Such an argument has a structure in two variables over the
+block's index (`IOcc₂`, `Colean/Model/IOcc2.lean`), here the plain one at the index of `RA`, so
+`RA` is a leaf too, and its `simp` rules are those of a single type. -/
+
+mutual
+data RA (α : Type u)
+  | nil
+  | mk (a : α) (p : List (RA α × Nat))
+data RB (α : Type u)
+  | mk (a : RA α)
+end
+
+/-- info: RA.Poly.instPolyIsoEta -/
+#guard_msgs in
+#synth PolyIso RA.{0} _ _
+
+example (x a : Nat) (p : List (RA Nat × Nat)) :
+    PolyIso.Mem RA x (RA.mk a p) ↔ x = a ∨ ∃ t, (∃ n, (t, n) ∈ p) ∧ PolyIso.Mem RA x t := by
+  simp
+
+data ThroughRA
+  | leaf
+  | mk (r : RA ThroughRA)
+
 /-! ### 7. Spellings
 
 The analysis works on the elaborated type of an argument, so a type spelled differently is the
@@ -644,7 +743,8 @@ theorem URose.size_pos {α : Type u} (t : URose α) : 0 < t.size := by
 /-! The recursor states the induction hypothesis of a nested argument by membership, for the
 functor of the argument's type: `∀ t, PolyIso.Mem (fun X => List X) t cs → motive t` here,
 `PolyIso.Mem (fun X => X × Option X) t children` for `UTree` below, and by `IPolyIso.Mem` at an
-index when the positions of a family's argument are at several indices. The `simp` lemmas of
+index when the positions of a family's argument are at several indices (at one index, also
+through a product, `T n × T n`, it is by `PolyIso.Mem` at that index). The `simp` lemmas of
 `PolyIso.lean` turn membership into the container's own (`mem_list`, `mem_option`) or into
 components (`mem_prod`, `mem_comp`, …), so a function by the recursor can use `List.attach`. -/
 
@@ -707,6 +807,139 @@ theorem LInf.dtor_spine :
       .node (Occ.map (Occ.ofIso L) (Occ.ofIso L) (fun _ => LInf.spine) (L.cons () .nil)) := by
   rw [LInf.spine, LInf.dtor_corec, LInf.F.map_node]
 
+/-! The hypothesis of a nested argument is stated with the instance that instance search finds
+for its functor, so a hypothesis written by hand is the recursor's: through `Vec (List T) 2` it is
+`Vec`'s instance at the premise `List`, not the composite of `Vec` and `List`, and through
+`E (T × Nat) Nat` (section 5) `E`'s at the premise `fun X => X × Nat`. `simp` computes the map at
+either premise, a leaf (`Occ.map_list`) or a built-in form (`Occ.ofIso_prod`). -/
+
+data VRose
+  | leaf
+  | node (cs : Vec (List VRose) 2)
+
+example (P : VRose → Prop) (hl : P .leaf)
+    (hn : ∀ cs, (∀ t, PolyIso.Mem (fun X => Vec (List X) 2) t cs → P t) → P (.node cs))
+    (t : VRose) : P t := by
+  induction t with
+  | leaf => exact hl
+  | node cs ih => exact hn cs ih
+
+example (P : EProd → Prop) (hl : P .leaf)
+    (hn : ∀ p, (∀ t, PolyIso.Mem (fun X => E (X × Nat) Nat) t p → P t) → P (.mk p))
+    (t : EProd) : P t := by
+  induction t with
+  | leaf => exact hl
+  | mk p ih => exact hn p ih
+
+/-- The number of nodes, by the folds of the two types. -/
+def EProd.size : EProd → Nat :=
+  EProd.fold (S := Nat) fun
+    | .leaf => 1
+    | .mk p => E.fold (S := Nat) (fun | .l q => q.1 + q.2 | .r n => n) p + 1
+
+example : (EProd.mk (.l (.mk (.r 3), 2))).size = 7 := by
+  simp [EProd.size]
+
+/-! ### 9. A parameter in the same field as the type
+
+A field with both a parameter and the type is split through its products and sums for the
+presentation, into parts with positions of one kind each: `p : α × PairStr α` gives a parameter
+position and a recursive one, `f : Tm α ⊕ α` one of them on each side. The `simp` rules are then
+stated with the components (`PairStr.Poly.mem_mk` with `p.1` and `p.2`), and once for each side of
+a sum (`Tm.Poly.map_app_inl`, `Tm.Poly.map_app_inr`). So the stream of section 4 can be written
+with a pair, and `Tm` of section 1 is a leaf too. -/
+
+codata PairStr (α : Type u)
+  | mk (p : α × PairStr α)
+
+/-- info: PairStr.Poly.instPolyIsoEta -/
+#guard_msgs in
+#synth PolyIso PairStr.{0} _ _
+
+/-- info: Tm.Poly.instPolyIsoEta -/
+#guard_msgs in
+#synth PolyIso Tm.{0} _ _
+
+data ThroughPairStr
+  | leaf
+  | mk (x : PairStr ThroughPairStr)
+
+data ThroughTm
+  | leaf
+  | mk (t : Tm ThroughTm)
+
+example (t a b : ThroughTm) : PolyIso.Mem Tm t (.app (.inl (.var a)) (.var b)) ↔ t = a ∨ t = b := by
+  simp
+
+/-! Under a named type constructor or a function the split stops: `p : List (α × LPair α)` and
+`k : Nat → α × FPair α` have positions of both kinds in one argument. Such a field has an
+occurrence structure in two variables (`Occ₂`, `Colean/Model/Occ2.lean`), the parameter at the
+premise of the instance and the recursion, and the `simp` rules map it by `Occ₂.map`
+(`LPair.Poly.map_mk`), which `simp` computes through its combinators, and state its members by the
+structures in each variable alone (`LPair.Poly.mem_mk`). -/
+
+data LPair (α : Type u)
+  | nil
+  | mk (p : List (α × LPair α))
+
+/-- info: LPair.Poly.instPolyIsoEta -/
+#guard_msgs in
+#synth PolyIso LPair.{0} _ _
+
+data FPair (α : Type u)
+  | leaf
+  | mk (k : Nat → α × FPair α)
+
+/-- info: FPair.Poly.instPolyIsoEta -/
+#guard_msgs in
+#synth PolyIso FPair.{0} _ _
+
+example (f : Nat → Nat) (a b : Nat) :
+    (Occ.ofIso LPair).map (Occ.ofIso LPair) f (.mk [(a, .nil), (b, .mk [])]) =
+      .mk [(f a, .nil), (f b, .mk [])] := by
+  simp
+
+example (x a b : Nat) (l : LPair Nat) :
+    PolyIso.Mem LPair x (.mk [(a, l), (b, .nil)]) ↔ (x = a ∨ x = b) ∨ PolyIso.Mem LPair x l := by
+  simp
+
+data ThroughFPair
+  | leaf
+  | mk (x : FPair ThroughFPair)
+
+example (t : ThroughFPair) : PolyIso.Mem FPair t (FPair.mk fun _ => (t, .leaf)) := by
+  simp
+
+/-! Across a sum inside the named type constructor, `p : List (α ⊕ LSum α)`, the structures in each
+variable alone do not agree with the one in two variables (a shape of the sum is on one side), so
+the rule of membership states the field by the members in each variable of that structure
+(`Occ₂.MemX`, `Occ₂.MemY`), which `simp` computes through its combinators. -/
+
+data LSum (α : Type u)
+  | nil
+  | mk (p : List (α ⊕ LSum α))
+
+example (x : Nat) (p : List (Nat ⊕ LSum Nat)) :
+    PolyIso.Mem LSum x (.mk p) ↔ Sum.inl x ∈ p ∨ ∃ t, Sum.inr t ∈ p ∧ PolyIso.Mem LSum x t := by
+  simp
+
+/-! In a family, the recursion's positions carry an index, and the field has a structure in two
+variables over the family's index (`IOcc₂`): `p : List (α × LFam α n)` has its positions at `n`,
+so its rules are those of a single type, at `LFam α n`. -/
+
+data LFam (α : Type u) : Nat → Type u
+  | nil {n : Nat} : LFam α n
+  | mk {n : Nat} (p : List (α × LFam α n)) : LFam α (n + 1)
+
+/-- info: LFam.Poly.instPolyIso 3 -/
+#guard_msgs in
+#synth PolyIso (fun X : Type => LFam X 3) _ _
+
+example (f : Nat → Nat) (a : Nat) :
+    (Occ.ofIso fun X => LFam X 1).map (Occ.ofIso fun X => LFam X 1) f (.mk [(a, .nil)]) =
+      .mk [(f a, .nil)] := by
+  simp
+
 /-! ## Part II: what does not work yet
 
 Everything here could be supported. What should stay rejected is not listed: negative
@@ -714,10 +947,10 @@ occurrences, functors that are not polynomial such as `Finset`, parameters that 
 on, fields whose type depends on a recursive field, non-uniform parameters, and a `PolyIso` without
 its `PolyMap`. Blocks that mix `data` and `codata` (`mixed_mutual`) are in
 `Sketch/MixedTour.lean`: their runs inside are declared open in the outer types and nested
-through by the instances generated here, so the limits of sections 10 to 12 are theirs too
-(sections 10 to 12 there). -/
+through by the instances generated here, so the limits of sections 11 and 12 are theirs too
+(Part II there). -/
 
-/-! ### 9. Missing instances
+/-! ### 10. Missing instances
 
 A plain `structure` gets no instance: only `data` and `codata` generate them. Nothing in it stops
 one from being generated when a declaration nests through it (`todo.md`). -/
@@ -736,68 +969,13 @@ structure NoFamIso (X : Bool → Type u) where
 codata NeedsFamIso : Bool → Type
   | mk {b : Bool} (children : NoFamIso (fun c => NeedsFamIso c)) : NeedsFamIso b
 
-/-! ### 10. A parameter in the same field as a recursive occurrence
-
-Such a parameter cannot vary yet, even though the field is positive in both. The field would
-need positions of both kinds, and the generator takes a field as one or the other. So `Str` of
-section 4 can be nested through, and the same stream as a pair cannot; neither can `Tm` of
-section 1, because of `f : Tm α ⊕ α`. Splitting the field is the way out when the type allows
-it. A `mixed_mutual` block with a field `Tree α × Forest α` in the inner run stops here: its
-parameter for the trees is in a field with the forests themselves (`Sketch/MixedTour.lean`,
-section 11). -/
-
-codata PairStr (α : Type u)
-  | mk (p : α × PairStr α)
-
-#synth PolyIso PairStr.{0} _ _
-
-#synth PolyIso Tm.{0} _ _
-
-data ThroughPairStr
-  | leaf
-  | mk (x : PairStr ThroughPairStr)
-
-/-! ### 11. A field mentioning two varying parameters
-
-Here is what happens with `p : α × β`: both parameters count as constant, so nothing is
-generated for them, silently, and neither `P2 T Nat` nor `P2 Nat T` can be nested through. The
-reason is that a field is presented in one hole at a time. A `mixed_mutual` block with a
-parameter, in which a run mentions a run two levels out, stops here: the run between gets a
-field `C.Open α X`, with no recursion of its own, where only `X` needs to vary
-(`Sketch/MixedTour.lean`, section 12). -/
-
-data P2 (α β : Type u)
-  | mk (p : α × β)
-
-#synth PolyIso (fun X : Type => P2 X Nat) _ _
-
-#synth PolyIso (P2 Nat) _ _
-
-data ThroughP2
-  | leaf
-  | mk (p : P2 ThroughP2 Nat)
-
-/-! Only the two mentioned parameters are lost: a third one in a field of its own still varies.
-And the same data in two fields has no problem at all. -/
-
-data P3 (α β γ : Type u)
-  | mk (p : α × β) (c : γ)
-
-data ThroughP3
-  | leaf
-  | mk (x : P3 Nat Nat ThroughP3)
-
-data Split (α β : Type u)
-  | mk (a : α) (b : β)
-
-data ThroughSplit
-  | leaf
-  | mk (x : Split ThroughSplit Nat)
-
-/-! ### 12. Holes at different indices in several arguments of a leaf
+/-! ### 11. Holes at different indices in several arguments of a leaf
 
 A leaf found by instance search is a functor of one variable, so all its holes must be one type.
-`Pair (T i) (T j)` has two. The built-in forms do not have this limit. -/
+`Pair (T i) (T j)` has two. It would need `Pair` as a functor on families,
+`IPolyIso (fun X => Pair (X i) (X j))`, and step 5 generates no `IPolyIso` instances: their
+varying parameter is a family, and `Model/Poly.lean` has the fixpoint for a parameter that is a
+type only. The built-in forms do not have this limit. -/
 
 data Pair (α β : Type u)
   | mk (a : α) (b : β)
@@ -832,47 +1010,26 @@ data ProdC
   | mk (a : ProdA)
 end
 
-/-! ### 13. A type of a block with a product in a nested argument
+/-! ### 12. Several types of a block inside a named type constructor
 
-A type of a block gets its instances at its index of the block, presented over the block's index
-without the parameters that vary. The index of a position of a nested argument must then be a
-type of the block at variables: through a named type constructor at one type, or under binders, it
-is (`Even` and `Odd` of section 6 with a parameter would be fine); through a product or a sum it
-is only after cases on the position, and the generation fails with a warning. The types
-themselves are declared, and a hand-written instance can still be given. -/
-
-mutual
-data PA (α : Type u)
-  | nil
-  | mk (a : α) (p : PA α × Nat)
-data PB (α : Type u)
-  | mk (a : PA α)
-end
-
-#synth PolyIso PA.{0} _ _
-
-data ThroughPA
-  | leaf
-  | mk (p : PA ThroughPA)
-
-/-! The same with two types of the block in one product: the positions of `p` are at `QA` and at
-`QB`, and which one is known only after cases on the position. -/
+In a block, a nested argument with positions at several types of the block inside a named type
+constructor, `p : List (SA α × SB α)`, has a structure in two variables over the block's index,
+so the types get their instances. Its `simp` rules are not generated, with a warning: they would
+state the members by the type of each, at an index that is a variable, which the rules cannot
+write in a form `simp` can use (the family of the block's types there is not reducible to them).
+-/
 
 mutual
-data QA (α : Type u)
+data SA (α : Type u)
   | nil
-  | mk (a : α) (p : QA α × QB α)
-data QB (α : Type u)
-  | mk (a : α) (q : QA α)
+  | mk (a : α) (p : List (SA α × SB α))
+data SB (α : Type u)
+  | mk (a : SA α)
 end
 
-#synth PolyIso QB.{0} _ _
+#check @SA.Poly.mem_mk
 
-data ThroughQB
-  | leaf
-  | mk (q : QB ThroughQB)
-
-/-! ### 14. Spellings that mean something else
+/-! ### 13. Spellings that mean something else
 
 `×'` is a named constructor, hence a leaf, and it has no instance. -/
 

@@ -7,15 +7,18 @@ import Colean.Gen.Command
 declared, the runs inside the outermost one open and then closed, as `MutualCmd.lean` describes.
 
 1. The runs, and their names (`mixRuns`): the outermost run under the names the user wrote, a run
-   inside it under `Tₘ.Open` (and `Blk.Open` for a block, whose index is `Blk.Ix`).
+   inside it under `Tₘ.Open` (and `Blk.Open` for a block, whose index is `Blk.Ix`); none of them
+   declared already (`checkMixNames`).
 2. The section variables of the block, and which declaration mentions which (`mixedVars`, one
    elaboration of the whole block, discarded); from these, the outer runs each run needs
    (`mixReach`), innermost first, and the runs that nest through each.
 3. The index `Blk.Ix` of every run that is a block (`declareMixIx`).
 4. The runs inside, from the innermost out, each declared open by the pipeline (`withCtx` with
    the run, `Gen/Front.lean`): its extra parameters stand for the outer types it needs.
-5. The outermost run, by the pipeline; once its types exist, the closed types of the runs inside
-   (`closeTypes`), with which its constructors, lemmas and recursors are stated (`Ctx.foldTy`).
+5. The outermost run, by the pipeline, after the declared sorts are checked against the universes
+   of the closed types (`checkMixSorts`); once its types exist, the closed types of the runs
+   inside (`closeTypes`), with which its constructors, lemmas and recursors are stated
+   (`Ctx.foldTy`).
 6. The rest of each run inside restated at the closed types (`restateRun`): every declaration of
    its public interface, `Tₘ.Open.d` at the closed types as `Tₘ.d`, with its attributes; the
    statements are those of `Tₘ.Open.d` at the closed families, written with the closed
@@ -47,6 +50,44 @@ def mixRuns (ns : Name) (decls : Array DeclStx) : Array MixRun := Id.run do
     let opened (n : Name) : Name := if j == 0 then n else n ++ `Open
     { co, decls := ds, names := closedNames.map opened, fam := opened closedFam
       ix? := if isBlock then some (blk ++ `Ix) else none, closedNames, closedFam }
+
+/-! ### Checks before the runs are declared -/
+
+/-- The names of a mixed block, before anything is declared (`checkNames`): the types, the open
+types `Tₘ.Open` of the runs inside, and for a run of several types, its name, open name and
+index. `ref` is the block's keyword. -/
+def checkMixNames (decls : Array DeclStx) (runs : Array MixRun) (ref : Syntax) :
+    TermElabM Unit := do
+  checkNames decls none ref
+  for run in runs, j in [0:runs.size] do
+    if j > 0 then
+      for n in run.names, d in run.decls do
+        checkFree n decls[d]!.T "a type `T` of a run inside the first is declared open, as \
+          `T.Open`; rename the type, or declare the block in another namespace"
+    if let some ix := run.ix? then
+      for n in [run.closedFam, run.fam, ix].eraseDups do
+        checkFree n ref "a run of several types is named after its types, joined by `_`, with its \
+          index `Ix` and, inside the first run, its open form `Open` in that namespace; rename or \
+          reorder the types, or declare the block in another namespace"
+
+/-- The declared sorts of a mixed block (`checkSorts`), once the runs inside are declared and
+before the outermost run is: the outermost run's types are in the universe of its model (`ctx`),
+the closed types of a run inside in that of its open type at the universes of the runs it needs.
+`xLevels` are the universes of the extra parameters of each run. -/
+def checkMixSorts (ctx : Ctx) (decls : Array DeclStx) (runs : Array MixRun)
+    (xLevels : Array (Array Name)) : TermElabM Unit := do
+  if ctx.written.isEmpty then return
+  let mut lvls : Array Level := #[← ctx.modelLevel]
+  for j in [1:runs.size] do
+    let run := runs[j]!
+    let ty := (← getConstInfo run.fam).type
+    let l ← forallTelescopeReducing ty fun _ body => do
+      let .sort l := body | throwError "internal error: not a family{indentExpr ty}"
+      return l.dec.getD l
+    let need := run.need.map (lvls[·]!)
+    lvls := lvls.push (l.instantiateParams xLevels[j]!.toList need.toList).normalize
+  ctx.checkSorts ((Array.range decls.size).map fun d =>
+    (runs.findIdx? (·.decls.contains d)).map (lvls[·]!))
 
 /-! ### Restating a declaration at the closed types -/
 
@@ -334,6 +375,7 @@ def elabMixed (decls : Array DeclStx) (ref : Syntax) : CommandElabM Unit :=
   runTermElabM fun vars => allOrNothing do
   let ns ← getCurrNamespace
   let mut runs := mixRuns ns decls
+  checkMixNames decls runs ref[0]
   let k := runs.size
   let (bvars, mentions) ← mixedVars decls ref vars
   -- What each run needs, innermost first, and what nests through it.
@@ -361,6 +403,7 @@ def elabMixed (decls : Array DeclStx) (ref : Syntax) : CommandElabM Unit :=
   -- The outermost run, with the closed types of the runs inside as soon as its types exist.
   let famsRef ← IO.mkRef (#[] : ClosedFams)
   let (np, closed) ← withCtx (runDecls 0) ref vars (mix? := some (mix 0)) fun ctx => do
+    step (checkMixSorts ctx decls runs xLevels)
     let ctx ← pipeline ctx (afterTypes := closeTypes decls runs xLevels famsRef)
     return (ctx.params.size, ctx.closed)
   -- The rest of the runs inside, at the closed types.

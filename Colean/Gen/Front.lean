@@ -41,9 +41,13 @@ which), and the index of a block is declared before the runs (`declareMixIx`).
 Besides type checking, the analysis checks what the construction needs: the result type of a
 constructor is the type applied to its parameters (and indices), recursive arguments are
 explicit, no argument type and no index of the result depends on a recursive argument, and the
-types being defined do not occur in the domain of a function.
+types being defined do not occur in the domain of a function. Before anything else, it checks the
+names (`checkNames`): no type twice in a block, and no type, block or index of a block declared
+already.
 
-The universe of the declared sort is not used: the type's universe is the model's. The section
+The universe of the declared sort does not make the types': theirs is the model's. A declared
+sort with a universe written, without `_`, is kept (`Ctx.written`), and the pipeline checks it
+against the model's before it declares anything (`checkSorts`, `Gen/Command.lean`). The section
 variables the declarations use become their first parameters, as with `inductive`; they keep
 their binder infos in the generated types.
 -/
@@ -70,6 +74,28 @@ def DeclStx.read? (stx : Syntax) : Option DeclStx :=
   | `(data $T:ident $ps:bracketedBinder* $[: $s]? $cs:codataCtor*) =>
     some { co := false, T, ps := ps.map (·.raw), sort? := s.map (·.raw), ctors := cs, ref := stx }
   | _ => none
+
+/-! ### Names -/
+
+/-- Throw at `ref` if `n`, a name the command declares and the user did not write, is declared
+already; `why` says where the name comes from and how to avoid the clash. -/
+def checkFree (n : Name) (ref : Syntax) (why : MessageData) : TermElabM Unit := do
+  if (← getEnv).contains n then
+    throwErrorAt ref "`{n}` has already been declared, and this block declares it: {why}"
+
+/-- The names of the declarations `decls`, before anything is declared: no type twice in the
+block, no type declared already, and for a block, not its name `blk` or its index `blk.Ix`
+either. `ref` is the block's keyword. -/
+def checkNames (decls : Array DeclStx) (blk? : Option Name) (ref : Syntax) : TermElabM Unit := do
+  let ns ← getCurrNamespace
+  for d in decls, i in [0:decls.size] do
+    if (decls.extract 0 i).any (·.T.getId == d.T.getId) then
+      throwErrorAt d.T "`{d.T.getId}` is declared twice in this block"
+    withRef d.T <| checkNotAlreadyDeclared (ns ++ d.T.getId)
+  if let some blk := blk? then
+    for n in [blk, blk ++ `Ix] do
+      checkFree n ref "the block is named after its types, joined by `_`, and its index is `Ix` \
+        in that namespace; rename or reorder the types, or declare the block in another namespace"
 
 /-- Elaborate binders one by one, so that each variable knows the binder it comes from. -/
 private partial def elabBindersRefs (bs : Array Syntax)
@@ -433,6 +459,8 @@ def withCtx (decls : Array DeclStx) (ref : Syntax) (vars : Array Expr) (k : Ctx 
     | none => if isBlock then
         ns ++ Name.mkSimple ("_".intercalate (shorts.map (·.toString)).toList)
       else names[0]!
+  -- The names, before anything is declared; those of a mixed block by `elabMixed`.
+  if mix?.isNone then checkNames decls (if isBlock then some name else none) ref[0]
   -- As in `inductive`: no `_recApp` annotations on the occurrences of the types.
   withRef ref <| Term.withoutErrToSorry <| Term.withoutSavingRecAppSyntax do
   let hdrs ← all.mapM fun d => withRef d.ref do elabHeader allShorts d.ps d.sort?
@@ -452,6 +480,14 @@ def withCtx (decls : Array DeclStx) (ref : Syntax) (vars : Array Expr) (k : Ctx 
       if (← instantiateMVars (← mkForallFVars is (mkSort Level.zero))).hasMVar then
         throwErrorAt all[m]!.ref "could not infer the types of the indices"
       return nameBinders "i" (← mkForallFVars is body)
+  -- The sorts with a universe written, without `_`, before the agreement below gives a `_` the
+  -- universe of another.
+  let checked ← (all.zip sorts).zipIdx.filterMapM fun ((d, sort), i) => do
+    let some stx := d.sort? | return none
+    let lvl ← instantiateLevelMVars (← sortLevel sort)
+    if lvl.hasMVar then return none
+    return some { decl := i, T := d.T.getId, stx, sort := ← instantiateMVars sort, lvl
+                  : WrittenSort }
   let written := (all.zip sorts).filter (·.1.sort?.isSome)
   if let some (d₀, s₀) := written[0]? then
     let l₀ ← sortLevel s₀
@@ -626,7 +662,7 @@ def withCtx (decls : Array DeclStx) (ref : Syntax) (vars : Array Expr) (k : Ctx 
       required := need.map (mx.runs[mx.r]!.nestedBy.contains ·) : MixCtx }
   let ctx0 : Ctx :=
     { b with co, name, ref, userLevels := userLevels ++ xLevels.toList, nVars := vars.size, idx,
-             J, Jlvl, ctors := #[], mix? := mixCtx? }
+             J, Jlvl, ctors := #[], written := checked, mix? := mixCtx? }
   let fam? := ctx0.famIdx?
   -- Constructor names shared by several types of a block are qualified in the block-level
   -- inductives.

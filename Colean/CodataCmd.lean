@@ -46,7 +46,7 @@ types `T`, `T.F`, `T.Shape`, `T.B`, `T.sig`, implicit elsewhere):
 * derived from the contract (`Codata.Contract`): `T.ctor`, `T.dtor_ctor`, `T.ctor_dtor`,
   `T.ctor_injective`, `T.corec_eq`, `T.corec_unique`; the individual constructors `T.ctorᵢ` with
   the simp lemmas `T.dtor_ctorᵢ` and `T.ctor_ctorᵢ` (`T.ctor (T.F.ctorᵢ …) = T.ctorᵢ …`),
-  injectivity `T.ctorᵢ_inj` (for constructors without implicit binders) and disjointness
+  injectivity `T.ctorᵢ_inj` (for constructors with explicit arguments) and disjointness
   `T.ctorᵢ_ne_ctorⱼ`, all simp lemmas;
 * a case analysis principle `T.casesOn`, registered as the `cases` eliminator for `T`, with
   its computation rules `T.casesOn_ctorᵢ` as simp lemmas.
@@ -58,9 +58,12 @@ With indices (`codata T (params) : (i₁ : I₁) → I₂ → Type u`, construct
 the indices of its recursive argument), `T : ∀ i₁ i₂, Type _`, `T.dtor {i₁ i₂}`,
 `T.corec (c : ∀ j₁ j₂, S j₁ j₂ → T.F S j₁ j₂) {i₁ i₂}`, `T.bisim (R : ∀ j₁ j₂, …)`, a motive
 `∀ j₁ j₂, T j₁ j₂ → Sort _` for `T.casesOn`, and so on. The index binders carry the names the
-user gave them. Injectivity and disjointness lemmas are generated only when they are well-typed,
-that is when the indices involved do not depend on the constructors' arguments and (for
-disjointness) coincide.
+user gave them. Where a result index mentions the constructor's arguments, injectivity shares
+them between its two sides, as `injEq` does for `inductive`
+(`Vec.cons_inj : Vec.cons a v = Vec.cons a' v' ↔ a = a' ∧ v = v'` at one `n`), and the
+arguments it shares may be implicit. Disjointness is stated where the result indices of the two
+constructors unify, at the arguments where they meet, and not when they cannot meet (`Vec.nil`
+and `Vec.cons`).
 
 The generic theory (`Framework.lean`, `Model/Cotype.lean`) has one index type. Several indices are packed into one,
 `T.Ix (params) := (i₁ : I₁) ×' I₂` (a `PSigma`, so indices may be propositions), and no index is

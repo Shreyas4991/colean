@@ -9,11 +9,11 @@ arguments are the indices of that type, so nothing new is involved: `Even`/`Odd`
 with one index. Blocks that mix both kinds, `mixed_mutual … end`, are in `Sketch/MixedTour.lean`.
 
 Read it top to bottom. Part I (sections 1 to 7) is what works, Part II what does not work yet but
-could (nothing at the moment), and Part III (section 8) what looks like a bug.
+could, and Part III what looks like a bug; there is nothing in either at the moment.
 
 Nesting is left out on purpose. Fields here are plain members, constants or functions into
 members; `×`, `⊕`, `List` and other leaves are not used. Blocks with nesting are in
-`Sketch/NestingTour.lean`: what works in section 6, what does not in sections 13 and 14.
+`Sketch/NestingTour.lean`: what works in section 6, what does not in sections 11 and 12.
 
 How the file is checked:
 
@@ -710,51 +710,16 @@ end NestedPerType
 
 /-! ## Part II: what does not work yet
 
-Nothing at the moment. What should stay refused is not listed: the types of a block share their parameters, names
-included, and their universe, as in Lean, an implicit parameter cannot be left out at an
-occurrence, as in Lean, and a `mutual` block is all `data` or all `codata`. -/
+Nothing at the moment. What should stay refused is not listed: the types of a block share their
+parameters, names included, and their universe, as in Lean, a universe written must be the one of
+the block's encoding (so not `Prop`), an implicit parameter cannot be left out at an occurrence,
+as in Lean, and a `mutual` block is all `data` or all `codata`. -/
 
 /-! ## Part III: what looks like a bug
 
-Each of these either deserves a clear error or should simply work. Instead the command fails late,
-in the kernel or in a proof it generates, or says nothing at all. -/
-
-/-! ### 8. Failures inside the generators -/
-
-/-! The name of the block is taken. It is a name the user never wrote, and the command does not
-check it: the index `Pa_Qa.Ix` is declared, and then the kernel refuses `Pa_Qa` itself, with
-"constant has already been declared". It deserves a clear error before anything is declared. -/
-
-namespace BlockName
-
-def Pa_Qa := Nat
-
-mutual
-data Pa
-  | nil
-  | mk (q : Qa)
-data Qa
-  | mk (p : Pa)
-end
-
-end BlockName
-
-/-! A declared sort of `Prop` is ignored without a word: both types are in `Type`. A single type
-behaves the same. -/
-
-namespace PropSort
-
-mutual
-data Pa : Prop
-  | nil
-  | mk (q : Qa)
-data Qa : Prop
-  | mk (p : Pa)
-end
-
-#check Pa
-
-end PropSort
+Nothing at the moment. The two that were here are clear errors now, given before the types are
+declared: a block whose name, made of its types' names, is taken, and a declared sort `Prop`,
+which was ignored without a word. -/
 
 end
 

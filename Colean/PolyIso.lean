@@ -215,6 +215,12 @@ end IPolyIso
 
 open PolyIso (Mem)
 
+/-! A property of the members of a pair, one of them through a container, splits by `simp`:
+`∀ t, t ∈ p.1 ∨ t = p.2 → P t` is `(∀ t ∈ p.1, P t) ∧ P p.2`, as `forall_eq_or_imp` does with the
+equation first. The lemma is Lean's own; it is a `simp` lemma from here on. -/
+
+attribute [simp] forall_or_eq_imp
+
 /-! ### The identity and constants
 
 What the instances of a functor with several arguments compose with: `Pair Nat X` is `Pair` at
@@ -849,6 +855,45 @@ instance [h₁ : IPolyIso G₁ Sh₁ Pos₁ pidx₁] [h₁' : IPolyIso G₁' Sh�
 @[simp] theorem mem_hole {X : J → Type u} (i j : J) (x : X j) (c : X i) :
     Mem (fun X : J → Type u => X i) j x c ↔ (⟨i, c⟩ : Σ j, X j) = ⟨j, x⟩ :=
   ⟨fun ⟨_, e⟩ => e, fun e => ⟨(), e⟩⟩
+
+/-- A property of every member at a hole is one of its content: what `simp` makes of a
+hypothesis by membership at a hole after `mem_hole`, `∀ j t, i = j → HEq c t → P j t`. -/
+@[simp] theorem forall_eq_heq_imp {X : J → Type u} {i : J} {c : X i} {P : ∀ j, X j → Prop} :
+    (∀ j (t : X j), i = j → HEq c t → P j t) ↔ P i c :=
+  ⟨fun h => h i c rfl HEq.rfl, fun h _ _ e hc => by subst e; cases hc; exact h⟩
+
+/-- A property of every member at a hole or elsewhere is one of the hole's content and one of the
+other members: what `simp` makes of a hypothesis by membership at several indices after
+`mem_prod` and `mem_hole`, `∀ j t, (i = j ∧ HEq c t) ∨ Q j t → P j t`. -/
+@[simp] theorem forall_eq_heq_or_imp {X : J → Type u} {i : J} {c : X i}
+    {Q P : ∀ j, X j → Prop} :
+    (∀ j (t : X j), (i = j ∧ HEq c t) ∨ Q j t → P j t) ↔ P i c ∧ ∀ j t, Q j t → P j t :=
+  ⟨fun h => ⟨h i c (.inl ⟨rfl, HEq.rfl⟩), fun j t hq => h j t (.inr hq)⟩, fun h j t => by
+    rintro (⟨rfl, hc⟩ | hq)
+    · cases hc
+      exact h.1
+    · exact h.2 j t hq⟩
+
+/-- The same with the hole last: `∀ j t, Q j t ∨ (i = j ∧ HEq c t) → P j t`. -/
+@[simp] theorem forall_or_eq_heq_imp {X : J → Type u} {i : J} {c : X i}
+    {Q P : ∀ j, X j → Prop} :
+    (∀ j (t : X j), Q j t ∨ (i = j ∧ HEq c t) → P j t) ↔ (∀ j t, Q j t → P j t) ∧ P i c :=
+  ⟨fun h => ⟨fun j t hq => h j t (.inl hq), h i c (.inr ⟨rfl, HEq.rfl⟩)⟩, fun h j t => by
+    rintro (hq | ⟨rfl, hc⟩)
+    · exact h.1 j t hq
+    · cases hc
+      exact h.2⟩
+
+/-- A property of every member at an index through a leaf is one of the members of the leaf's
+value: what `simp` makes of a hypothesis by membership at `F (X i)` after `mem_at`,
+`∀ j t x, Q x → i = j → HEq x t → P j t`. -/
+@[simp] theorem forall_forall_eq_heq_imp {X : J → Type u} {i : J} {Q : X i → Prop}
+    {P : ∀ j, X j → Prop} :
+    (∀ j (t : X j) (x : X i), Q x → i = j → HEq x t → P j t) ↔ ∀ x, Q x → P i x :=
+  ⟨fun h x hx => h i x x hx rfl HEq.rfl, fun h _ _ x hx e hc => by
+    subst e
+    cases hc
+    exact h x hx⟩
 
 @[simp] theorem not_mem_const (A : Type v) {X : J → Type u} (j : J) (x : X j) (c : A) :
     ¬ Mem (fun _ : J → Type u => A) j x c :=

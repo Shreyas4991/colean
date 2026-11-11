@@ -212,16 +212,12 @@ example {X Y : Type} (f : X → Y) {n : Nat} (a : Vec X n) :
 
 end
 
-/-! ### What is not supported: a warning, and the types are untouched
+/-! ### Through a product in a block
 
 In a block, the index of a position of a nested argument must be a type of the block at
-variables. Through a product it is one only after cases on the position. -/
+variables. Through a product or a sum it is one only after cases on the position: the argument is
+then split into its components for the presentation (`ColeanTest/NestGaps.lean`). -/
 
-/--
-warning: `QA`, `QB` cannot be nested through: no `Codata.PolyIso` instance was generated. The types themselves are not affected.
-the positions of the nested argument `p` of `mk` are at a type of the block only after cases on them, as through a product or a sum, which is not supported for the types of a block
--/
-#guard_msgs in
 mutual
 data QA (α : Type u)
   | nil
@@ -231,5 +227,35 @@ data QB (α : Type u)
 end
 
 noncomputable example : QB Nat := .mk (.mk 0 (.nil, 1))
+
+/-- info: QB.Poly.instPolyIsoEta -/
+#guard_msgs in
+#synth PolyIso QB.{0} _ _
+
+/-! ### What is not supported: a warning, and the types are untouched
+
+Inside a named type constructor the argument does not split. With its positions at one type of
+the block after cases on them (`List (RA α × Nat)`) it has a structure in two variables at that
+type (`ColeanTest/NestGaps3.lean`); at several types, the instances are generated, but not the
+`simp` lemmas, which state the members by the type of each. -/
+
+/--
+warning: no simp lemmas were generated for the instances of `RA`, `RB`; the instances are not affected.
+the positions of the nested argument `p` are at several types of the block
+-/
+#guard_msgs in
+mutual
+data RA (α : Type u)
+  | nil
+  | mk (a : α) (p : List (RA α × RB α))
+data RB (α : Type u)
+  | mk (a : RA α)
+end
+
+noncomputable example : RB Nat := .mk (.mk 0 [])
+
+/-- info: RA.Poly.instPolyIsoEta -/
+#guard_msgs in
+#synth PolyIso RA.{0} _ _
 
 end DeriveIdxTest
