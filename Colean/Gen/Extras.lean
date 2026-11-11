@@ -162,11 +162,13 @@ def fCtorApp (c : Ctor) (w : Level) (X : Expr) (ys : Array Expr) : MetaM Expr :=
   ctx.genAt (ctx.fCtor c) [w] (#[X] ++ ys)
 
 /-- Run `k` on the arguments of `c` as those of `T.c`: the occurrences are `Tₘ params idx`, with
-the per-type constants in a block. -/
+the per-type constants in a block, and in the outermost run of a mixed block the types of the
+runs inside are their closed types (`Ctx.foldTy`). -/
 def withTArgs (c : Ctor) (k : Array Expr → (Expr → Expr) → TermElabM α)
     (rename : Name → Name := id) : TermElabM α := do
   let tys ← (Array.range ctx.types.size).mapM fun m => ctx.constWith (ctx.tyName m) []
   ctx.withArgsAtU c (fun m idx => mkAppN tys[m]! (ctx.params ++ idx)) (← ctx.tLvl) k rename
+    ctx.foldTy
 
 /-- Open the telescope of an argument of kind `.fn n` of `T.c`, with type `ty`: `k ys idx` with
 the bound variables and the family-level index arguments of the result. -/
@@ -232,11 +234,12 @@ def nestMem (a : ArgInfo) (n : Nest) (σ : Expr → Expr) : TermElabM NestMem :=
     return { idx? := none, fn, inst := ← isoOf o .fam, elem }
 
 /-- The membership statement `PolyIso.Mem G t y`, or `IPolyIso.Mem G ⟨js⟩ t y` at the
-family-level index arguments `js`. -/
+family-level index arguments `js`; in the outermost run of a mixed block, `t ∈ y` for a closed
+type with a membership instance (`Ctx.foldTy`). -/
 def memProp (nm : NestMem) (y t : Expr) (js : Array Expr) : TermElabM Expr := do
   if nm.idx?.isSome then
     let args : Array (Option Expr) := #[nm.fn, none, none, nm.inst, nm.elem, t, y]
-    withUnfolding <| mkAppOptM ``Codata.PolyIso.Mem args
+    return ctx.foldTy (← withUnfolding <| mkAppOptM ``Codata.PolyIso.Mem args)
   else
     let args : Array (Option Expr) :=
       #[none, nm.fn, none, none, none, nm.inst, nm.elem, ← ctx.pack js, t, y]
@@ -366,7 +369,7 @@ def recIHsWith (app : Array Expr → Expr → TermElabM Expr) (c : Ctor) (ys : A
           let ms := ctx.occTypes a.type
           for m in ms do
             let nm' := if ms.size == 1 then n else
-              n.appendAfter ("_" ++ (ctx.tyName m).getString!)
+              n.appendAfter ("_" ++ ctx.shortName m)
             out := out.push (nm', ← ctx.memIHAt nm y m app)
         else out := out.push (n, ← ctx.memIH nm y app)
   return out

@@ -15,7 +15,10 @@ lemmas" below), so that `simp` computes through the instances.
 This step is separate from the declaration of the type. It runs after it, nothing in the
 declaration depends on it, and it cannot affect it: on failure every declaration of this step is
 rolled back and a warning is logged, and the type is simply not available for nesting. A failure
-of the `simp` lemmas alone rolls back only them, with a warning; the instances stay.
+of the `simp` lemmas alone rolls back only them, with a warning; the instances stay. In an open
+run of a `mixed_mutual` block that an outer run nests through, the outer run needs the
+instances in the run's extra parameters: a failure, or such a parameter that cannot vary, is an
+error, which stops the block.
 
 The parameters of `T` that may vary, the *holes*, are those of sort `Type u` that no other
 parameter's type and no index's type depends on and that are used, outside the occurrences of
@@ -273,7 +276,7 @@ def genPolyIx (P : Poly) : TermElabM Poly := do
   let ty ← withBinderInfo (P.consts.filter (!pre.contains ·)) .default do
     mkForallFVars P.consts (mkSort r.succ)
   let ctorName (m : Nat) : Name :=
-    name ++ Name.mkSimple ctx.types[m]!.name.lastComponentAsString
+    name ++ Name.mkSimple (ctx.shortName m)
   let us ← withLocalDeclD `Ix ty fun Iv => do
     let ctorTys ← ctx.types.mapM fun t =>
       withBinderInfo P.consts .implicit do mkForallFVars (P.consts ++ t.idx) (mkAppN Iv P.consts)
@@ -1880,18 +1883,41 @@ def genPoly (holes : Array Expr) : TermElabM Unit := do
 
 /-- Step 5: the instances of the types of a declaration that has holes. Failure is a warning,
 whatever the exception (a timeout too): the declarations of this step are rolled back, and the
-types stay as they are. -/
+types stay as they are. In an open run of a `mixed_mutual` block that an outer run nests through,
+it is an error instead, and so is an extra parameter of such a run that cannot vary: the outer run
+needs the instances in it. -/
 def deriveInstances : TermElabM Unit := do
+  let ns ← getCurrNamespace
+  let short (n : Name) : MessageData := m!"`{n.replacePrefix ns .anonymous}`"
+  let shorts := ctx.types.map (short ·.name)
+  let strict? := ctx.mix?.filter fun mx => ctx.isOpen && mx.required.any id
   let s ← saveState
   tryCatchRuntimeEx
     (withCurrHeartbeats do
       let holes ← ctx.polyHoles
+      if let some mx := strict? then
+        for x in mx.xs, req in mx.required, o in mx.outerNames do
+          if req && !holes.contains x then
+            let xn := (← x.fvarId!.getDecl).userName
+            unless (← whnf (← inferType x)).isSort do
+              throwError "its parameter `{xn}`, standing for {short o}, is a family over the \
+                index of {short o}: nesting through it needs `Codata.IPolyIso` instances, which \
+                are not generated"
+            throwError "its parameter `{xn}`, standing for {short o}, cannot vary: it occurs in \
+              a field together with another parameter that varies or with the type itself, or in \
+              a field without an occurrence structure in it"
       if holes.isEmpty then return
       ctx.genPoly holes)
     fun e => do
+      if let some mx := strict? then
+        let outers := (mx.outerNames.zip mx.required).filterMap fun (n, b) =>
+          if b then some (short n) else none
+        throwError "{MessageData.joinSep (mx.closedNames.map short).toList ", "} cannot be \
+          nested through in this `mixed_mutual` block: no `Codata.PolyIso` instance was \
+          generated for {MessageData.joinSep shorts.toList ", "}, the open form that \
+          {MessageData.joinSep outers.toList ", "} nest{if outers.size == 1 then "s" else ""} \
+          through.\n{e.toMessageData}"
       s.restore (restoreInfo := true)
-      let ns ← getCurrNamespace
-      let shorts := ctx.types.map fun t => m!"`{t.name.replacePrefix ns .anonymous}`"
       let types := if ctx.isBlock then "The types themselves are" else "The type itself is"
       logWarning m!"{MessageData.joinSep shorts.toList ", "} cannot be nested through: no \
         `Codata.PolyIso` instance was generated. {types} not affected.\n{e.toMessageData}"

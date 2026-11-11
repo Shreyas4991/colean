@@ -31,6 +31,13 @@ arguments are that type's indices: the family's one index binder is `m : Blk.Ix 
 occurrence `Tₘ params idx` is at `Blk.Ix.Tₘ idx`, and a constructor name shared by several types
 is qualified (`T_c`) in the block-level inductives.
 
+A run of a `mixed_mutual` block (`Mix`, `MutualCmd.lean`) is analysed like a block, with the
+other declarations of the block as local variables too while the constructors are elaborated:
+their occurrences then become the run's extra parameters (for the runs outside) or the open
+types of the runs inside, at the families of the runs those need (`mixFam`). The section
+variables are those of the whole block (`mixedVars`, which also says which declaration mentions
+which), and the index of a block is declared before the runs (`declareMixIx`).
+
 Besides type checking, the analysis checks what the construction needs: the result type of a
 constructor is the type applied to its parameters (and indices), recursive arguments are
 explicit, no argument type and no index of the result depends on a recursive argument, and the
@@ -190,7 +197,7 @@ private def instantiateCtor (c : Ctor) : MetaM Ctor := do
   return { c with args, idx := ← c.idx.mapM inst, uidx := ← c.uidx.mapM inst }
 
 /-- The packed index type of index binders: `(i₁ : I₁) ×' (i₂ : I₂) ×' …`, `I₁`, or `Unit`. -/
-private def packedType (idx : Array Expr) : MetaM Expr := do
+def packedType (idx : Array Expr) : MetaM Expr := do
   if idx.isEmpty then return mkConst ``Unit
   let mut acc ← inferType idx.back!
   for m' in [0:idx.size - 1] do
@@ -238,30 +245,203 @@ private def declareIx (ix : Name) (userLevels : List Name) (params declParams : 
       mkAppN (Lean.mkConst (ctorName n) (us.map mkLevelParam)) params
     return (ctors, mkAppN Ic params)
 
+/-! ### Mixed blocks -/
+
+/-- A `mixed_mutual` block, for the front end: its declarations, its runs (with the needs of the
+runs inside `r` known), the run `r` being elaborated, and the section variables the whole block
+uses (`mixedVars`). -/
+structure Mix where
+  all : Array DeclStx
+  runs : Array MixRun
+  r : Nat
+  vars : Array Expr
+  deriving Inhabited
+
+/-- The constant `n` applied to `args`, its universes found by unification with their types. -/
+def appConst (n : Name) (args : Array Expr) : MetaM Expr := do
+  let mut e ← mkConstWithFreshMVarLevels n
+  for a in args do
+    let .forallE _ d _ _ ← whnf (← inferType e)
+      | throwError "internal error: too many arguments for `{n}`"
+    unless ← isDefEq d (← inferType a) do
+      throwError "internal error: ill-typed argument of `{n}`{indentExpr a}"
+    e := mkApp e a
+  instantiateMVars e
+
+/-- The runs that the run `r` of a mixed block reaches: those it mentions (`mentioned`), and,
+through each one inside it, those that one needs (`needs`, known for the runs inside `r`). -/
+def mixReach (needs : Array (Array Nat)) (r : Nat) (mentioned : Array Nat) : Array Nat := Id.run do
+  let mut clo : Array Nat := #[]
+  for j in mentioned do
+    unless clo.contains j || j == r do clo := clo.push j
+  let mut todo := clo.filter (· > r)
+  while h : todo.size > 0 do
+    let j := todo[todo.size - 1]
+    todo := todo.pop
+    for k in needs[j]! do
+      unless clo.contains k || k == r do
+        clo := clo.push k
+        if k > r then todo := todo.push k
+  return clo.qsort (· < ·)
+
+/-- The components of a term `p` of a packed index with `n` components: `p.1, p.2.1, …`. -/
+def projsN (n : Nat) (p : Expr) : MetaM (Array Expr) := do
+  if n ≤ 1 then return if n == 0 then #[] else #[p]
+  let mut out := #[]
+  let mut cur := p
+  for _ in [0:n - 1] do
+    out := out.push (← mkAppM ``PSigma.fst #[cur])
+    cur ← mkAppM ``PSigma.snd #[cur]
+  return out.push cur
+
+/-- `fun is => ⟨is⟩`, the packing of the index binders of a declared sort `∀ is, Type u`. -/
+def packFn (sort : Expr) : MetaM Expr :=
+  forallTelescopeReducing sort fun is _ => do
+    let mut acc := is.back!
+    for m' in [0:is.size - 1] do
+      let i := is[is.size - 2 - m']!
+      let β ← mkLambdaFVars #[i] (← inferType acc)
+      acc ← mkAppOptM ``PSigma.mk #[← inferType i, β, i, acc]
+    mkLambdaFVars is acc
+
+/-- The section variables a `mixed_mutual` block uses, and for each declaration the other
+declarations its constructors mention: from its headers and constructors elaborated together,
+every type a local variable, as Lean's `mutual` elaborates a block. The elaboration itself is
+discarded. -/
+def mixedVars (all : Array DeclStx) (ref : Syntax) (vars : Array Expr) :
+    TermElabM (Array Expr × Array (Array Nat)) := do
+  let s ← saveState
+  try
+    let shorts := all.map (·.T.getId)
+    let names := shorts.map ((← getCurrNamespace) ++ ·)
+    withRef ref <| Term.withoutErrToSorry <| Term.withoutSavingRecAppSyntax do
+    let hdrs ← all.mapM fun d => withRef d.ref do elabHeader shorts d.ps d.sort?
+    let (hdr₀, np) := hdrs[0]!
+    forallBoundedTelescope hdr₀ np fun params _ => do
+    let sorts ← hdrs.mapM fun (hdr, _) => instantiateForall hdr params
+    let Ttys ← sorts.mapM fun sort => do
+      let l ← mkFreshLevelMVar
+      forallTelescopeReducing sort fun is _ => mkForallFVars (params ++ is) (mkSort l.succ)
+    let nIdx ← sorts.mapM fun sort => forallTelescopeReducing sort fun is _ => pure is.size
+    withAuxDecls shorts names Ttys fun Tvs => do
+    let tys ← all.mapIdxM fun d decl => decl.ctors.mapM fun c => do
+      let (_, ty, _, _) ← elabCtor Tvs[d]! params nIdx[d]! c
+      return ty
+    let (_, used) ← (do
+      for (hdr, _) in hdrs do (← instantiateMVars hdr).collectFVars
+      for ty in tys.flatten do (← instantiateMVars ty).collectFVars).run {}
+    let (_, _, vars) ← Meta.removeUnused vars used
+    let tys ← tys.mapM (·.mapM instantiateMVars)
+    let mentions := tys.mapIdx fun d ts => (Array.range all.size).filter fun d' =>
+      d' != d && ts.any (·.containsFVar Tvs[d']!.fvarId!)
+    return (vars, mentions)
+  finally
+    s.restore
+
+/-- The indices `Blk.Ix` of the runs of a `mixed_mutual` block that are blocks, on the parameters
+(`vars` the section variables of the block), declared before the runs: the types of a run
+outside another are a family over its index in the inner run. -/
+def declareMixIx (all : Array DeclStx) (runs : Array MixRun) (ref : Syntax)
+    (vars : Array Expr) : TermElabM Unit := do
+  if runs.all (·.ix?.isNone) then return
+  let shorts := all.map (·.T.getId)
+  withRef ref <| Term.withoutErrToSorry <| Term.withoutSavingRecAppSyntax do
+  let hdrs ← all.mapM fun d => withRef d.ref do elabHeader shorts d.ps d.sort?
+  let (hdr₀, np) := hdrs[0]!
+  forallBoundedTelescope hdr₀ np fun params _ => do
+  let sorts ← hdrs.mapM fun (hdr, _) => do
+    forallTelescopeReducing (← instantiateForall hdr params) fun is body => do
+      return nameBinders "i" (← mkForallFVars is body)
+  let userLevels := (← Term.getLevelNames).reverse
+  for run in runs do
+    let some ix := run.ix? | continue
+    openTelescopes (run.decls.map (sorts[·]!)) fun opened => do
+      discard <| declareIx ix userLevels (vars ++ params) params
+        (run.decls.zipIdx.map fun (d, m) => (shorts[d]!, opened[m]!.1)) ref
+
+/-- The family of the run `j` of a mixed block as seen from the run `mx.r` being elaborated, whose
+extra parameters are `xs` (for the runs `need`) and whose types are the local variables `tys`
+over `vars ++ params ++ xs`: for an outer run its extra parameter, for the run itself its types
+(on the packed index, or by cases on its `Blk.Ix`), for a run inside its open type at the
+families of the runs it needs. -/
+private partial def mixFam (mx : Mix) (need : Array Nat) (xs vars params tys : Array Expr)
+    (shorts : Array Name) (nIdx : Array Nat) (sorts : Array Expr) (r : Level) (j : Nat) :
+    TermElabM Expr := do
+  let run := mx.runs[j]!
+  let d := run.decls[0]!
+  let overIdx (body : Array Expr → TermElabM Expr) : TermElabM Expr := do
+    if nIdx[d]! == 0 then return ← body #[]
+    let J ← forallTelescopeReducing sorts[d]! fun is _ => packedType is
+    withLocalDeclD `p J fun p => do mkLambdaFVars #[p] (← body (← projsN nIdx[d]! p))
+  let allParams := vars ++ params ++ xs
+  if j < mx.r then
+    let some i := need.findIdx? (· == j) | throwError "internal error: run {j} not needed"
+    return xs[i]!
+  if j == mx.r then
+    match run.ix? with
+    | none => return ← overIdx fun idx => pure (mkAppN tys[0]! (allParams ++ idx))
+    | some ix =>
+      let us := (← getConstInfo ix).levelParams.map mkLevelParam
+      let I := mkAppN (.const ix us) (vars ++ params)
+      return ← withLocalDeclD `i I fun i => do
+        mkLambdaFVars #[i] (← mkCasesOnApp ix us (vars ++ params) i (mkLevelSucc r).succ
+          (fun _ _ => return mkSort r.succ) fun cname idx => do
+            let some m := run.decls.findIdx?
+                (ix ++ Name.mkSimple shorts[·]!.lastComponentAsString == cname)
+              | throwError "internal error: unexpected constructor {cname}"
+            return mkAppN tys[m]! (allParams ++ idx))
+  let fams ← run.need.mapM (mixFam mx need xs vars params tys shorts nIdx sorts r)
+  let e ← appConst run.fam (vars ++ params ++ fams)
+  if run.ix?.isSome then return e
+  overIdx fun idx => pure (mkAppN e idx)
+
+/-! ### The context -/
+
 /-- Analyse the declarations `decls`, one or the types of a `mutual` block, all `codata` (`co`)
 or all `data`, and run `k` on their context, inside the local context of the context's free
 variables. `ref` is the command. `vars` are the section variables: those the declarations use
 become their first parameters, as with `inductive`. A block is one family over its index
-`Blk.Ix`, which is declared here. -/
-def withCtx (decls : Array DeclStx) (ref : Syntax) (vars : Array Expr) (k : Ctx → TermElabM α) :
-    TermElabM α := do
+`Blk.Ix`, which is declared here.
+
+In a `mixed_mutual` block (`mix?`), `decls` is the run `mix.r`: the other declarations of the
+block are local variables too while the constructors are elaborated, and then each occurrence of
+a type of a run outside is the extra parameter `X` standing for that run (applied to the packed
+index, or to its constructor of `Blk.Ix`), and each occurrence of a type of a run inside is that
+run's open type at the families of the runs it needs (`Mix.need`), this run's own types among
+them. The extra parameters come after the declared ones; the section variables are the block's,
+and the index of a block was declared before (`declareMixIx`). -/
+def withCtx (decls : Array DeclStx) (ref : Syntax) (vars : Array Expr) (k : Ctx → TermElabM α)
+    (mix? : Option Mix := none) : TermElabM α := do
+  -- Every declaration of the block, and the positions of the run's own.
+  let all : Array DeclStx := match mix? with
+    | some mx => mx.all
+    | none => decls
+  let own : Array Nat := match mix? with
+    | some mx => mx.runs[mx.r]!.decls
+    | none => Array.range decls.size
   let co := decls[0]!.co
-  let shorts := decls.map (·.T.getId)
+  let allShorts : Array Name := all.map (·.T.getId)
+  let shorts : Array Name := own.map (allShorts[·]!)
   let ns ← getCurrNamespace
-  let names := shorts.map (ns ++ ·)
+  let allNames : Array Name := allShorts.map (ns ++ ·)
+  let names : Array Name := match mix? with
+    | some mx => mx.runs[mx.r]!.names
+    | none => shorts.map (ns ++ ·)
   let isBlock := decls.size ≥ 2
-  let name := if isBlock then
-      ns ++ Name.mkSimple ("_".intercalate (shorts.map (·.toString)).toList)
-    else names[0]!
+  let name := match mix? with
+    | some mx => mx.runs[mx.r]!.fam
+    | none => if isBlock then
+        ns ++ Name.mkSimple ("_".intercalate (shorts.map (·.toString)).toList)
+      else names[0]!
   -- As in `inductive`: no `_recApp` annotations on the occurrences of the types.
   withRef ref <| Term.withoutErrToSorry <| Term.withoutSavingRecAppSyntax do
-  let hdrs ← decls.mapM fun d => withRef d.ref do elabHeader shorts d.ps d.sort?
+  let hdrs ← all.mapM fun d => withRef d.ref do elabHeader allShorts d.ps d.sort?
   let (hdr₀, np) := hdrs[0]!
   -- The types of a block agree on their parameters, and on their universe where it is written.
-  for d in decls, (hdr, n) in hdrs do
+  for d in all, (hdr, n) in hdrs do
     unless n == np && (← sameParams hdr₀ hdr np) do
       throwErrorAt d.T
-        "the types of a mutual block must have the same parameters as `{decls[0]!.T}`"
+        "the types of a mutual block must have the same parameters as `{all[0]!.T}`"
   -- The placeholder universe of the types: a name no user can write.
   let uT := Name.mkNum `uT 0
   forallBoundedTelescope hdr₀ np fun params sort₀ => do
@@ -270,23 +450,26 @@ def withCtx (decls : Array DeclStx) (ref : Syntax) (vars : Array Expr) (k : Ctx 
     let sort ← if m == 0 then pure sort₀ else instantiateForall hdr params
     forallTelescopeReducing sort fun is body => do
       if (← instantiateMVars (← mkForallFVars is (mkSort Level.zero))).hasMVar then
-        throwErrorAt decls[m]!.ref "could not infer the types of the indices"
+        throwErrorAt all[m]!.ref "could not infer the types of the indices"
       return nameBinders "i" (← mkForallFVars is body)
-  let written := (decls.zip sorts).filter (·.1.sort?.isSome)
+  let written := (all.zip sorts).filter (·.1.sort?.isSome)
   if let some (d₀, s₀) := written[0]? then
     let l₀ ← sortLevel s₀
     for (d, s) in written do
       unless ← isLevelDefEq (← sortLevel s) l₀ do
         throwErrorAt d.T "the types of a mutual block must be in the same universe as `{d₀.T}`"
   -- The types' universe, a metavariable during the elaboration of the constructors: the
-  -- placeholder if they leave it free.
+  -- placeholder if they leave it free. The universes of the other runs' types are metavariables
+  -- too, assigned with their replacements.
   let r ← mkFreshLevelMVar
-  let Ttys ← sorts.mapM fun sort =>
-    forallTelescope sort fun is _ => mkForallFVars (params ++ is) (mkSort r.succ)
+  let lvls ← all.mapIdxM fun d _ => if own.contains d then pure r else mkFreshLevelMVar
+  let Ttys ← (sorts.zip lvls).mapM fun (sort, l) =>
+    forallTelescope sort fun is _ => mkForallFVars (params ++ is) (mkSort l.succ)
   let nIdx ← sorts.mapM fun sort => forallTelescope sort fun is _ => pure is.size
-  withAuxDecls shorts names Ttys fun Tvs => do
-  let ctors ← decls.mapIdxM fun m d => d.ctors.mapM fun c => do
-    let (n, ty, refs, resRef) ← elabCtor Tvs[m]! params nIdx[m]! c
+  withAuxDecls allShorts allNames Ttys fun TvsAll => do
+  let Tvs := own.map (TvsAll[·]!)
+  let ctors ← own.mapIdxM fun m d => all[d]!.ctors.mapM fun c => do
+    let (n, ty, refs, resRef) ← elabCtor Tvs[m]! params nIdx[d]! c
     return (m, n, ty, refs, resRef, c)
   let ctors := ctors.flatten
   -- The user's universes, auto-bound ones included.
@@ -297,27 +480,114 @@ def withCtx (decls : Array DeclStx) (ref : Syntax) (vars : Array Expr) (k : Ctx 
   let rId? := match rLvl with
     | .mvar id => some id
     | _ => none
+  let otherIds := (Array.range all.size).filterMap fun d =>
+    if own.contains d then none else match lvls[d]! with
+      | .mvar id => some id
+      | _ => none
   let ctors ← ctors.mapM fun (m, n, ty, refs, resRef, c) => do
     let ty ← instantiateMVars ty
-    let others := (collectLevelMVars {} ty).result.filter (some · != rId?)
+    let others := (collectLevelMVars {} ty).result.filter fun id =>
+      some id != rId? && !otherIds.contains id
     if ty.hasExprMVar || !others.isEmpty then
       throwErrorAt resRef "could not determine the universes of the arguments{indentExpr ty}"
     return (m, n, ty, refs, resRef, c)
   -- As in `inductive`: the section variables the declarations use (with those their types use)
-  -- are parameters; the others leave the local context.
+  -- are parameters; the others leave the local context. In a mixed block, those of the block.
   let (_, used) ← (do
-    for (hdr, _) in hdrs do (← instantiateMVars hdr).collectFVars
-    for (_, _, ty, _) in ctors do ty.collectFVars).run {}
+    match mix? with
+    | some mx => for v in mx.vars do Expr.collectFVars v
+    | none =>
+      for (hdr, _) in hdrs do (← instantiateMVars hdr).collectFVars
+      for (_, _, ty, _) in ctors do ty.collectFVars).run {}
   let (lctx, localInsts, vars) ← Meta.removeUnused vars used
   withLCtx lctx localInsts do
-  -- The occurrences `T params idx` become `T vars params idx`, for local variables `T` over all
+  -- In a mixed block: the other declarations the run mentions, the outer runs it needs and their
+  -- extra parameters `X`, with their universes.
+  let mentioned := (Array.range all.size).filter fun d =>
+    !own.contains d && ctors.any (·.2.2.1.containsFVar TvsAll[d]!.fvarId!)
+  let need := match mix? with
+    | some mx => mx.runs[mx.r]!.need
+    | none => #[]
+  let usedNames ← params.mapM fun (p : Expr) => p.fvarId!.getUserName
+  let xNames ← need.mapIdxM fun i _ => do
+    let n := if need.size == 1 then `X else Name.mkSimple s!"X{Nat.toSubscriptString (i + 1)}"
+    plainOr (usedNames ++ allShorts) n
+  let xLevels := need.foldl (init := #[]) fun acc k => Id.run do
+    let some mx := mix? | return acc
+    let base := Name.mkSimple ("u_" ++ (allShorts[mx.runs[k]!.decls[0]!]!).toString)
+    let mut u := base
+    while userLevels.contains u || acc.contains u do u := u.appendAfter "'"
+    return acc.push u
+  let xTys ← need.mapIdxM fun i k => do
+    let some mx := mix? | unreachable!
+    let run := mx.runs[k]!
+    let sort := mkSort (Level.param xLevels[i]!).succ
+    match run.ix? with
+    | some ix =>
+      let us := (← getConstInfo ix).levelParams.map mkLevelParam
+      mkArrow (mkAppN (.const ix us) (vars ++ params)) sort
+    | none =>
+      let d := run.decls[0]!
+      if nIdx[d]! == 0 then return sort
+      let J ← forallTelescopeReducing sorts[d]! fun is _ => packedType is
+      mkArrow J sort
+  withLocalDeclsD' xNames xTys fun xs => do
+  -- The occurrences `T params idx` become `T vars params xs idx`, for local variables `T` over all
   -- the parameters.
-  let Ttys ← Tvs.mapM fun Tv => do mkForallFVars vars (← instantiateMVars (← inferType Tv))
-  withLocalDeclsD' shorts Ttys fun Tvs' => do
-  let ctors := ctors.map fun (m, n, ty, refs, resRef, c) =>
-    (m, n, ty.replaceFVars Tvs (Tvs'.map (mkAppN · vars)), refs, resRef, c)
-  let params := vars ++ params
-  openTelescopes sorts fun idxs => do
+  let Ttys' ← Tvs.mapM fun Tv => do
+    let ty ← instantiateMVars (← inferType Tv)
+    if xs.isEmpty then mkForallFVars vars ty
+    else mkForallFVars (vars ++ params ++ xs) (← instantiateForall ty params)
+  withLocalDeclsD' shorts Ttys' fun Tvs' => do
+  let allParams := vars ++ params ++ xs
+  -- The replacements of the other runs' types, as functions of their index arguments.
+  let reps : Array (Option (Array Expr → Expr)) ← match mix? with
+    | none => pure #[]
+    | some mx => do
+      let famOf := mixFam mx need xs vars params Tvs' allShorts nIdx sorts r
+      all.mapIdxM fun d _ => do
+        unless mentioned.contains d do return none
+        let some j := mx.runs.findIdx? (·.decls.contains d) | return none
+        let run := mx.runs[j]!
+        let some m := run.decls.findIdx? (· == d) | return none
+        if j < mx.r then
+          let some i := need.findIdx? (· == j) | throwError "internal error: run {j} not needed"
+          unless ← isLevelDefEq lvls[d]! (.param xLevels[i]!) do
+            throwErrorAt all[d]!.T "could not determine the universe of `{all[d]!.T}` here"
+          let pack ← if nIdx[d]! ≥ 2 then some <$> packFn sorts[d]! else pure none
+          let ixCtor ← run.ix?.mapM fun ix => do
+            let us := (← getConstInfo ix).levelParams.map mkLevelParam
+            return mkAppN (.const (ix ++ Name.mkSimple allShorts[d]!.lastComponentAsString) us)
+              (vars ++ params)
+          return some fun (idx : Array Expr) => match ixCtor, pack with
+            | some c, _ => mkApp xs[i]! (mkAppN c idx)
+            | none, some f => mkApp xs[i]! (f.beta idx)
+            | none, none => mkAppN xs[i]! idx
+        else
+          let fams ← run.need.mapM famOf
+          let e ← appConst run.names[m]! (vars ++ params ++ fams)
+          let l ← forallTelescopeReducing (← inferType e) fun _ body => do
+            let .sort l := body | throwError "internal error: not a family{indentExpr e}"
+            return l.dec.getD l
+          unless ← isLevelDefEq lvls[d]! l do
+            throwErrorAt all[d]!.T "could not determine the universe of `{all[d]!.T}` here"
+          return some fun (idx : Array Expr) => mkAppN e idx
+  let ctors ← ctors.mapM fun (m, n, ty, refs, resRef, c) => do
+    let ty := if mix?.isNone then ty.replaceFVars Tvs (Tvs'.map (mkAppN · vars)) else
+      ty.replace fun s => Id.run do
+        let f := s.getAppFn
+        unless f.isFVar do return none
+        let some d := TvsAll.findIdx? (· == f) | return none
+        let args := s.getAppArgs
+        if let some m := own.findIdx? (· == d) then
+          if args.size < np then return some (mkAppN Tvs'[m]! (vars ++ args))
+          return some (mkAppN Tvs'[m]! (vars ++ args.extract 0 np ++ xs ++ args.extract np args.size))
+        let some (some rep) := reps[d]? | return none
+        return some (rep (args.extract np args.size))
+    return (m, n, ← instantiateMVars ty, refs, resRef, c)
+  let params := allParams
+  let ownSorts := own.map (sorts[·]!)
+  openTelescopes ownSorts fun idxs => do
   let idxs := idxs.map (·.1)
   openTelescopes (ctors.map (·.2.2.1)) fun opened => do
   let types := (Array.range decls.size).map fun m =>
@@ -326,9 +596,17 @@ def withCtx (decls : Array DeclStx) (ref : Syntax) (vars : Array Expr) (k : Ctx 
   let declParams := params.extract vars.size params.size
   -- A block: its index `Blk.Ix`, and the one index binder `m : Blk.Ix params` of the family.
   let (ixCtors, ixType?) ← if isBlock then
-      let (cs, I) ← declareIx (name ++ `Ix) userLevels params declParams
-        (types.map fun t => (t.name, t.idx)) ref
-      pure (cs, some I)
+      match (mix?.bind fun mx => mx.runs[mx.r]!.ix?) with
+      | some ix =>
+        let us := (← getConstInfo ix).levelParams.map mkLevelParam
+        let ps := vars ++ params.extract vars.size (params.size - xs.size)
+        let cs := shorts.map fun s =>
+          mkAppN (.const (ix ++ Name.mkSimple s.lastComponentAsString) us) ps
+        pure (cs, some (mkAppN (.const ix us) ps))
+      | none =>
+        let (cs, I) ← declareIx (name ++ `Ix) userLevels params declParams
+          (types.map fun t => (t.name, t.idx)) ref
+        pure (cs, some I)
     else pure (#[], none)
   let usedNames ← (params ++ idxs.flatten ++ opened.flatMap (·.1)).mapM (·.fvarId!.getUserName)
   let mName ← plainOr (usedNames ++ ctors.map (·.2.1)) `m
@@ -342,8 +620,13 @@ def withCtx (decls : Array DeclStx) (ref : Syntax) (vars : Array Expr) (k : Ctx 
     | some I => pure I
     | none => packedType idx
   let Jlvl ← typeLevel J
+  let mixCtx? := mix?.map fun mx =>
+    { r := mx.r, xs, need, xLevels, closedNames := mx.runs[mx.r]!.closedNames
+      outerNames := need.map (mx.runs[·]!.closedNames[0]!)
+      required := need.map (mx.runs[mx.r]!.nestedBy.contains ·) : MixCtx }
   let ctx0 : Ctx :=
-    { b with co, name, ref, userLevels, nVars := vars.size, idx, J, Jlvl, ctors := #[] }
+    { b with co, name, ref, userLevels := userLevels ++ xLevels.toList, nVars := vars.size, idx,
+             J, Jlvl, ctors := #[], mix? := mixCtx? }
   let fam? := ctx0.famIdx?
   -- Constructor names shared by several types of a block are qualified in the block-level
   -- inductives.

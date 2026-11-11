@@ -438,7 +438,7 @@ def withTypeMotives (v : Level) (k : Array Expr → Expr → TermElabM α) : Ter
         let tgt ← mkArrow (← ctx.tAt #[i]) (mkSort v)
         let lvl := (← getLevel tgt).normalize
         let value := mkAppN (.const (mkCasesOnName ix) (lvl :: us))
-          (ctx.params ++ #[← mkLambdaFVars #[i] tgt, i] ++ motives)
+          (ixTy.getAppArgs ++ #[← mkLambdaFVars #[i] tgt, i] ++ motives)
         mkLambdaFVars #[i, x] (mkApp value x)
       k motives M
   termination_by ctx.types.size - m

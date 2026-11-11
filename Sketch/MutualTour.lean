@@ -1,16 +1,15 @@
 import Colean.MutualCmd
 
 /-!
-# A walk through uniform blocks
+# A walk through mutual blocks
 
 A uniform block is a `mutual … end` of `data` declarations, or of `codata` declarations, with the
 same parameters. It is one family over an inductive `Ix`, with a constructor per type whose
 arguments are the indices of that type, so nothing new is involved: `Even`/`Odd` is one `data`
-with one index.
+with one index. Blocks that mix both kinds, `mixed_mutual … end`, are in `Sketch/MixedTour.lean`.
 
-Read it top to bottom. Part I (sections 1 to 7) is what works, Part II what does not work yet
-but could (nothing at present), and Part III (section 8) what looks like a bug. Blocks that mix
-`data` and `codata` (`mixed_mutual`) were removed pending a redesign, and their part with them.
+Read it top to bottom. Part I (sections 1 to 7) is what works, Part II what does not work yet but
+could (nothing at the moment), and Part III (section 8) what looks like a bug.
 
 Nesting is left out on purpose. Fields here are plain members, constants or functions into
 members; `×`, `⊕`, `List` and other leaves are not used. Blocks with nesting are in
@@ -707,12 +706,13 @@ example : (Tr.node 1 [.mk (.node 2 []) none]).sum = 3 := by
 
 end NestedPerType
 
+/-! Blocks that mix `data` and `codata`, `mixed_mutual … end`, are in `Sketch/MixedTour.lean`. -/
+
 /-! ## Part II: what does not work yet
 
-Nothing at present: the last item, recursors per type, is section 7. What should stay refused is
-not listed: the types of a block share their parameters, names included, and their universe, as
-in Lean, an implicit parameter cannot be left out at an occurrence, as in Lean, and a `mutual`
-block is all `data` or all `codata`. -/
+Nothing at the moment. What should stay refused is not listed: the types of a block share their parameters, names
+included, and their universe, as in Lean, an implicit parameter cannot be left out at an
+occurrence, as in Lean, and a `mutual` block is all `data` or all `codata`. -/
 
 /-! ## Part III: what looks like a bug
 

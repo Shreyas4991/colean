@@ -167,11 +167,61 @@ lives in a universe at least that of `Ix`, so the largest index of the block cou
 
 # Mixed blocks
 
+```
+mixed_mutual
+codata Tree (α : Type u)
+  | node (a : α) (children : Forest α)
+data Forest (α : Type u)
+  | nil
+  | cons (t : Tree α) (f : Forest α)
+end
+```
+
 A block with `data` and `codata` declarations is a nested fixpoint, and a cyclic system has
 several nested solutions (the trees outside the forests are the finitely branching infinite
-trees, the forests outside the trees the finite ones), so such a block would have to state the
-order. A `mutual` block may not mix the two kinds. The `mixed_mutual` command, which nested the
-declarations in the order written, is removed, pending a redesign.
+trees, the forests outside the trees the finite ones), so the block states the order: the
+textual order is the nesting order, the first declaration outermost. A plain `mutual` block may
+not mix the two kinds. The declarations share their parameters, names included, and their
+universe where it is written, as in `mutual`.
+
+A *run*, a maximal sequence of adjacent declarations of the same kind, is a single declaration
+or a uniform block, and has the uniform contract of its kind, with the runs outside it as
+parameters. For runs `R₁ ⊃ R₂ ⊃ … ⊃ Rₖ`:
+
+1. Each run `Rᵢ` with `i > 1` is declared *open*: with one more parameter `X` for each run
+   outside it that it needs (a type `X` for a run of one type without indices, a family over the
+   run's index otherwise), every occurrence of a type of that run replaced by `X`. Its contract
+   is that of a `data` or `codata` declaration (or block) with these parameters:
+   `Forest.Open α X` with `Forest.Open.fold`, `Forest.Open.rec`, … for any `X`. A run further
+   inside occurs as its open type at the families of the runs it needs, a nested occurrence.
+2. The outer types nest through the open types of the runs inside at their own types:
+   `Tree` is the `codata` declaration whose children are `Forest.Open α (Tree α)`. This needs the
+   open types to be polynomial in their extra parameters, `PolyIso (fun X => Forest.Open α X)`,
+   which the command generates as for any declared type (step 5).
+3. The closed types are the open ones at the outer types, `Forest α := Forest.Open α (Tree α)`,
+   from the outermost run in: each run's types at the closed types of the runs it needs. Each
+   closed type has the contract of a standalone declaration, the open one at these families:
+   `Forest.F α S := Forest.Open.F α (Tree α) S`, `Forest.fold`, `Forest.rec`, `Forest.dtor`, …,
+   and the outer types' are stated with the closed types: `Tree.node : α → Forest α → Tree α`.
+
+The functor of a run at its state has the open types of the runs inside at that state:
+`Tree.F α S` is `α × Forest.Open α S`, so `Tree.corec` takes a step `S → α × Forest.Open α S`,
+and `Tree.bisim` relates the children by `Occ.Rel` through the open forests' instance. Composed,
+these are the contracts of the nested fixpoint: `(Tree, dtor)` is a final coalgebra of
+`X ↦ α × μ F. 1 + X × F`, and `Forest α` the initial algebra of `F ↦ 1 + Tree α × F`.
+
+The recursors of a run are those of its kind, the outer types opaque in the inner runs
+(`Forest.rec` has no hypothesis for the trees), and a nested argument of an outer run through an
+inner one has its hypothesis by membership in the closed type: `Membership (Tree α) (Forest α)`
+is `PolyIso.Mem (fun X => Forest.Open α X)`, and `simp` computes it on the constructors
+(`Forest.mem_cons : x ∈ Forest.cons t f ↔ x = t ∨ x ∈ f`).
+
+Not supported: a run outside another whose types have indices or form a block (the open type's
+parameter is then a family, and nesting through it needs `IPolyIso` instances), a field
+mentioning an outer type together with the run's own type (`Tree α × Forest α`), and, in a block
+with parameters, a run passing an outer type on to a run further inside (its field `C.Open α X`
+mentions two parameters): the open types then have no instances in their parameter, and the
+block stops with that error. Without parameters such a block is accepted.
 
 
 # Recursors

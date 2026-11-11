@@ -7,8 +7,8 @@ them), `PolyIso.lean` (the user interface for nesting), `Model/` (`Cotype`, `Int
 `Poly`: the fixpoints on `Raw`, occurrence structures, fixpoints as polynomial functors),
 `Syntax.lean` (the command syntax), `Gen/` (the generators by step, on `Expr`: `Decl`, `Occ`,
 `Ctx`, `Front`, `Functor`, `Signature`, `Iso`, `Model`, `Rel`, `Framework`, `Extras`, `Surface`,
-`Derive`, and the pipeline `Command`), `CodataCmd.lean`/`DataCmd.lean` (the commands),
-`MutualCmd.lean` (blocks), all directly under `Colean/`; the tests are the separate library
+`Derive`, the pipeline `Command`, and `Mixed` for mixed blocks), `CodataCmd.lean`/`DataCmd.lean` (the commands),
+`MutualCmd.lean` (blocks, mixed blocks), all directly under `Colean/`; the tests are the separate library
 `ColeanTest/`, one test per type; `Sketch/` holds hand-written experiments, a library outside the
 default build, which need not compile. The root modules `Colean.lean` and `ColeanTest.lean`
 import everything and are both default targets, so `lake build` checks it all. The contract is
@@ -115,7 +115,7 @@ DONE:
 NOT DONE:
 
 * nothing else planned. A `mutual` block mixing `data` and `codata` is rejected; mixed blocks are
-  section 5.
+  section 5, `mixed_mutual`.
 
 ## 4. Nested types — DONE; instances for declared types DONE
 
@@ -176,17 +176,51 @@ NOT DONE:
 * `rel_*` characterisations of `Occ.Rel` through `prod`, `pi`, `comp` as iffs (only the
   introductions exist), and user-facing `T.map`/`T.Rel` abbreviations.
 
-## 5. Mixed blocks — REMOVED, pending a redesign
+## 5. Mixed blocks — DONE, on top of nesting (2026-11-11)
 
 A block with `data` and `codata` declarations is a nested fixpoint, and a cyclic system has
-several nested solutions, so the block must say the order. The `mixed_mutual` command said it
-by the textual order, elaborating runs of one kind from the innermost out, each inner run with a
-family parameter for the run outside it. It needed instances for the inner runs in their family
-parameter, which were never generated, so a cyclic block never got through after the generated
-structures of section 4 were removed. With the move of the commands to `Expr` (2026-11) it was
-removed rather than ported. Its tests stay in `ColeanTest/`, not built (`Mixed.lean`,
-`MixedOrder.lean`, `MixedRuns.lean`, `MixedRejected.lean`, `Param.lean`), and its design notes
-are in the git history at `bc6498d`. `mutual` rejects a block that mixes the two kinds.
+several nested solutions, so the block says the order: `mixed_mutual … end`, the textual order,
+the first outermost (`MutualCmd.lean`, `Gen/Mixed.lean`, `contract.md`). Runs of one kind are
+declared from the innermost out, each by the pipeline: the runs inside the first open, under
+`Tₘ.Open`, with a parameter per outer run they need, through which the runs outside nest by the
+instances of step 5; then the closed types `Tₘ := Tₘ.Open params (outer types)`, abbreviations,
+as soon as the first run's types exist, with which the first run is stated, and the interface of
+each run inside restated at them. The design and the history before 2026-11 are in the git
+history (`bc6498d`).
+
+DONE:
+
+* any number of runs, of one type or of a block, inner runs with indices, parameters and
+  section variables (`ColeanTest/Mixed.lean`, `MixedOrder.lean`, `MixedRuns.lean`,
+  `MixedBlock.lean`, `MixedIdx.lean`, `MixedParam.lean`);
+* the closed types with the whole interface of a standalone declaration, the statements of the
+  outer runs with them, and the hypotheses of the recursors through inner runs by membership in
+  the closed types (`Membership` instances, with the `simp` lemmas `Tₘ.mem_c`);
+* `simp` through the nesting: the closed constructors are abbreviations of the open ones, so the
+  `simp` lemmas of step 5 (`Tₘ.Open.Poly.map_c`, `mem_c`) apply to them;
+* a block of one kind is a `mutual` block, with a warning; `mutual` rejects a mixed block.
+
+NOT DONE:
+
+* outer runs with indices, or of several types: the open types' parameter is then a family, and
+  nesting through it needs `IPolyIso` instances, not generated (section 4); the block stops at the
+  error of step 5 (`ColeanTest/MixedRejected.lean`);
+* a field mentioning an outer type together with the run's own type (`p : Tree α × Forest α`):
+  step 5 does not generate instances in a parameter used so (gap 2 of section 4); the same error;
+* with parameters, a run passing an outer type on to a run further inside (A ⊃ B ⊃ C, `C`
+  mentioning `A`): the middle run's field `c : C.Open α X` has no recursion of `B`, but it
+  mentions two parameters, `α` and `X`, and step 5 drops both although only `X` needs to vary
+  (gap 3 of section 4); the same error. Several parameters in one field would fix it, and so
+  would letting step 5 keep the block's parameters constant. Without parameters the block is
+  accepted;
+* the functor of an outer run at its state, and the rules mapping through inner runs
+  (`Tree.F.node : α → Forest.Open α X → Tree.F α X`, `T.fold_c`), mention the open types: they are
+  the inner types at a state, with no closed form;
+* membership instances for members of an outer run with indices or of several types (which fail
+  anyway); the hypotheses through a composite (`List (Forest α)`) stay by `PolyIso.Mem`, which
+  `simp` turns into membership in the closed types;
+* instances for the closed types in their declared parameters (the open types have them, the
+  closed ones would need the outer types' instances, which a mixed outer run does not get).
 
 ## 6. Surface — NOT DONE
 
@@ -206,5 +240,5 @@ are in the git history at `bc6498d`. `mutual` rejects a block that mixes the two
 2. `data`: DONE (leftovers listed above).
 3. Mutual blocks: DONE (leftovers listed above).
 4. Nested types: DONE, with generated instances for single types, families and blocks.
-5. Mixed blocks: REMOVED, pending a redesign.
+5. Mixed blocks: DONE (leftovers listed above).
 6. Surface items, as they become blocking.

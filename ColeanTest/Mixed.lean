@@ -3,16 +3,18 @@ import Colean.MutualCmd
 /-! # Test: mixed `data`/`codata` blocks
 
 A `mixed_mutual` block nests its declarations in the order written, the first outermost. Here
-the coinductive types come first: the `data` types take the coinductive family as an extra
-parameter, and the `codata` types nest through them. -/
+the coinductive type comes first: the finitely branching infinite trees. The forests are
+declared open in the trees (`Forest.Open α X`), the trees nest through `Forest.Open α (Tree α)`,
+and `Forest α` is that type, with the whole interface of a `data` declaration. -/
 
 universe u
 
 namespace MixedTest
 
+open Codata
+
 noncomputable section
 
--- One coinductive type without indices: the parameter is a type.
 mixed_mutual
 codata Tree (α : Type u)
   | node (a : α) (children : Forest α)
@@ -21,74 +23,150 @@ data Forest (α : Type u)
   | cons (t : Tree α) (f : Forest α)
 end
 
--- Binary trees with labeled right edges: the inductive type first, so the labeled edges are
--- inside the finite trees (`LabeledEdge α X` for any `X`, `BinTree.cons : Tree α →
--- LabeledEdge α (BinTree α) → BinTree α`).
-mixed_mutual
-data BinTree (α : Type u)
-  | nil
-  | cons (left : Tree α) (right : LabeledEdge α)
-codata LabeledEdge (α : Type u)
-  | mk (a : α) (node : BinTree α)
-end
+/-! ### What the user sees
 
-#check @BinTree.cons
-#check @LabeledEdge.mk
+The trees as a single `codata` declaration with `Forest α` for its children; the forests as a
+single `data` declaration with `Tree α` for its trees. -/
 
-#check @Forest.nil
-#check @Forest.cons
-#check @Tree.node
-#check @Tree.F.node
-#check @Tree.dtor
-#check @Forest.rec
-#check Tree.corec
-#check Tree.bisim
-#check @Forest.occ
-#check @Forest.map_cons
-#check @Forest.rel_cons
-#check @LabeledEdge.map_mk
-#check @LabeledEdge.rel_mk
+/-- info: @Tree.node : {α : Type u_1} → α → Forest α → Tree α -/
+#guard_msgs in #check @Tree.node
+/-- info: @Forest.cons : {α : Type u_1} → Tree α → Forest α → Forest α -/
+#guard_msgs in #check @Forest.cons
+/-- info: @Forest.nil : {α : Type u_1} → Forest α -/
+#guard_msgs in #check @Forest.nil
+/--
+info: @Tree.corec : {α : Type u_1} → {S : Type u_2} → (S → Tree.F α S) → S → Tree α
+-/
+#guard_msgs in #check @Tree.corec
+/--
+info: @Tree.bisim : ∀ {α : Type u_1} (R : Tree α → Tree α → Prop),
+  (∀ (x y : Tree α), R x y → Tree.F.Rel R x.dtor y.dtor) → ∀ {x y : Tree α}, R x y → x = y
+-/
+#guard_msgs in #check @Tree.bisim
+/--
+info: @Tree.casesOn : {α : Type u_1} →
+  {motive : Tree α → Sort u_2} →
+    (t : Tree α) → ((a : α) → (children : Forest α) → motive (Tree.node a children)) → motive t
+-/
+#guard_msgs in #check @Tree.casesOn
+/--
+info: @Forest.rec : {α : Type u_1} →
+  {motive : Forest α → Sort u_2} →
+    motive Forest.nil →
+      ((t : Tree α) → (f : Forest α) → motive f → motive (Forest.cons t f)) → (t : Forest α) → motive t
+-/
+#guard_msgs in #check @Forest.rec
+/--
+info: @Forest.fold : {α : Type u_1} → {S : Type u_2} → (Forest.F α S → S) → Forest α → S
+-/
+#guard_msgs in #check @Forest.fold
+/--
+info: @Forest.casesOn : {α : Type u_1} →
+  {motive : Forest α → Sort u_2} →
+    (t : Forest α) → motive Forest.nil → ((t : Tree α) → (f : Forest α) → motive (Forest.cons t f)) → motive t
+-/
+#guard_msgs in #check @Forest.casesOn
+/-- info: @Forest.F.cons : {α : Type u_1} → {X : Type u_2} → Tree α → X → Forest.F α X -/
+#guard_msgs in #check @Forest.F.cons
+/--
+info: @Forest.fold_cons : ∀ {α : Type u_1} {S : Type u_2} (a : Forest.F α S → S) (t : Tree α) (f : Forest α),
+  Forest.fold a (Forest.cons t f) = a (Forest.F.cons t (Forest.fold a f))
+-/
+#guard_msgs in #check @Forest.fold_cons
+/--
+info: @Forest.contract : {α : Type u_1} → Data.Contract (fun p => Forest α) fun X p => Forest.F α (X ())
+-/
+#guard_msgs in #check @Forest.contract
+/--
+info: @Forest.cons_inj : ∀ {α : Type u_1} (t : Tree α) (f : Forest α) (t' : Tree α) (f' : Forest α),
+  Forest.cons t f = Forest.cons t' f' ↔ t = t' ∧ f = f'
+-/
+#guard_msgs in #check @Forest.cons_inj
+/-- info: @Forest.cons_ne_nil : ∀ {α : Type u_1} (t : Tree α) (f : Forest α), Forest.cons t f ≠ Forest.nil -/
+#guard_msgs in #check @Forest.cons_ne_nil
+/--
+info: @Forest.mem_cons : ∀ {α : Type u_1} (t : Tree α) (f : Forest α) (x : Tree α), x ∈ Forest.cons t f ↔ x = t ∨ x ∈ f
+-/
+#guard_msgs in #check @Forest.mem_cons
+
+/-! The functor of the trees has the forests at its state, the open forests: corecursion builds
+a forest of states, with the constructors of `Forest.Open`, which dot notation finds. -/
+
+/--
+info: @Tree.F.node : {α : Type u_1} → {X : Type u_2} → α → Forest.Open α X → Tree.F α X
+-/
+#guard_msgs in #check @Tree.F.node
+
+/-! ### Corecursion on trees -/
 
 def Tree.leaf {α : Type u} (a : α) : Tree α := Tree.node a Forest.nil
 
 @[simp] theorem Tree.dtor_leaf {α : Type u} (a : α) : (Tree.leaf a).dtor = .node a Forest.nil := by
   simp [Tree.leaf]
 
-/-- The number of trees in a forest, by the fold of the parameterised type. -/
-def Forest.size {α : Type u} (f : Forest α (Tree α)) : Nat :=
-  Forest.fold (S := Nat) (fun | .nil => 0 | .cons _ n => n + 1) f
-
-theorem Forest.size_cons {α : Type u} (t : Tree α) (f : Forest α (Tree α)) :
-    (Forest.cons t f).size = f.size + 1 := by
-  rw [Forest.size, Forest.fold_cons]
-  rfl
-
 /-- The tree with two copies of itself as children, corecursively. -/
 def Tree.bin {α : Type u} (a : α) : Tree α :=
-  Tree.corec (S := Unit) (fun _ => .node a (Forest.cons () (Forest.cons () Forest.nil))) ()
+  Tree.corec (S := Unit) (fun _ => .node a (.cons () (.cons () .nil))) ()
 
-theorem Tree.dtor_bin {α : Type u} (a : α) :
-    (Tree.bin a).dtor = .node a (Codata.Occ.map (Forest.occ α) (Forest.occ α) (fun _ => Tree.bin a)
-      (Forest.cons () (Forest.cons () Forest.nil))) := by
-  rw [Tree.bin, Tree.dtor_corec]
-  rfl
-
-/-- The unfolding of `Tree.bin`, with the constructor-level lemmas `Forest.map_cons`,
-`Forest.map_nil` computing the map on the forest of states. -/
-example : Tree.bin 0 = .node 0 (.cons (.bin 0) <| .cons (.bin 0) .nil) := by
-  conv_lhs => rw [← Tree.ctor_dtor (Tree.bin 0), Tree.dtor_bin]
-  rw [Forest.map_cons, Forest.map_cons, Forest.map_nil]
-  rfl
+/-- The unfolding of `Tree.bin`, one step: `simp` maps the forest of states through the instance
+of the open forests (`Forest.Open.Poly.map_cons`). -/
+theorem Tree.bin_eq {α : Type u} (a : α) :
+    Tree.bin a = .node a (.cons (.bin a) (.cons (.bin a) .nil)) := by
+  conv_lhs => rw [← Tree.ctor_dtor (Tree.bin a), Tree.bin, Tree.dtor_corec]
+  simp [Tree.bin]
 
 example {α : Type u} (t : Tree α) : ∃ a cs, t = Tree.node a cs := by
   cases t with
   | node a cs => exact ⟨a, cs, rfl⟩
 
-/-! Equality of trees by bisimulation. The children of a node form a forest of trees, so the
-bisimulation step has to relate two *forests*: `Tree.F.Rel.node` asks for
-`Occ.Rel R cs cs'`, the forests having the same shape (the same erased forest) and
-`R`-related trees at all positions, and `Occ.rel_map` provides it when both forests are
-images of one forest. This is where coinduction sees through the inductive part. -/
+/-! ### Folds and induction on forests -/
+
+/-- The number of trees in a forest. -/
+def Forest.size {α : Type u} (f : Forest α) : Nat :=
+  Forest.fold (S := Nat) (fun | .nil => 0 | .cons _ n => n + 1) f
+
+@[simp] theorem Forest.size_nil {α : Type u} : (Forest.nil : Forest α).size = 0 := by
+  simp [Forest.size]
+
+@[simp] theorem Forest.size_cons {α : Type u} (t : Tree α) (f : Forest α) :
+    (Forest.cons t f).size = f.size + 1 := by
+  simp [Forest.size]
+
+example {α : Type u} (a : α) : (Tree.bin a).dtor = .node a (.cons (.bin a) (.cons (.bin a) .nil)) := by
+  conv_lhs => rw [Tree.bin_eq]
+  simp
+
+/-- The children of `Tree.bin a`, by cases on the tree. -/
+def Tree.children {α : Type u} (t : Tree α) : Forest α := Tree.casesOn t fun _ cs => cs
+
+example {α : Type u} (a : α) : (Tree.bin a).children.size = 2 := by
+  rw [Tree.bin_eq]
+  simp [Tree.children]
+
+/-- Membership in a forest is the trees in it: `mem_cons`, `mem_nil`. -/
+theorem Forest.mem_size {α : Type u} (f : Forest α) (t : Tree α) (h : t ∈ f) : 0 < f.size := by
+  induction f with
+  | nil => simp at h
+  | cons t' f ih => simp
+
+example {α : Type u} (f : Forest α) : f = Forest.nil ∨ ∃ t f', f = Forest.cons t f' := by
+  cases f with
+  | nil => exact Or.inl rfl
+  | cons t f' => exact Or.inr ⟨t, f', rfl⟩
+
+/-- The recursor, at a dependent motive. -/
+def Forest.trees {α : Type u} (f : Forest α) : List (Tree α) :=
+  Forest.rec (motive := fun _ => List (Tree α)) [] (fun t _ l => t :: l) f
+
+example {α : Type u} (t : Tree α) (f : Forest α) :
+    (Forest.cons t f).trees = t :: f.trees := by
+  simp [Forest.trees]
+
+/-! ### Bisimulation on trees
+
+The children of a node are a forest of trees, so a bisimulation step relates two forests
+(`Tree.F.Rel.node`), at the open forests of the functor; `Tree.F.rel_map` provides it for the
+images of one layer. -/
 
 /-- One step of relabelling: the next states are the children themselves. -/
 def Tree.relabelStep {α : Type u} (h : α → α) (t : Tree α) : Tree.F α (Tree α) :=
@@ -98,120 +176,31 @@ def Tree.relabelStep {α : Type u} (h : α → α) (t : Tree α) : Tree.F α (Tr
 /-- Relabel every node, corecursively, with the tree as the state. -/
 def Tree.relabel {α : Type u} (h : α → α) : Tree α → Tree α := Tree.corec (Tree.relabelStep h)
 
+theorem Tree.relabelStep_id {α : Type u} (t : Tree α) : Tree.relabelStep id t = t.dtor := by
+  unfold Tree.relabelStep
+  cases t.dtor
+  rfl
+
 theorem Tree.relabel_id {α : Type u} (t : Tree α) : Tree.relabel id t = t := by
   refine Tree.bisim (fun x y => x = Tree.relabel id y) ?_ rfl
   rintro _ y rfl
-  rw [Tree.relabel, Tree.dtor_corec]
-  simp only [Tree.relabelStep]
-  rcases hy : y.dtor with ⟨a, cs⟩
-  simp only [Tree.F.map_node]
-  refine .node _ _ _ ?_
-  have h := Codata.Occ.rel_map (Forest.occ α) (Forest.occ α) (Forest.occ α)
-    (fun x y => x = Tree.relabel id y) (Tree.corec (Tree.relabelStep id)) (fun x => x) cs
-    fun _ => rfl
-  rwa [Codata.Occ.map_id] at h
+  rw [Tree.relabel, Tree.dtor_corec, Tree.relabelStep_id]
+  conv => arg 3; rw [← Tree.F.map_id y.dtor]
+  exact Tree.F.rel_map _ _ _ _ fun _ => rfl
 
-theorem Tree.relabel_comp {α : Type u} (g f : α → α) (t : Tree α) :
-    Tree.relabel g (Tree.relabel f t) = Tree.relabel (g ∘ f) t := by
-  refine Tree.bisim (fun x y => ∃ t, x = Tree.relabel g (Tree.relabel f t) ∧
-    y = Tree.relabel (g ∘ f) t) ?_ ⟨t, rfl, rfl⟩
-  rintro _ _ ⟨t, rfl, rfl⟩
-  simp only [Tree.relabel, Tree.dtor_corec, Tree.relabelStep]
-  rcases ht : t.dtor with ⟨a, cs⟩
-  simp only [Tree.F.map_node, Codata.Occ.map_map, Function.comp_apply]
-  exact .node _ _ _ (Codata.Occ.rel_map _ _ _ _ _ _ cs fun x => ⟨x, rfl, rfl⟩)
+/-! Coinduction inside induction: a function on forests by the fold, whose step relabels a tree
+corecursively. -/
 
-/-! The mirror: coinduction inside induction. A function on forests of trees, by the fold,
-whose step relabels a tree corecursively; the proof that relabelling by `id` is the identity on
-forests is by induction on the forest, and its `cons` case proves the equality of two trees by
-a bisimulation. The bisimulation does not use the induction hypothesis (it is about the tree
-`t`, not the forest), and the induction hypothesis is not used inside the bisimulation. -/
+/-- Relabel the trees of a forest. -/
+def Forest.relabelAll {α : Type u} (h : α → α) (fo : Forest α) : Forest α :=
+  Forest.fold (S := Forest α) (fun | .nil => .nil | .cons t fo' => .cons (Tree.relabel h t) fo') fo
 
-/-- Relabel the trees of a forest: the fold, with a corecursive function in its step. -/
-def Forest.relabelAll {α : Type u} (h : α → α) (fo : Forest α (Tree α)) : Forest α (Tree α) :=
-  Forest.fold (S := Forest α (Tree α))
-    (fun | .nil => .nil | .cons t fo' => .cons (Tree.relabel h t) fo') fo
-
-theorem Forest.relabelAll_id {α : Type u} (fo : Forest α (Tree α)) :
-    Forest.relabelAll id fo = fo := by
+theorem Forest.relabelAll_id {α : Type u} (fo : Forest α) : Forest.relabelAll id fo = fo := by
   induction fo with
-  | nil => rw [Forest.relabelAll, Forest.fold_nil]
+  | nil => simp [Forest.relabelAll]
   | cons t fo ih =>
-    -- The inductive step: the fold computes one `cons`, the tail is the induction hypothesis.
-    rw [Forest.relabelAll, Forest.fold_cons]
-    show Forest.cons (Tree.relabel id t) (Forest.relabelAll id fo) = Forest.cons t fo
-    rw [ih]
-    -- The head is a tree: a bisimulation, inside the inductive step (this is `Tree.relabel_id`
-    -- proved in place).
-    congr 1
-    refine Tree.bisim (fun x y => x = Tree.relabel id y) ?_ rfl
-    rintro _ y rfl
-    rw [Tree.relabel, Tree.dtor_corec]
-    simp only [Tree.relabelStep]
-    rcases hy : y.dtor with ⟨a, cs⟩
-    simp only [Tree.F.map_node]
-    refine .node _ _ _ ?_
-    have h := Codata.Occ.rel_map (Forest.occ α) (Forest.occ α) (Forest.occ α)
-      (fun x y => x = Tree.relabel id y) (Tree.corec (Tree.relabelStep id)) (fun x => x) cs
-      fun _ => rfl
-    rwa [Codata.Occ.map_id] at h
-
-example {α : Type u} (f : Forest α (Tree α)) : f = Forest.nil ∨ ∃ t f', f = Forest.cons t f' := by
-  cases f with
-  | nil => exact Or.inl rfl
-  | cons t f' => exact Or.inr ⟨t, f', rfl⟩
-
--- Two coinductive types: the parameter is a family over their enumeration.
-mixed_mutual
-codata Tree₂ (α : Type u)
-  | node (a : α) (children : Forest₂ α)
-codata Str₂ (α : Type u)
-  | cons (hd : Tree₂ α) (tl : Str₂ α)
-data Forest₂ (α : Type u)
-  | nil
-  | cons (t : Tree₂ α) (s : Str₂ α) (f : Forest₂ α)
-end
-
-#check @Forest₂.cons
-#check @Forest₂.map_cons
-#check @Forest₂.rel_cons
-#check @Tree₂.node
-#check @Str₂.cons
-#check @Tree₂_Str₂.F.node
-#check @Tree₂_Str₂.F.Rel.node
-#check @Tree₂.corec
-#check @Forest₂.occ
-
--- One coinductive type with an index: the parameter is a family over the index.
-mixed_mutual
-codata VTree (α : Type u) : Nat → Type u
-  | node {n : Nat} (a : α) (children : VForest α n) : VTree α n
-data VForest (α : Type u) : Nat → Type u
-  | nil : VForest α 0
-  | cons {n : Nat} (t : VTree α n) (f : VForest α n) : VForest α (n + 1)
-end
-
-#check @VForest.cons
-#check @VForest.map_cons
-#check @VForest.rel_cons
-#check @VTree.node
-#check @VTree.dtor
-#check @VTree.F.Rel.node
-
-/-- A forest of `n` units. -/
-def VForest.units {α : Type u} : (n : Nat) → VForest α (fun _ => Unit) n
-  | 0 => .nil
-  | n + 1 => .cons () (VForest.units n)
-
-/-- The tree of depth `n` with `n` children of depth `n`, and so on, corecursively: the state
-at index `n` is a unit. -/
-def VTree.full {α : Type u} (a : α) {n : Nat} : VTree α n :=
-  VTree.corec (S := fun _ => Unit) (fun n _ => .node a (VForest.units n)) ()
-
-theorem VTree.dtor_full {α : Type u} (a : α) (n : Nat) :
-    (VTree.full a (n := n)).dtor = VTree.F.map (fun _ _ => VTree.full a) (.node a (VForest.units n)) := by
-  rw [VTree.full, VTree.dtor_corec]
-  rfl
+    simp only [Forest.relabelAll, Forest.fold_cons] at ih ⊢
+    rw [ih, Tree.relabel_id]
 
 end
 

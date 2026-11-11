@@ -22,6 +22,7 @@ import Colean.Gen.Extras
 import Colean.Gen.Surface
 import Colean.Gen.Derive
 import Colean.Gen.Command
+import Colean.Gen.Mixed
 import Colean.CodataCmd
 import Colean.DataCmd
 import Colean.MutualCmd
@@ -30,6 +31,7 @@ import Colean.MutualCmd
 # (Co)inductive types as subtypes of one general type
 The framework (`Framework`), the user interface for nesting (`PolyIso`), the model (`Model/`),
 the command syntax (`Syntax`), the command generators by step, on `Expr` (`Gen/`), the `codata`
-and `data` commands (`CodataCmd`, `DataCmd`) and their mutual blocks (`MutualCmd`). The tests are
-the separate library `ColeanTest`. The decomposition is described in `architecture.md`.
+and `data` commands (`CodataCmd`, `DataCmd`) and their mutual and mixed blocks (`MutualCmd`).
+The tests are the separate library `ColeanTest`. The decomposition is described in
+`architecture.md`.
 -/

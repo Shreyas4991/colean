@@ -1,7 +1,8 @@
 # Architecture of `Colean/`
 
 A declaration `codata T … | …` or `data T … | …`, or a `mutual` block of them, is processed in
-steps with fixed boundaries. Each step sees only the outputs of the steps above it; each has one
+steps with fixed boundaries; a `mixed_mutual` block runs them on each of its runs (see "Mixed
+blocks"). Each step sees only the outputs of the steps above it; each has one
 file of theory and one generator file.
 
 | Step | Sees | Produces | Proofs |
@@ -30,7 +31,7 @@ Generators, on `Expr`, in dependency order. `Syntax.lean` holds the command synt
 - `Gen/Decl.lean`: adding declarations from closed `Expr`s, each checked by the kernel before the next: inductive types with the auxiliary constructions of `inductive` (fixed indices promoted to parameters, as `inductive` does), noncomputable definitions, theorems by term or by a tactic on a goal metavariable, simp lemmas and other attributes; definitions by cases (`mkCasesOnApp`).
 - `Gen/Occ.lean`: the occurrence structure of an elaborated argument type, by recursion on its head after `whnfR` (and `id`); instance search at leaves.
 - `Gen/Ctx.lean`: the context `Ctx`: parameters (section variables first), indices and constructor arguments as free variables of one `TermElabM` run, the types being defined as local variables at a placeholder universe, argument kinds, names; for a block, its index `Blk.Ix`.
-- `Gen/Front.lean`: syntax → `Ctx`, elaborating the declarations as `inductive` does, a single one or the types of a block.
+- `Gen/Front.lean`: syntax → `Ctx`, elaborating the declarations as `inductive` does, a single one or the types of a block, or a run of a mixed block with the other runs' types replaced (`Mix`).
 - `Gen/Functor.lean`: step 1.
 - `Gen/Signature.lean`, `Gen/Iso.lean`, `Gen/Model.lean`: step 2 (the signature; the isomorphism and its laws; the type and the contract).
 - `Gen/Rel.lean`: `T.F.Rel`, `rel_map`, `rel_ofC` (step 4, generated before the model, see below).
@@ -38,7 +39,8 @@ Generators, on `Expr`, in dependency order. `Syntax.lean` holds the command synt
 - `Gen/Extras.lean`: step 2b (`T.recPos`, `T.rec`), and the instance of an occurrence structure (`isoOf`).
 - `Gen/Surface.lean`: step 4 (constructors and their lemmas, `casesOn`, `rec_cᵢ`, `fold_cᵢ`; in a block, the types `Tₘ`, the aliases and, for `data`, the recursors `Tₘ.rec` per type).
 - `Gen/Derive.lean`: step 5, separate from the pipeline (see below).
-- `Gen/Command.lean`: the pipeline. `CodataCmd.lean`, `DataCmd.lean`: the commands; `MutualCmd.lean`: `mutual` blocks of them.
+- `Gen/Command.lean`: the pipeline. `CodataCmd.lean`, `DataCmd.lean`: the commands; `MutualCmd.lean`: `mutual` blocks of them, and `mixed_mutual` blocks.
+- `Gen/Mixed.lean`: a `mixed_mutual` block: its runs, the pipeline on each, the closed types of the runs inside, their membership instances, and their interface restated at the closed types.
 
 ## The generators
 
@@ -121,9 +123,49 @@ hypothesis by membership at an index of the block (`IPolyIso.Mem`) is one per ty
 argument in `Tₘ.rec`, each at its type's motive, and `Blk.rec`'s is given to each at its
 constructor of `Blk.Ix`.
 
-A block mixing `data` and `codata` is a nested fixpoint, whose order is a choice. The
-`mixed_mutual` command that stated the order is removed, pending a redesign; `mutual` rejects
-such a block.
+A block mixing `data` and `codata` is a nested fixpoint, whose order is a choice; `mutual`
+rejects such a block, and `mixed_mutual` states the order (next section).
+
+## Mixed blocks
+
+A `mixed_mutual` block is a sequence of runs, maximal sequences of adjacent declarations of the
+same kind, the first outermost (`Gen/Mixed.lean`). The whole block is elaborated once, as
+`mutual` would (`mixedVars`, discarded), for its section variables and for which declaration
+mentions which; from these, the outer runs each run needs (`mixReach`: those it mentions, and
+those the runs inside it that it mentions need), and the runs that nest through each. The
+indices `Blk.Ix` of the runs that are blocks come next, on the declared parameters.
+
+The runs inside the first are declared from the innermost out, each by the pipeline as a single
+type or a block whose parameters end with one `X` per outer run it needs: the front end
+(`withCtx` with a `Mix`) elaborates the run's constructors with every declaration of the block as
+a local variable, then replaces the occurrences of an outer run's types by its `X` and those of a
+run inside by that run's open type at the families of the runs it needs (`mixFam`), so the
+analysis sees a declaration with parameters and nested occurrences, nothing new. Its names are
+internal, `Tₘ.Open` (and `Blk.Open`). Step 5 gives the open types their instances in the `X`s,
+through which the runs outside nest; when one of them does, a failure of step 5 is an error.
+
+The first run is declared by the pipeline with a hook after its types (`closeTypes`): the closed
+types `Tₘ params := Tₘ.Open params (fams)` of the runs inside, abbreviations, from the outermost
+of them in, at the closed families of the runs each needs, and for each run that nests through a
+closed type of one type without indices, the instance `Membership` of its members. The rest of
+the pipeline states its declarations with these (`Ctx.foldTy`, through the arguments of the
+constructors, `withTArgs`, and the hypotheses by membership, `memProp`): a term `Tₘ.Open params
+(fams)` at the closed families is written `Tₘ params`, and `PolyIso.Mem` through it `x ∈ c`
+(`foldClosed`).
+
+Then the interface of each run inside is restated at the closed types (`restateRun`): every
+public declaration `Tₘ.Open.d` (not those of the model or of step 5, nor the auxiliary
+constructions of inductive types) as `Tₘ.d`, its statement that of `Tₘ.Open.d` at the closed
+families written with the closed declarations, its value `Tₘ.Open.d` itself, with its
+attributes (`simp`, the eliminators, `elab_as_elim`); an inductive type (`T.F`) becomes a
+reducible definition and its constructors reducible definitions usable in patterns, the
+constructors `Tₘ.c` reducible too, so that the lemmas of the open types, those of step 5 among
+them, apply to the closed ones. Last, the `simp` lemmas `Tₘ.mem_c` of the membership instances,
+the `simp` normal form of the membership through the open types (`memLemmas`). The names the user
+wrote are the closed declarations in the info tree.
+
+The functor of a run at its state keeps the open types of the runs inside at that state
+(`Tree.F α X ∋ node (a : α) (children : Forest.Open α X)`): there is no closed form for it.
 
 ## Nesting and declared types
 

@@ -36,6 +36,12 @@ occurrences of a type are at the block index `wrap m idx`, and a constructor rec
 and no `ixCtors`. The per-type declarations use the types `Tₘ` (`tyAt`, `withArgsAtU`), the
 block-level ones the family.
 
+*Mixed blocks.* A run of a `mixed_mutual` block is analysed as a type or a block whose last
+parameters stand for the outer types it needs (`MixCtx`); in the outermost run, once its types
+exist, the statements are written with the closed types of the runs inside (`closed`,
+`foldClosed`): `Tₘ.Open params (fams)` at the closed families is `Tₘ params`, and membership in it
+`x ∈ c` (`MemRule`).
+
 *Universes.* A generated declaration has the user's universes that occur in it, in the order
 declared, then universes of its own named `u_1`, `u_2`, … (`freshLevels`), as Lean names them;
 `constWith` uses a generated constant at given universes for its own ones.
@@ -226,6 +232,145 @@ def replaceOcc (e : Expr) (rep : Array Expr → Expr) (lvl : Level) : Expr :=
 
 end Block
 
+/-! ### Mixed blocks -/
+
+/-- A run of a `mixed_mutual` block (`MutualCmd.lean`): adjacent declarations of the same kind,
+with the names of what it declares. -/
+structure MixRun where
+  co : Bool
+  /-- The positions of its declarations in the block. -/
+  decls : Array Nat
+  /-- The names of its types: `Tₘ.Open` in an open run, `Tₘ` in the outermost one. -/
+  names : Array Name
+  /-- The name of its family: its type, or its block (`Blk.Open` in an open run). -/
+  fam : Name
+  /-- In a block, its index `Blk.Ix`, on the parameters without the extra ones, declared before
+  the runs. -/
+  ix? : Option Name
+  /-- The names of the closed types, and of the closed family. -/
+  closedNames : Array Name
+  closedFam : Name
+  /-- The runs outside it whose types it takes as parameters, outermost first. -/
+  need : Array Nat := #[]
+  /-- The runs outside it that nest through it, directly or through a run between. -/
+  nestedBy : Array Nat := #[]
+  deriving Inhabited
+
+/-- A run of a `mixed_mutual` block, as its context records it. -/
+structure MixCtx where
+  /-- Its position in the block. -/
+  r : Nat
+  /-- The extra parameters, one per outer run in `need`. -/
+  xs : Array Expr
+  need : Array Nat
+  /-- Their universes, which the generated declarations of the run take after the user's. -/
+  xLevels : Array Name
+  /-- The closed types of the run, and for each extra parameter the first type of its run, for
+  messages. -/
+  closedNames : Array Name
+  outerNames : Array Name
+  /-- For each extra parameter, whether its run nests through this one: then the open types must
+  have instances in it (step 5). -/
+  required : Array Bool
+  deriving Inhabited
+
+/-- A declaration of an open run of a `mixed_mutual` block and its closed counterpart:
+`openN params Xs rest`, with the closed families `args params` for the extra parameters `Xs`, is
+`closedN params rest`. -/
+structure FoldRule where
+  openN : Name
+  closedN : Name
+  /-- The number of parameters before the extra ones. -/
+  np : Nat
+  /-- The closed families, each a function of the parameters. -/
+  args : Array Expr
+  /-- The positions, among the universes of `openN`, of those of the extra parameters. -/
+  dropLvls : Array Nat
+  deriving Inhabited
+
+/-- Membership in a closed type of a mixed block: `PolyIso.Mem (fn params) x c`, for members of
+the type `elem params` of an outer run, is `x ∈ c`, the instance's `mem params c x`. -/
+structure MemRule where
+  np : Nat
+  /-- The number of indices of the closed type. -/
+  nIdx : Nat := 0
+  /-- The members' type, its head constant, and the closed type. -/
+  elemN : Name
+  contN : Name
+  /-- Functions of the parameters (and of the indices of the closed type `C`, for `fn`, `mem`
+  and `unfolded`): the functor, the members' type, and `@Membership.mem elem C inst`. -/
+  fn : Expr
+  elem : Expr
+  mem : Expr
+  /-- `fun c x => PolyIso.Mem (fn params) x c`, as a function of the parameters: what `mem`
+  unfolds to. -/
+  unfolded : Expr
+  deriving Inhabited
+
+/-- The closed declarations of a mixed block, with which statements are written (`foldClosed`). -/
+structure Closed where
+  rules : NameMap FoldRule := {}
+  mems : Array MemRule := #[]
+  deriving Inhabited
+
+/-- `e` and `e'` are the same term but for their universes and eta. -/
+def sameUpToLevels (e e' : Expr) : Bool :=
+  let erase (e : Expr) := (mapLevels (fun _ => .zero) e).eta
+  erase e == erase e'
+
+/-- `e` with every application of a declaration of an open run at the closed families written
+with its closed counterpart (`FoldRule`), the declaration on its own too when it takes no
+arguments there, and membership in a closed type by its instance
+(`MemRule`), the arguments first, so that a closed type is recognised inside the arguments of
+another. -/
+partial def foldClosed (c : Closed) (e : Expr) : Expr :=
+  if c.rules.isEmpty then e else go e
+where
+  go (e : Expr) : Expr :=
+    match e with
+    | .app .. =>
+      let f := e.getAppFn
+      let args := e.getAppArgs.map go
+      let dflt := mkAppN (if f.isConst then f else go f) args
+      match f with
+      | .const n us => Id.run do
+        if n == ``Codata.PolyIso.Mem && args.size == 7 then
+          let elem := args[4]!
+          let F := args[0]!
+          for r in c.mems do
+            unless elem.isAppOfArity r.elemN r.np do continue
+            let ps := elem.getAppArgs
+            -- The indices of the closed type, at the end of the functor's body.
+            let idx := if r.nIdx == 0 then #[] else match F with
+              | .lam _ _ b _ => b.getAppArgs.extract (b.getAppNumArgs - r.nIdx) b.getAppNumArgs
+              | _ => #[]
+            unless idx.size == r.nIdx && !idx.any (·.hasLooseBVars) do continue
+            if sameUpToLevels (r.fn.beta (ps ++ idx)) F && sameUpToLevels (r.elem.beta ps) elem then
+              return mkApp2 (r.mem.beta (ps ++ idx)) args[6]! args[5]!
+          return dflt
+        let some r := c.rules.find? n | return dflt
+        let nx := r.args.size
+        unless args.size ≥ r.np + nx do return dflt
+        let ps := args.extract 0 r.np
+        unless args.extract r.np (r.np + nx) == r.args.map (·.beta ps) do return dflt
+        let us' := us.zipIdx.filterMap fun (u, i) => if r.dropLvls.contains i then none else some u
+        return mkAppN (.const r.closedN us') (ps ++ args.extract (r.np + nx) args.size)
+      | _ => dflt
+    -- Without parameters and extra arguments, the open declaration on its own.
+    | .const n us => match c.rules.find? n with
+      | some r =>
+        if r.np == 0 && r.args.isEmpty then
+          .const r.closedN (us.zipIdx.filterMap fun (u, i) =>
+            if r.dropLvls.contains i then none else some u)
+        else e
+      | none => e
+    | .lam n d b bi => .lam n (go d) (go b) bi
+    | .forallE n d b bi => .forallE n (go d) (go b) bi
+    | .letE n t v b nd => .letE n (go t) (go v) (go b) nd
+    | .mdata m b => .mdata m (go b)
+    | .proj s i b => .proj s i (go b)
+    | e => e
+
 /-- Everything the generators need: see the header. -/
 structure Ctx extends Block where
   /-- `codata` (`true`) or `data`. -/
@@ -246,11 +391,22 @@ structure Ctx extends Block where
   /-- `J : Type Jlvl`. -/
   Jlvl : Level
   ctors : Array Ctor
+  /-- In a `mixed_mutual` block, the run. -/
+  mix? : Option MixCtx := none
+  /-- In the outermost run of a `mixed_mutual` block, once its types exist: the closed types of
+  the runs inside, with which the statements are written (`foldTy`). -/
+  closed : Closed := {}
   deriving Inhabited
 
 namespace Ctx
 
 variable (ctx : Ctx)
+
+/-- Is this an open run of a `mixed_mutual` block, declared with the outer types as parameters? -/
+def isOpen : Bool := ctx.mix?.any (·.r > 0)
+
+/-- `e` written with the closed types of a mixed block (`foldClosed`). -/
+def foldTy (e : Expr) : Expr := foldClosed ctx.closed e
 
 /-- The parameters declared with the type: those that are explicit in the generated types. The
 section variables before them keep their own binder infos there, as with `inductive`. -/
@@ -313,15 +469,16 @@ def famFn (X Y : Expr) : TermElabM Expr :=
 their types replaced by `rep m idx` at universe `lvl`: the constructor's arguments as those of
 `T.F` at a family `X` (`withArgsAt`, `rep idx := X idx` at the family-level index), say. `k`
 receives the new variables and the substitution of the old by the new, for the expressions of
-the analysis (index arguments, occurrence structures). The new variables are named `rename x`.
+the analysis (index arguments, occurrence structures). The new variables are named `rename x`,
+and their types are passed through `post`.
 -/
 def withArgsAtU (c : Ctor) (rep : Nat → Array Expr → Expr) (lvl : Level)
-    (k : Array Expr → (Expr → Expr) → TermElabM α) (rename : Name → Name := id) :
-    TermElabM α := do
+    (k : Array Expr → (Expr → Expr) → TermElabM α) (rename : Name → Name := id)
+    (post : Expr → Expr := id) : TermElabM α := do
   let rec go (i : Nat) (ys : Array Expr) : TermElabM α := do
     if h : i < c.args.size then
       let a := c.args[i]
-      let ty := ctx.replaceOccU (a.type.replaceFVars (c.fvars.extract 0 i) ys) rep lvl
+      let ty := post (ctx.replaceOccU (a.type.replaceFVars (c.fvars.extract 0 i) ys) rep lvl)
       withLocalDecl (rename a.name) a.bi ty fun y => go (i + 1) (ys.push y)
     else k ys fun e => e.replaceFVars c.fvars ys
   go 0 #[]
@@ -418,6 +575,9 @@ def fold_unique : Name := ctx.gen "fold_unique"
 declarations of their own (`Tₘ params idx := Blk params (.Tₘ idx)`); otherwise the type is the
 family. -/
 def tyName (m : Nat) : Name := ctx.types[m]!.name
+/-- The last component of the name the user wrote for the `m`-th type (`Forest`, also for
+`Forest.Open`). -/
+def shortName (m : Nat) : String := ctx.types[m]!.nameRef.getId.lastComponentAsString
 def tCtor (c : Ctor) : Name := ctx.tyName c.owner ++ c.name
 def tName' (c : Ctor) (pre post : String) : Name :=
   ctx.tyName c.owner ++ Name.mkSimple (pre ++ c.name.toString ++ post)

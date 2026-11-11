@@ -712,8 +712,10 @@ theorem LInf.dtor_spine :
 Everything here could be supported. What should stay rejected is not listed: negative
 occurrences, functors that are not polynomial such as `Finset`, parameters that later types depend
 on, fields whose type depends on a recursive field, non-uniform parameters, and a `PolyIso` without
-its `PolyMap`. The section on `mixed_mutual` is gone with the command, removed pending a
-redesign. -/
+its `PolyMap`. Blocks that mix `data` and `codata` (`mixed_mutual`) are in
+`Sketch/MixedTour.lean`: their runs inside are declared open in the outer types and nested
+through by the instances generated here, so the limits of sections 10 to 12 are theirs too
+(sections 10 to 12 there). -/
 
 /-! ### 9. Missing instances
 
@@ -740,7 +742,9 @@ Such a parameter cannot vary yet, even though the field is positive in both. The
 need positions of both kinds, and the generator takes a field as one or the other. So `Str` of
 section 4 can be nested through, and the same stream as a pair cannot; neither can `Tm` of
 section 1, because of `f : Tm α ⊕ α`. Splitting the field is the way out when the type allows
-it. -/
+it. A `mixed_mutual` block with a field `Tree α × Forest α` in the inner run stops here: its
+parameter for the trees is in a field with the forests themselves (`Sketch/MixedTour.lean`,
+section 11). -/
 
 codata PairStr (α : Type u)
   | mk (p : α × PairStr α)
@@ -757,7 +761,10 @@ data ThroughPairStr
 
 Here is what happens with `p : α × β`: both parameters count as constant, so nothing is
 generated for them, silently, and neither `P2 T Nat` nor `P2 Nat T` can be nested through. The
-reason is that a field is presented in one hole at a time. -/
+reason is that a field is presented in one hole at a time. A `mixed_mutual` block with a
+parameter, in which a run mentions a run two levels out, stops here: the run between gets a
+field `C.Open α X`, with no recursion of its own, where only `X` needs to vary
+(`Sketch/MixedTour.lean`, section 12). -/
 
 data P2 (α β : Type u)
   | mk (p : α × β)

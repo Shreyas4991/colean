@@ -3,8 +3,8 @@ import Colean.Gen.Command
 /-!
 # The `codata` command
 
-Current scope: parameters, a single type or a mutual block (`MutualCmd.lean`), any number of
-indices. Constructor
+Current scope: parameters, a single type, a mutual block or a mixed block of `codata` and `data`
+declarations (`MutualCmd.lean`), any number of indices. Constructor
 binders may be explicit or implicit; recursive arguments may be plain (`t : T params idx`),
 under a telescope of arrows (`f : (y₁ : B₁) → … → Bₙ → T params idx`), dependent or not, where
 the domains may depend on the constructor's own data and the index on the bound variables, or

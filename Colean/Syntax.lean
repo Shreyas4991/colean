@@ -4,7 +4,8 @@ import Lean
 # The syntax of the commands
 
 The `codata` and `data` declarations, elaborated by `CodataCmd.lean` and `DataCmd.lean` through
-the generators of `Gen/`, and read by the blocks of `MutualCmd.lean`.
+the generators of `Gen/`, and read by the blocks of `MutualCmd.lean`, which elaborates the
+`mixed_mutual` blocks too.
 -/
 
 open Lean Parser.Term
@@ -24,6 +25,11 @@ syntax (name := codataCmd) "codata " ident (ppSpace bracketedBinder)* (" : " ter
 type, or family, as a subtype of `Raw`. -/
 syntax (name := dataCmd) "data " ident (ppSpace bracketedBinder)* (" : " term)?
   codataCtor* : command
+
+/-- `mixed_mutual … end`: a block of `codata` and `data` declarations nested in the order written,
+the first outermost (`MutualCmd.lean`). -/
+syntax (name := mixedMutualCmd) "mixed_mutual" (ppLine (codataCmd <|> dataCmd))+
+  ppDedent(ppLine "end") : command
 
 /-- The binders of a declaration are its interface: the unused-variables linter skips them, as
 it does for `inductive`. -/

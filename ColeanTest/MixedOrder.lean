@@ -6,10 +6,11 @@ Directories and entries: a directory is a finite list of entries; an entry has a
 contents (a directory) and its next version, forever. Each type mentions the other and itself,
 so the system is cyclic and its two nested readings are different types:
 
-* codata outer, the entries written first: `Dir X = List X` and `Entry = ν E. α × Dir E × E`.
-  The nesting of directories may be infinite: an entry may contain itself (`Entry.loop`).
+* codata outer, the entries written first: `Dir X = μ D. 1 + X × D` and
+  `Entry = ν E. α × Dir E × E`. The nesting of directories may be infinite: an entry may contain
+  itself (`Entry.loop`).
 * data outer, the directories written first: `EntryB X = ν E. α × X × E`, a version chain, and
-  `DirB = μ D. List (EntryB D)`. The nesting of directories is well-founded (`DirB.acc`); only
+  `DirB = μ D. 1 + EntryB D × D`. The nesting of directories is well-founded (`DirB.acc`); only
   the version chains are infinite.
 
 The same two declarations in the two orders of a `mixed_mutual` block. -/
@@ -17,6 +18,8 @@ The same two declarations in the two orders of a `mixed_mutual` block. -/
 universe u
 
 namespace OrderTest
+
+open Codata
 
 noncomputable section
 
@@ -30,19 +33,23 @@ data Dir (α : Type u)
   | cons (e : Entry α) (d : Dir α)
 end
 
-#check @Dir.cons
-#check @Entry.mk
+/-- info: @Dir.cons : {α : Type u_1} → Entry α → Dir α → Dir α -/
+#guard_msgs in #check @Dir.cons
+/-- info: @Entry.mk : {α : Type u_1} → α → Dir α → Entry α → Entry α -/
+#guard_msgs in #check @Entry.mk
 
 /-- An entry whose only content is itself, in every version: an infinite nesting. -/
 def Entry.loop {α : Type u} (a : α) : Entry α :=
-  Entry.corec (S := Unit) (fun _ => .mk a (Dir.cons () Dir.nil) ()) ()
+  Entry.corec (S := Unit) (fun _ => .mk a (.cons () .nil) ()) ()
 
-theorem Entry.dtor_loop {α : Type u} (a : α) :
-    (Entry.loop a).dtor =
-      .mk a (Codata.Occ.map (Dir.occ α) (Dir.occ α) (fun _ => Entry.loop a) (Dir.cons () Dir.nil))
-        (Entry.loop a) := by
-  rw [Entry.loop, Entry.dtor_corec]
-  rfl
+theorem Entry.loop_eq {α : Type u} (a : α) :
+    Entry.loop a = .mk a (.cons (.loop a) .nil) (.loop a) := by
+  conv_lhs => rw [← Entry.ctor_dtor (Entry.loop a), Entry.loop, Entry.dtor_corec]
+  simp [Entry.loop]
+
+/-- The loop is a member of its own contents. -/
+example {α : Type u} (a : α) : ∃ d e, Entry.loop a = .mk a d e ∧ Entry.loop a ∈ d :=
+  ⟨_, _, Entry.loop_eq a, by simp⟩
 
 /-! ### Data outer -/
 
@@ -54,21 +61,32 @@ codata EntryB (α : Type u)
   | mk (name : α) (contents : DirB α) (next : EntryB α)
 end
 
--- Version chains with contents `X`: coinductive, with an occurrence structure in `X`;
--- directories nest through it.
-#check @EntryB.mk
-#check @DirB.cons
-#check @EntryB.occ
+/-- info: @EntryB.mk : {α : Type u_1} → α → DirB α → EntryB α → EntryB α -/
+#guard_msgs in #check @EntryB.mk
+/-- info: @DirB.cons : {α : Type u_1} → EntryB α → DirB α → DirB α -/
+#guard_msgs in #check @DirB.cons
 
--- The induction hypothesis holds at every position of the entry: the contents of every version.
-#check @DirB.rec
+/-! The induction hypothesis holds at every member of the entry: the contents of every version.
+-/
 
-/-- `d'` is the contents of some version of some entry of `d` (a position of the entry's
-structure). -/
+/--
+info: @DirB.rec : {α : Type u_1} →
+  {motive : DirB α → Sort u_2} →
+    motive DirB.nil →
+      ((e : EntryB α) → (d : DirB α) → ((t : DirB α) → t ∈ e → motive t) → motive d → motive (DirB.cons e d)) →
+        (t : DirB α) → motive t
+-/
+#guard_msgs in #check @DirB.rec
+/--
+info: @EntryB.mem_mk : ∀ {α : Type u_1} (name : α) (contents : DirB α) (next : EntryB α) (x : DirB α),
+  x ∈ EntryB.mk name contents next ↔ x = contents ∨ x ∈ next
+-/
+#guard_msgs in #check @EntryB.mem_mk
+
+/-- `d'` is the contents of some version of some entry of `d`. -/
 inductive DirB.Below {α : Type u} : DirB α → DirB α → Prop
-  | head (e : EntryB α (DirB α)) (d : DirB α) (q : EntryB.Pos α (Codata.Occ.toC (EntryB.occ α) e).1) :
-      DirB.Below ((Codata.Occ.toC (EntryB.occ α) e).2 q) (DirB.cons e d)
-  | tail (e : EntryB α (DirB α)) (d d' : DirB α) : DirB.Below d' d → DirB.Below d' (DirB.cons e d)
+  | head (e : EntryB α) (d d' : DirB α) : d' ∈ e → DirB.Below d' (DirB.cons e d)
+  | tail (e : EntryB α) (d d' : DirB α) : DirB.Below d' d → DirB.Below d' (DirB.cons e d)
 
 /-- Every directory is accessible: the nesting of directories is well-founded, although the
 entries are infinite objects. The constructors are not those of an inductive type, so the case
@@ -83,12 +101,26 @@ theorem DirB.acc {α : Type u} (d : DirB α) : Acc DirB.Below d := by
     refine Acc.intro _ fun d' h => ?_
     generalize hc : DirB.cons e d = c at h
     cases h with
-    | head e' d'' q =>
+    | head e' d'' _ hm =>
       obtain ⟨rfl, rfl⟩ := (DirB.cons_inj _ _ _ _).mp hc
-      exact ih_e q
+      exact ih_e _ hm
     | tail e' d'' _ h' =>
       obtain ⟨rfl, rfl⟩ := (DirB.cons_inj _ _ _ _).mp hc
       exact ih_d.inv h'
+
+/-! A fold of the directories through the entries: the step sees an entry of results, an open
+entry, whose first version's contents is the result for the contents. -/
+
+/-- The depth of the nesting along the first versions. -/
+def DirB.depth {α : Type u} (d : DirB α) : Nat :=
+  DirB.fold (S := Nat)
+    (fun | .nil => 0 | .cons e n => max n (EntryB.Open.casesOn e fun _ c _ => c + 1)) d
+
+/-- `simp` computes the fold through the codata entries: `EntryB.Open.Poly.map_mk` pushes the
+map into the first version. -/
+example {α : Type u} (a : α) (e : EntryB α) :
+    (DirB.cons (EntryB.mk a (DirB.cons (EntryB.mk a .nil e) .nil) e) .nil).depth = 2 := by
+  simp [DirB.depth]
 
 end
 
