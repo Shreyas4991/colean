@@ -44,7 +44,7 @@ info: @Menu.rec : {α : Type u_2} →
 -/
 #guard_msgs in #check @Menu.rec
 /--
-info: @Trace.corec : {α : Type u_1} → {S : Type u_2} → (S → Trace.F α S) → S → Trace α
+info: @Trace.corec : {α : Type u_2} → {S : Type u_1} → (S → Trace.F α S) → S → Trace α
 -/
 #guard_msgs in #check @Trace.corec
 /--

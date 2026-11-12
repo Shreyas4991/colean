@@ -53,6 +53,13 @@ does, implicit elsewhere):
 * a case analysis principle `T.casesOn`, registered as the `cases` eliminator for `T`, with
   its computation rules `T.casesOn_ctorᵢ` as simp lemmas.
 
+`T.ctor`, `T.bisim`, `T.F`, `T.contract` and the internals (the signature, the isomorphism and
+its laws, the model's recursor, everything under `T.Poly`) are `protected`, as `inductive`
+protects its auxiliary constructions: after `open T` they are not `bisim`, `toC`, …, only
+`T.bisim`, `T.toC` and dot notation; `protectedGen` (`Gen/Decl.lean`) has the list. The type, the
+constructors, the eliminators `T.rec`, `T.casesOn` (as Lean leaves them), `T.fold`, `T.corec`,
+`T.dtor`, and the lemmas are not protected.
+
 With indices (`codata T (params) : (i₁ : I₁) → I₂ → Type u`, constructors
 `ctorᵢ … : T params idx₁ idx₂`), the same declarations are generated in their indexed form:
 `T.F (params) (X : ∀ i₁ i₂, Type _) : ∀ i₁ i₂, Type _`, `T.F.map (f : ∀ j₁ j₂, X j₁ j₂ → Y j₁ j₂)`,

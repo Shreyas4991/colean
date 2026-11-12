@@ -16,7 +16,8 @@ the aliases. Before them, the declared sorts with a universe are checked against
 (`checkSorts`). Each declaration is checked by the kernel as it is added, so a failure stops the
 command there, and the state is restored: a failed command declares nothing. Each step has its
 own heartbeat budget. Then, separately, the derived instances (step 5, `Gen/Derive.lean`), whose
-failure is only a warning.
+failure is only a warning. Last, the internals are made `protected`
+(`protectGenerated`, `Gen/Decl.lean`), as `inductive` protects its own.
 -/
 
 open Lean Elab Command
@@ -82,6 +83,9 @@ def pipeline (ctx : Ctx) (afterTypes : Ctx → TermElabM Ctx := pure) : TermElab
   -- A separate step, after the type is complete: it cannot fail the declaration, unless it is
   -- an open run of a mixed block that an outer run nests through.
   ctx.deriveInstances
+  -- Last, the internals made `protected` (`protectedGen`).
+  let tys := ctx.types.map (·.name)
+  protectGenerated (tys.push ctx.name) (tys ++ ctx.ctors.map ctx.tCtor)
   return ctx
 
 /-- Run `x`; on failure, restore the state and rethrow: a failed command declares nothing. The

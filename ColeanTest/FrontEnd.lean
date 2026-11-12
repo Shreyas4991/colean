@@ -5,10 +5,11 @@ import Colean.MutualCmd
 Universes left to the command become universe parameters `u_1`, … (`Type _`, `Sort _`, an
 auto-bound `α`, section variables), and the constructors may fix them. Parameters keep the binder
 annotations the user wrote, and the types of a block must agree on them. The recursors have their
-motive's universe first. A default value or tactic is on the constructor only. Injectivity is
+motive's universe first, as does every declaration with a motive or a state, named `u` when free
+(`T.fold.{u, u_1}`). A default value or tactic is on the constructor only. Injectivity is
 stated as `injEq` is, with `HEq` where the two sides' types differ. Types with dotted names may
 form a block. A single index that is a proposition is reported at the index. A constructor has
-the declaration ranges of its own syntax. -/
+the declaration ranges of its own syntax. The internals are `protected`. -/
 
 namespace FrontEndTest
 
@@ -74,13 +75,55 @@ example : AB3 Nat := .mk 1 .nil
 
 example : CS Unit Nat := CS.corec (S := Unit) (fun _ => .mk 0 fun _ => ()) ()
 
-/-! ### The recursor's universes: the motive's first, as in `inductive` -/
+/-! ### The recursor's universes: the motive's first, as in `inductive`
+
+So for every declaration with a motive or a state: its universe first, named `u` when the type
+has no universe `u`, else the first of `u_1`, `u_2`, … it has not. -/
 
 /-- `AB3.rec.{2, 0}` is the recursor into `Sort 2` of `AB3.{0}`, as `List.rec.{2, 0}` is. -/
 example : AB3.{0} Nat → Type := AB3.rec.{2, 0} (fun _ _ _ => Unit) Unit
 
 example : AB3.{0} Nat → Type := fun t =>
   AB3.casesOn.{2, 0} (motive := fun _ => Type) t (fun _ _ => Unit) Unit
+
+/-- `AB3.fold.{1, 0}` folds `AB3.{0}` into `Type`. -/
+example : AB3.{0} Nat → Type := AB3.fold.{1, 0} fun | .mk _ _ => Unit | .nil => Unit
+
+/-- `CS.corec.{0, 1, 0}` unfolds a state in `Type` into `CS.{1, 0}`. -/
+example : CS.{1, 0} Unit Nat := CS.corec.{0, 1, 0} (S := Unit) (fun _ => .mk 0 fun _ => ()) ()
+
+/--
+info: FrontEndTest.AB3.rec.{u, u_1} {α : Type u_1} {motive : AB3 α → Sort u}
+  (mk : (a : α) → (t : AB3 α) → motive t → motive (AB3.mk a t)) (nil : motive AB3.nil) (t : AB3 α) : motive t
+-/
+#guard_msgs in #check AB3.rec
+
+/-- info: FrontEndTest.AB3.fold.{u, u_1} {α : Type u_1} {S : Type u} (a : AB3.F α S → S) (t : AB3 α) : S -/
+#guard_msgs in #check AB3.fold
+
+/--
+info: FrontEndTest.CS.corec.{u, u_1, u_2} {α : Sort u_1} {β : Type u_2} {S : Type u} (c : S → CS.F α β S) (s : S) : CS α β
+-/
+#guard_msgs in #check CS.corec
+
+-- With a universe `u` of its own, the motive's is `u_1`; with `u` and `u_1`, `u_2`.
+data UU (α : Type u)
+  | mk (a : α)
+
+/--
+info: FrontEndTest.UU.rec.{u_1, u} {α : Type u} {motive : UU α → Sort u_1} (mk : (a : α) → motive (UU.mk a)) (t : UU α) :
+  motive t
+-/
+#guard_msgs in #check UU.rec
+
+data UU₁ (α : Type u_1) (β : Type u)
+  | mk (a : α) (b : β)
+
+/--
+info: FrontEndTest.UU₁.casesOn_mk.{u_2, u_1, u} {α : Type u_1} {β : Type u} {motive : UU₁ α β → Sort u_2} (a : α) (b : β)
+  (mk : (a : α) → (b : β) → motive (UU₁.mk a b)) : UU₁.casesOn (UU₁.mk a b) mk = mk a b
+-/
+#guard_msgs in #check UU₁.casesOn_mk
 
 /-! ### Binder annotations of the parameters -/
 
@@ -340,6 +383,43 @@ end
 
 /-- info: @NG.cons : {α : Type u_1} → NF α → NG α -/
 #guard_msgs in #check @NG.cons
+
+/-! ### Protected declarations
+
+The internals are `protected`, as `inductive` protects its auxiliary constructions: after `open T`
+their short names do not resolve, while the full names and dot notation do. The eliminators `rec`,
+`casesOn` (as Lean leaves them), `fold`, `corec` and `dtor` are not protected. -/
+
+data PT
+  | leaf
+  | node (l r : PT)
+
+section
+open PT
+
+example : PT → Nat := rec (motive := fun _ => Nat) 1 (fun _ _ a b => a + b + 1)
+
+example : PT → Nat := fold fun _ => 0
+
+/-- error: Unknown identifier `toC` -/
+#guard_msgs in #check toC
+
+/-- The full names, dot notation and the constructors. -/
+def PT.size (t : PT) : Nat :=
+  PT.rec (motive := fun _ => Nat) 1 (fun _ _ a b => a + b + 1) t
+
+example (t : PT) : Nat := t.fold fun _ => 0
+
+example : PT := node leaf (node leaf leaf)
+
+example : (node leaf leaf).size = 3 := by simp [PT.size, PT.rec_node, PT.rec_leaf]
+
+example (t : PT) : 0 < t.size := by
+  induction t using PT.rec with
+  | leaf => simp [PT.size, PT.rec_leaf]
+  | node l r _ _ => simp [PT.size, PT.rec_node]
+
+end
 
 /-! ### Declaration ranges: a constructor's own syntax, its name selected -/
 

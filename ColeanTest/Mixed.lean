@@ -35,7 +35,7 @@ single `data` declaration with `Tree α` for its trees. -/
 /-- info: @Forest.nil : {α : Type u_1} → Forest α -/
 #guard_msgs in #check @Forest.nil
 /--
-info: @Tree.corec : {α : Type u_1} → {S : Type u_2} → (S → Tree.F α S) → S → Tree α
+info: @Tree.corec : {α : Type u_2} → {S : Type u_1} → (S → Tree.F α S) → S → Tree α
 -/
 #guard_msgs in #check @Tree.corec
 /--
@@ -57,7 +57,7 @@ info: @Forest.rec : {α : Type u_2} →
 -/
 #guard_msgs in #check @Forest.rec
 /--
-info: @Forest.fold : {α : Type u_1} → {S : Type u_2} → (Forest.F α S → S) → Forest α → S
+info: @Forest.fold : {α : Type u_2} → {S : Type u_1} → (Forest.F α S → S) → Forest α → S
 -/
 #guard_msgs in #check @Forest.fold
 /--
@@ -69,7 +69,7 @@ info: @Forest.casesOn : {α : Type u_2} →
 /-- info: @Forest.F.cons : {α : Type u_1} → {X : Type u_2} → Tree α → X → Forest.F α X -/
 #guard_msgs in #check @Forest.F.cons
 /--
-info: @Forest.fold_cons : ∀ {α : Type u_1} {S : Type u_2} (a : Forest.F α S → S) (t : Tree α) (f : Forest α),
+info: @Forest.fold_cons : ∀ {α : Type u_2} {S : Type u_1} (a : Forest.F α S → S) (t : Tree α) (f : Forest α),
   Forest.fold a (Forest.cons t f) = a (Forest.F.cons t (Forest.fold a f))
 -/
 #guard_msgs in #check @Forest.fold_cons

@@ -32,7 +32,7 @@ info: @Forest.cons : {α : Type u_1} → {β : Type u_2} → Tree α β → Fore
 -/
 #guard_msgs in #check @Forest.cons
 /--
-info: @Forest.fold : {α : Type u_1} → {β : Type u_2} → {S : Type u_3} → (Forest.F α β S → S) → Forest α β → S
+info: @Forest.fold : {α : Type u_2} → {β : Type u_3} → {S : Type u_1} → (Forest.F α β S → S) → Forest α β → S
 -/
 #guard_msgs in #check @Forest.fold
 -- The open forests, with the parameter for the trees at its own universe (the universe of a type

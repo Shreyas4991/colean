@@ -782,6 +782,14 @@ def withCtx (decls : Array DeclStx) (ref : Syntax) (vars : Array Expr) (k : Ctx 
     { r := mx.r, xs, need, xLevels, closedNames := mx.runs[mx.r]!.closedNames
       outerNames := need.map (mx.runs[·]!.closedNames[0]!)
       required := need.map (mx.runs[mx.r]!.nestedBy.contains ·) : MixCtx }
+  -- The user's universes are those the declarations mention, as the universe parameters of an
+  -- inductive type are: a universe in scope that they do not mention is free for the generated
+  -- declarations (`Ctx.motiveLevels`).
+  let mut mentionedLvls : CollectLevelParams.State := {}
+  for p in params do mentionedLvls := collectLevelParams mentionedLvls (← inferType p)
+  for s in ownSorts do mentionedLvls := collectLevelParams mentionedLvls s
+  for (_, _, ty, _) in ctors do mentionedLvls := collectLevelParams mentionedLvls ty
+  let userLevels := userLevels.filter mentionedLvls.params.contains
   let ctx0 : Ctx :=
     { b with co, name, ref, userLevels := userLevels ++ xLevels.toList, nVars := vars.size, idx,
              J, Jlvl, ctors := #[], written := checked, mix? := mixCtx? }

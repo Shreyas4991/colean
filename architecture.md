@@ -19,7 +19,7 @@ file of theory and one generator file.
 Theory, in dependency order:
 
 - `Raw.lean`: the general type `Raw I L := List I → Option L` (the model's carrier).
-- `PolyIso.lean`: the user interface for nesting: `PolyIso` and `PolyMap` (and `IPolyIso`, `IPolyMap` for functors on families) say that a functor is isomorphic to a polynomial functor, and `PolyIso.Mem` (`IPolyIso.Mem`, at an index) says what the members of a value are. Instances for constants, the identity, `List`, `Option`, `Array`, and for products, sums, functions, dependent pairs and composites of functors with instances, functors on families among them, with `simp` lemmas for membership through all of them (through a sum at any value, `mem_sum`). Depends on Mathlib only.
+- `PolyIso.lean`: the user interface for nesting: `PolyIso` and `PolyMap` (and `IPolyIso`, `IPolyMap` for functors on families) say that a functor is isomorphic to a polynomial functor, and `PolyIso.Mem` (`IPolyIso.Mem`, at an index) says what the members of a value are. Instances for constants, the identity, `List`, `Option`, `Array`, and for products, sums, functions, dependent pairs and composites of functors with instances, functors on families among them, with `simp` lemmas for membership through all of them (through a sum at any value, `mem_sum`), and for a property of every member, or of some member, at any index, rewritten before the membership inside (`simp ↓`, `IPolyIso.forall_mem_prod`, `exists_mem_compC`, …) so that the index and the member are taken away at the holes (`forall_eq_heq_imp`, `exists_eq_heq_and`, …). Depends on Mathlib only.
 - `Framework.lean`: `Codata.Rel`, `Codata.Contract`, `Data.All`, `Data.Contract` and every theorem that follows from a contract alone. Depends on Mathlib only.
 - `Model/Cotype.lean`: signatures, the container functor `Obj`, the encoding, the greatest fixpoint `IsWf`, `Cotype`, its contract pieces and the transport theorems to a functor `F ≃ Obj`.
 - `Model/Intype.lean`: the least fixpoint `IsFin`, `Intype`, the dependent recursor by well-founded recursion, fold, and the transports.
@@ -40,7 +40,7 @@ Generators, on `Expr`, in dependency order. `Syntax.lean` holds the command synt
 - `Gen/Framework.lean`: step 3.
 - `Gen/Extras.lean`: step 2b (`T.recPos`, `T.rec`), and the instance of an occurrence structure (`isoOf`).
 - `Gen/Surface.lean`: step 4 (constructors and their lemmas, `casesOn`, `rec_cᵢ`, `fold_cᵢ`; in a block, the types `Tₘ`, the aliases and, for `data`, the recursors `Tₘ.rec` per type).
-- `Gen/Derive.lean`: step 5, separate from the pipeline (see below).
+- `Gen/Derive.lean`: step 5, separate from the pipeline (see below), in parts under `Gen/Derive/`, each on the ones before: the holes and the structures of the fields (`Holes.lean`), the presentation (`Pres.lean`), the layer `toL`, `ofL` and its laws (`Layer.lean`), the fixpoint and the instances (`Fix.lean`), the `simp` lemmas (`Simp.lean`); `Derive.lean` runs them.
 - `Gen/Command.lean`: the pipeline. `CodataCmd.lean`, `DataCmd.lean`: the commands; `MutualCmd.lean`: `mutual` blocks of them, and `mixed_mutual` blocks.
 - `Gen/Mixed.lean`: a `mixed_mutual` block: its runs, the pipeline on each, the closed types of the runs inside, their membership instances, and their interface restated at the closed types.
 
@@ -90,6 +90,25 @@ on the shape, `rel_ofC` by cases on `F.Rel` after writing the layers as `toC a`.
 - The framework never mentions a model, a signature or `Raw`; the model never mentions a declaration; the surface never proves anything.
 - A nested argument enters the model as a shape with positions; the user-facing `F` keeps its type.
 - Some generated proofs need the definitional unfolding of Lean before 4.34 (`withUnfolding`, around those proofs only): a term of the signature is the expected one only after unfolding.
+
+## Protected names
+
+As `inductive` protects its auxiliary constructions (`recOn`, `noConfusion`, `below`, `brecOn`,
+`ctorIdx`, …, which the inductive types generated here, `T.F`, `T.Shape`, `T.B`, `T.F.Rel`, get
+from it), the commands protect, relative to a type, a block or an open type `T`: `T.ctor`,
+`T.bisim`, `T.F`, `T.contract`; the internals `T.Shape`, `T.B`, `T.Ix`, `T.ShapeP`, `T.idx`, `T.sig`, `T.toC`, `T.ofC`, `T.ofC_toC`,
+`T.toC_ofC`, `T.ofC_map`, `T.rel_ofC`, `T.recPos`, `T.recAux`, `T.recPos_ctor`, `T.fold_ctor`,
+`T.casesOnAux`, `T.casesOn_ctor`; everything under `T.Poly` (step 5); and the open types `Tₘ.Open`
+of a mixed block. After `open T` these are not `toC`, `bisim`, …, only `T.toC`, `T.bisim`. The
+types, the constructors, the eliminators `T.rec`, `T.casesOn` (which Lean leaves unprotected too)
+and `T.fold`, `T.corec`, `T.dtor`, and the user-facing lemmas (`T.cᵢ_inj`, `T.cᵢ_ne_cⱼ`, `T.rec_cᵢ`,
+`T.fold_cᵢ`, `T.casesOn_cᵢ`, `T.dtor_cᵢ`, `T.ctor_cᵢ`, `T.dtor_corec`, `T.corec_eq`,
+`T.corec_unique`, `T.fold_eq`, `T.fold_unique`, `T.ctor_dtor`, `T.dtor_ctor`, `T.ctor_injective`,
+the declarations under `T.F`) are not, as Lean protects neither constructors nor `inj`/`injEq`.
+The list is `protectedGen` (`Gen/Decl.lean`), applied once the pipeline has declared everything,
+step 5 included (`protectGenerated`, at the end of `pipeline`, and for the closed types of a
+mixed block at the end of `elabMixed`), so protection changes no generated statement, and the
+generators refer to everything by its full name anyway.
 
 ## Recursors
 

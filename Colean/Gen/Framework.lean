@@ -84,7 +84,7 @@ def genCorecLemmas : TermElabM Unit := do
   let L ← ctx.tLvl
   let T ← ctx.tFam
   let tPk ← ctx.packFam T
-  let fresh := ctx.freshLevels 1
+  let fresh := ctx.motiveLevels
   let wS := ctx.holeLevel (.param fresh[0]!)
   withLocalDecl (← ctx.userName `S) .implicit (← ctx.famType wS) fun S => do
   let FS ← ctx.fFam wS S
@@ -124,7 +124,7 @@ def genCorecLemmas : TermElabM Unit := do
       ctx.appAt ctx.ctor_dtor (← ctx.projs p) #[t]
     let value ← mkAppOptM ``Codata.corec_eq_of (#[← ctx.ixp, tPk, Sp, FSp, FTp, dtor, ctor, corec,
       map, dtor_corec, ctor_dtor, ← ctx.uncurryN c 1, ← ctx.packI, s].map some)
-    addThm ctx.corec_eq (← ctx.levelParamsOf fresh #[type]) type (← mkLambdaFVars xs value)
+    addThm ctx.corec_eq (← ctx.elimLevelParamsOf fresh #[type]) type (← mkLambdaFVars xs value)
       ctx.ref
   -- `corec_unique`
   withLocalDeclD `h (← ctx.famFn S T) fun h => do
@@ -168,7 +168,7 @@ def genCorecLemmas : TermElabM Unit := do
   let value ← mkAppOptM ``Codata.corec_unique_of (#[← ctx.ixp, tPk, Sp, FSp, FTp, dtor, corec, map,
     rel, bisim, dtor_corec, rel_map, ← ctx.uncurryN c 1, ← ctx.uncurryN h 1,
     ← ctx.uncurryN hh 1, ← ctx.packI, s].map some)
-  addThm ctx.corec_unique (← ctx.levelParamsOf fresh #[type]) type (← mkLambdaFVars xs value)
+  addThm ctx.corec_unique (← ctx.elimLevelParamsOf fresh #[type]) type (← mkLambdaFVars xs value)
     ctx.ref
 
 /-- `fold_eq`, `fold_unique`, for a family in any universe. -/
@@ -177,7 +177,7 @@ def genFoldLemmas : TermElabM Unit := do
   let T ← ctx.tFam
   let tPk ← ctx.packFam T
   let fPk ← ctx.fPk L
-  let fresh := ctx.freshLevels 1
+  let fresh := ctx.motiveLevels
   let wS := ctx.holeLevel (.param fresh[0]!)
   withLocalDecl (← ctx.userName `S) .implicit (← ctx.famType wS) fun S => do
   let FS ← ctx.fFam wS S
@@ -216,7 +216,7 @@ def genFoldLemmas : TermElabM Unit := do
       ctx.appAt ctx.ctor_dtor (← ctx.projs p) #[t]
     let value ← mkAppOptM ``Data.fold_eq_of (#[← ctx.ixp, tPk, Sp, FSp, FTp, dtor, ctor, fold, map,
       fold_ctor, ctor_dtor, ← ctx.uncurryN a 1, ← ctx.packI, t].map some)
-    addThm ctx.fold_eq (← ctx.levelParamsOf fresh #[type]) type (← mkLambdaFVars xs value) ctx.ref
+    addThm ctx.fold_eq (← ctx.elimLevelParamsOf fresh #[type]) type (← mkLambdaFVars xs value) ctx.ref
   -- `fold_unique`
   withLocalDeclD `h (← ctx.famFn T S) fun h => do
   let hhTy ← withLocalDeclD `y (← ctx.fAt L T ctx.idx) fun y => do
@@ -242,7 +242,7 @@ def genFoldLemmas : TermElabM Unit := do
   let value ← mkAppOptM ``Data.fold_unique_of (#[← ctx.ixp, tPk, Sp, FSp, fPk, map, ctor,
     induction, fold, mapS, fold_ctor, mapS_map, ← ctx.uncurryN a 1, ← ctx.uncurryN h 1,
     ← ctx.uncurryN hh 1, ← ctx.packI, t].map some)
-  addThm ctx.fold_unique (← ctx.levelParamsOf fresh #[type]) type (← mkLambdaFVars xs value) ctx.ref
+  addThm ctx.fold_unique (← ctx.elimLevelParamsOf fresh #[type]) type (← mkLambdaFVars xs value) ctx.ref
 
 /-- Step 3. -/
 def genFramework : TermElabM Unit := do

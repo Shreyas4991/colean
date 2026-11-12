@@ -27,7 +27,7 @@ def CoNat.ofNat (n : Nat) : CoNat :=
 theorem CoNat.top_or_ofNat (n : CoNat) : n = .top ∨ ∃ m, n = .ofNat m := by
   suffices (∀ m, n ≠ .ofNat m) → n = .top by grind
   intro h
-  apply bisim (fun lhs rhs => (∀ m, lhs ≠ .ofNat m) ∧ rhs = .top)
+  apply CoNat.bisim (fun lhs rhs => (∀ m, lhs ≠ .ofNat m) ∧ rhs = .top)
   · rintro n _ ⟨h, rfl⟩
     conv => arg 3; rw [top_unfold]; simp
     cases n with

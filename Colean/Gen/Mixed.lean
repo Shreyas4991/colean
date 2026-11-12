@@ -23,6 +23,8 @@ declared, the runs inside the outermost one open and then closed, as `MutualCmd.
    its public interface, `Tₘ.Open.d` at the closed types as `Tₘ.d`, with its attributes; the
    statements are those of `Tₘ.Open.d` at the closed families, written with the closed
    declarations (`foldClosed`), the values `Tₘ.Open.d` itself.
+7. The internals of the closed types made `protected`, and the open types
+   `Tₘ.Open` (`protectGenerated`); those of each run by the pipeline already.
 
 All of it runs in one `TermElabM` run, and a failure anywhere restores the state: a failed block
 declares nothing.
@@ -420,5 +422,10 @@ def elabMixed (decls : Array DeclStx) (ref : Syntax) : CommandElabM Unit :=
     closed ← step (restateRun decls runs[j]! np xLevels[j]! fams closed)
   step (memLemmas decls runs closed)
   addMixedDeclInfo decls runs
+  -- The internals of the closed types, and the open types, `protected`.
+  for run in runs.extract 1 runs.size do
+    let ctors := (run.decls.zip run.closedNames).flatMap fun (d, n) =>
+      decls[d]!.ctors.map fun c => n ++ c.raw[1].getId
+    protectGenerated (run.closedNames.push run.closedFam) (run.closedNames ++ ctors)
 
 end Codata.Gen

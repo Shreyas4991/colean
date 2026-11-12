@@ -45,11 +45,14 @@ exist, the statements are written with the closed types of the runs inside (`clo
 `x ∈ c` (`MemRule`).
 
 *Universes.* A generated declaration has the user's universes that occur in it, in the order
-declared, then universes of its own named `u_1`, `u_2`, … (`freshLevels`), as Lean names them; an
-eliminator, `T.rec` or `T.casesOn`, has its motive's universe first, as in Lean
-(`elimLevelParamsOf`). The user's universes include those the headers leave to the command
-(`Type _`, an auto-bound `Sort _`), which become universe parameters `u_1`, … as with `inductive`.
-`constWith` uses a generated constant at given universes for its own ones, whatever their order.
+declared, then universes of its own named `u_1`, `u_2`, … (`freshLevels`), as Lean names them. A
+declaration with a motive or a state (`T.rec`, `T.casesOn`, `T.recPos`, `T.fold`, `T.corec`, and
+their rules) has the universe of the motive or the state first, named as Lean names that of
+`T.rec`: `u`, or else the first of `u_1`, `u_2`, … that the user's universes leave free
+(`motiveLevels`, `elimLevelParamsOf`). The user's universes include those the headers leave to the
+command (`Type _`, an auto-bound `Sort _`), which become universe parameters `u_1`, … as with
+`inductive`. `constWith` uses a generated constant at given universes for its own ones, whatever
+their order.
 -/
 
 open Lean Meta Elab Term
@@ -391,8 +394,8 @@ structure Ctx extends Block where
   name : Name
   /-- The declaration, for errors and declaration ranges. -/
   ref : Syntax
-  /-- The user's universes, in the order declared, then those the headers left to the command,
-  now universe parameters `u_1`, … (`headerLevelParams`). -/
+  /-- The user's universes that the declarations mention, in the order declared, then those the
+  headers left to the command, now universe parameters `u_1`, … (`headerLevelParams`). -/
   userLevels : List Name
   /-- How many of the parameters, at the front, are section variables. -/
   nVars : Nat := 0
@@ -518,7 +521,8 @@ def nestAt (n : Nest) (lvl : Level) (σ : Expr → Expr) : Expr :=
 /-! ### Names -/
 
 /-- The generated declaration `T.s`. Inside its own namespace `T.T` would shadow the type `T`,
-so a generated name equal to the type's name is primed (`B.B'` for `codata B`). -/
+so a generated name equal to the type's name is primed (`B.B'` for `codata B`). Which of these
+names are `protected` is `protectedGen` (`Gen/Decl.lean`). -/
 def gen (s : String) : Name :=
   let last := match ctx.name with
     | .str _ s' => s'
@@ -609,13 +613,19 @@ def userName (n : Name) : TermElabM Name := do
 /-- `n` universe names for a declaration, besides the user's. -/
 def freshLevels (n : Nat) : List Name := freshLevelNames n ctx.userLevels
 
+/-- The universe name of a motive or a state, as Lean's `inductive` names the motive's universe
+of `T.rec`: `u`, unless the user's universes have it, else the first of `u_1`, `u_2`, … they do
+not have. -/
+def motiveLevels : List Name :=
+  if ctx.userLevels.contains `u then freshLevelNames 1 ctx.userLevels else [`u]
+
 /-- The universe parameters of a declaration made of `es`, with the added universes `fresh`. -/
 def levelParamsOf (fresh : List Name) (es : Array Expr) : MetaM (List Name) :=
   Gen.levelParamsOf ctx.userLevels fresh es
 
-/-- The universe parameters of an eliminator made of `es`, whose motive is in the added universe
-`fresh`: that one first, then the user's, as Lean orders those of `T.rec` and `T.casesOn`
-(`List.rec.{u_1, u}`). -/
+/-- The universe parameters of a declaration made of `es` with a motive or a state in the added
+universe `fresh`: that one first, then the user's, as Lean orders those of `T.rec` and
+`T.casesOn` (`List.rec.{u_1, u}`). -/
 def elimLevelParamsOf (fresh : List Name) (es : Array Expr) : MetaM (List Name) := do
   let us ← ctx.levelParamsOf fresh es
   return fresh.filter us.contains ++ us.filter (!fresh.contains ·)

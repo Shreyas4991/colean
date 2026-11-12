@@ -32,7 +32,7 @@ info: @Rose.rec : {α : Type u_2} →
 #check @Rose.rec
 
 /--
-info: @Rose.rec_node : ∀ {α : Type u_1} {motive : Rose α → Sort u_2} (a : α) (cs : List (Rose α))
+info: @Rose.rec_node : ∀ {α : Type u_2} {motive : Rose α → Sort u_1} (a : α) (cs : List (Rose α))
   (node : (a : α) → (cs : List (Rose α)) → ((t : Rose α) → PolyIso.Mem (fun X => List X) t cs → motive t) → motive (Rose.node a cs)),
   Rose.rec node (Rose.node a cs) = node a cs fun t _ => Rose.rec node t
 -/

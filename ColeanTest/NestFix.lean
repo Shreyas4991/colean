@@ -24,7 +24,9 @@ One section per fix:
 9. the messages of step 5: a short reason, and a message when no parameter may vary;
 10. the eta `PolyMap` across universes for a parameter in `Type (u + 1)`;
 11. no disjunct for the members in the parameter of a field without it, and generated binders
-    unlike the arguments. -/
+    unlike the arguments;
+12. `simp` takes the index and the member of a hypothesis or a rule by `IPolyIso.Mem` away at
+    the holes, also through a list of pairs at one index (`List (T n × T n)`). -/
 
 universe u v
 
@@ -183,7 +185,8 @@ example {α : Type} (P : ∀ n, FS₃ α n → Prop) (h0 : P 0 .z)
   | s p ih => exact hs _ p ih
 
 -- Under a list the sum is not reached by cases on the value: by `IPolyIso.Mem`, which `simp`
--- computes through the sum at any value.
+-- computes through the sum at any value, the index and the member taken away at the holes
+-- (`IPolyIso.forall_mem_compC`, `IPolyIso.forall_mem_sum`).
 data FS₄ (α : Type) : Nat → Type
   | z : FS₄ α 0
   | s {n : Nat} (p : List (FS₄ α n ⊕ FS₄ α n)) : FS₄ α (n + 1)
@@ -194,10 +197,10 @@ example {α : Type} (P : ∀ n, FS₄ α n → Prop) (h0 : P 0 .z)
     {n : Nat} (t : FS₄ α n) : P n t := by
   induction t with
   | z => exact h0
-  | s p ih =>
+  | @s n p ih =>
     simp at ih
-    exact hs _ p (fun t h => ih _ t (.inl ⟨t, h, rfl, .rfl⟩))
-      (fun t h => ih _ t (.inr ⟨t, h, rfl, .rfl⟩))
+    guard_hyp ih :ₛ (∀ a, Sum.inl a ∈ p → P n a) ∧ ∀ b, Sum.inr b ∈ p → P n b
+    exact hs _ p ih.1 ih.2
 
 -- The rules of step 5 for a nested argument at one index only after cases on its positions,
 -- under a list: by `IPolyIso.Mem`.
@@ -472,6 +475,68 @@ info: @HX.Poly.mem_mk : ∀ {H₀ : Type u_2 → Type u_1} {S : Type u_3} {R : S
 -/
 #guard_msgs(whitespace := lax) in
 #check @HX.Poly.mem_mk
+
+/-! ### 12. Quantifiers over the members at several indices
+
+`simp` takes the index and the member of a hypothesis or a rule by `IPolyIso.Mem` away at the
+holes, inside a named type constructor too (`IPolyIso.forall_mem_compC`, `exists_mem_compC`, …,
+then `IPolyIso.forall_eq_heq_imp`, `exists_eq_heq_and`, …). -/
+
+-- The recursor's hypothesis through a list of pairs at two indices.
+data FQ (α : Type u) : Nat → Type u
+  | z {n : Nat} (a : α) : FQ α n
+  | s {n : Nat} (p : List (FQ α n × FQ α (n + 1))) : FQ α (n + 2)
+
+theorem FQ.ind {α : Type u} (P : ∀ n, FQ α n → Prop) (h0 : ∀ n a, P n (.z a))
+    (hs : ∀ n (p : List (FQ α n × FQ α (n + 1))), (∀ s t, (s, t) ∈ p → P n s ∧ P (n + 1) t) →
+      P (n + 2) (.s p))
+    {n : Nat} (t : FQ α n) : P n t := by
+  induction t with
+  | z a => exact h0 _ a
+  | @s n p ih =>
+    simp at ih
+    guard_hyp ih :ₛ ∀ (s : FQ α n) (t : FQ α (n + 1)), (s, t) ∈ p → P n s ∧ P (n + 1) t
+    exact hs n p ih
+
+example (x : Nat) {n : Nat} (p : List (FQ Nat n × FQ Nat (n + 1))) :
+    PolyIso.Mem (fun X => FQ X (n + 2)) x (.s p) ↔
+      ∃ s t, (s, t) ∈ p ∧
+        (PolyIso.Mem (fun X => FQ X n) x s ∨ PolyIso.Mem (fun X => FQ X (n + 1)) x t) := by
+  simp
+
+-- The rule of membership through a list of pairs at one index (`FP` above).
+example (x : Nat) {n : Nat} (a : Nat) (p : List (FP Nat n × FP Nat n)) :
+    PolyIso.Mem (fun X => FP X (n + 1)) x (.s a p) ↔
+      x = a ∨ ∃ s t, (s, t) ∈ p ∧
+        (PolyIso.Mem (fun X => FP X n) x s ∨ PolyIso.Mem (fun X => FP X n) x t) := by
+  simp
+
+-- Through a dependent pair, a sum and a function (`FS₃` above).
+example (x : Nat) {n : Nat} (p : (k : Nat) × (FS₃ Nat n ⊕ (Fin k → FS₃ Nat n))) :
+    PolyIso.Mem (fun X => FS₃ X (n + 1)) x (.s p) ↔
+      (∃ a, p.2 = .inl a ∧ PolyIso.Mem (fun X => FS₃ X n) x a) ∨
+        ∃ b, p.2 = .inr b ∧ ∃ i, PolyIso.Mem (fun X => FS₃ X n) x (b i) := by
+  simp
+
+-- Through a sum under a list (`FS₄` above).
+example (x : Nat) {n : Nat} (p : List (FS₄ Nat n ⊕ FS₄ Nat n)) :
+    PolyIso.Mem (fun X => FS₄ X (n + 1)) x (.s p) ↔
+      (∃ a, Sum.inl a ∈ p ∧ PolyIso.Mem (fun X => FS₄ X n) x a) ∨
+        ∃ b, Sum.inr b ∈ p ∧ PolyIso.Mem (fun X => FS₄ X n) x b := by
+  simp
+
+-- Some member of a functor on families with a lemma of its own (`Both.mem`), and at holes
+-- directly.
+example {X : Bool → Type} (P : ∀ b, X b → Prop) (c : Both X) :
+    (∃ j t, IPolyIso.Mem Both j t c ∧ P j t) ↔ P false c.no ∨ P true c.yes := by
+  simp
+
+example {X : Nat → Type} (P Q : ∀ n, X n → Prop) {i k : Nat} (c : X i) (d : X k) (l : List (X i)) :
+    ((∃ j t, (i = j ∧ HEq c t) ∧ P j t) ↔ P i c) ∧
+      ((∃ j t, ((i = j ∧ HEq c t) ∨ (k = j ∧ HEq d t)) ∧ P j t) ↔ P i c ∨ P k d) ∧
+      ((∃ j t, (Q j t ∨ (i = j ∧ HEq c t)) ∧ P j t) ↔ (∃ j t, Q j t ∧ P j t) ∨ P i c) ∧
+      ((∃ j t, (∃ y, y ∈ l ∧ i = j ∧ HEq y t) ∧ P j t) ↔ ∃ y ∈ l, P i y) := by
+  simp
 
 end
 

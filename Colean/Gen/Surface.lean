@@ -199,7 +199,7 @@ def casesAuxBlock (m : Nat) (cs : Array Ctor) (g : MVarId) : TermElabM Unit := d
 def genCasesOf (m : Nat) : TermElabM Unit := do
   let L ← ctx.tLvl
   let T ← ctx.tFam
-  let fresh := ctx.freshLevels 1
+  let fresh := ctx.motiveLevels
   let v := Level.param fresh[0]!
   let ty := ctx.types[m]!
   let ref := ty.ref
@@ -214,7 +214,7 @@ def genCasesOf (m : Nat) : TermElabM Unit := do
     mkForallFVars ys (mkAppN motive (c.uidx.map σ |>.push (← ctx.tCtorApp c ys)))
   let FT ← ctx.fAt L T idx
   let ctorAt (idx : Array Expr) (y : Expr) := ctx.appAt ctx.ctor idx #[y]
-  let lvls (xs : Array Expr) := do ctx.levelParamsOf fresh xs
+  let lvls (xs : Array Expr) := do ctx.elimLevelParamsOf fresh xs
   let impl (xs : Array Expr) (stmt value : Expr) : TermElabM (Expr × Expr) :=
     withBinderInfo (ctx.params ++ uidx) .implicit do
       return (← mkForallFVars xs stmt, ← mkLambdaFVars xs value)
@@ -301,7 +301,7 @@ def genAliases : TermElabM Unit := do
   unless ctx.isBlock do return
   let L ← ctx.tLvl
   let T ← ctx.tFam
-  let fresh := ctx.freshLevels 1
+  let fresh := ctx.motiveLevels
   let wS := ctx.holeLevel (.param fresh[0]!)
   -- `Tₘ.corec`
   do
@@ -315,7 +315,7 @@ def genAliases : TermElabM Unit := do
       let value ← ctx.genAt ctx.corec [wS] (#[S, c] ++ idx ++ #[s])
       let (type, value) ← withBinderInfo (ctx.params ++ t.idx) .implicit do
         return (← mkForallFVars xs (← ctx.tyAt m t.idx), ← mkLambdaFVars xs value)
-      addDef (ctx.tyGen m "corec") (← ctx.levelParamsOf fresh #[type, value]) type value t.ref
+      addDef (ctx.tyGen m "corec") (← ctx.elimLevelParamsOf fresh #[type, value]) type value t.ref
         (reducible := true)
   -- `Tₘ.bisim`
   withLocalDeclD `R (← ctx.famRel T T) fun R => do
@@ -342,7 +342,7 @@ def genAliases : TermElabM Unit := do
 reached by dot notation, see `genAliases`). The recursors per type are `genTypeRecs`. -/
 def genDataAliases : TermElabM Unit := do
   unless ctx.isBlock do return
-  let fresh := ctx.freshLevels 1
+  let fresh := ctx.motiveLevels
   let wS := ctx.holeLevel (.param fresh[0]!)
   withLocalDecl (← ctx.userName `S) .implicit (← ctx.famType wS) fun S => do
   withLocalDeclD `a (← ctx.famFn (← ctx.fFam wS S) S) fun a => do
@@ -354,7 +354,7 @@ def genDataAliases : TermElabM Unit := do
     let value ← ctx.genAt ctx.fold [wS] (#[S, a] ++ idx ++ #[tv])
     let (type, value) ← withBinderInfo (ctx.params ++ t.idx) .implicit do
       return (← mkForallFVars xs (mkAppN S idx), ← mkLambdaFVars xs value)
-    addDef (ctx.tyGen m "fold") (← ctx.levelParamsOf fresh #[type, value]) type value t.ref
+    addDef (ctx.tyGen m "fold") (← ctx.elimLevelParamsOf fresh #[type, value]) type value t.ref
       (reducible := true)
 
 /-! ### The info tree -/
@@ -413,7 +413,7 @@ def genRecLemmas : TermElabM Unit := do
   let T ← ctx.tFam
   -- `rec_cᵢ`
   do
-    let fresh := ctx.freshLevels 1
+    let fresh := ctx.motiveLevels
     let v := Level.param fresh[0]!
     ctx.withMotive v fun motive => do
     let recAt (minors idx : Array Expr) (t : Expr) : TermElabM Expr := do
@@ -446,10 +446,10 @@ def genRecLemmas : TermElabM Unit := do
       let (type, value) ← withBinderInfo ctx.params .implicit do
         return (← mkForallFVars xs (← mkEq lhs rhs), ← mkLambdaFVars xs value)
       let n := ctx.recRuleN c
-      addThm n (← ctx.levelParamsOf fresh #[type]) type value ctx.ref
+      addThm n (← ctx.elimLevelParamsOf fresh #[type]) type value ctx.ref
       addSimp n
   -- `fold_cᵢ`
-  let fresh := ctx.freshLevels 1
+  let fresh := ctx.motiveLevels
   let wS := ctx.holeLevel (.param fresh[0]!)
   withLocalDecl (← ctx.userName `S) .implicit (← ctx.famType wS) fun S => do
   withLocalDeclD `a (← ctx.famFn (← ctx.fFam wS S) S) fun a => do
@@ -482,7 +482,7 @@ def genRecLemmas : TermElabM Unit := do
     let (type, value) ← withBinderInfo ctx.params .implicit do
       return (← mkForallFVars xs (← mkEq lhs rhs), ← mkLambdaFVars xs value)
     let n := ctx.tName' c "fold_" ""
-    addThm n (← ctx.levelParamsOf fresh #[type]) type value ctx.ref
+    addThm n (← ctx.elimLevelParamsOf fresh #[type]) type value ctx.ref
     addSimp n
 
 /-! ### `data` blocks: the recursors per type -/
@@ -532,7 +532,7 @@ constructors of each type, with the induction hypotheses by the recursors of the
 are the block-level rules `Blk.rec_cᵢ` by unfolding. -/
 def genTypeRecs : TermElabM Unit := do
   unless ctx.isBlock do return
-  let fresh := ctx.freshLevels 1
+  let fresh := ctx.motiveLevels
   let v := Level.param fresh[0]!
   ctx.withTypeMotives v fun motives M => do
   let app (idx : Array Expr) (x : Expr) : TermElabM Expr := do
@@ -569,7 +569,7 @@ def genTypeRecs : TermElabM Unit := do
     let (type, value) ← withBinderInfo ctx.params .implicit do
       return (← mkForallFVars xs stmt, ← mkLambdaFVars xs value)
     let n := ctx.tName' c "rec_" ""
-    addThm n (← ctx.levelParamsOf fresh #[type]) type value ctx.types[c.owner]!.ref
+    addThm n (← ctx.elimLevelParamsOf fresh #[type]) type value ctx.types[c.owner]!.ref
     addSimp n
 
 end Ctx

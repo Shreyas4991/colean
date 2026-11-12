@@ -95,7 +95,7 @@ def genContract : TermElabM Unit := do
       return (← mkForallFVars xs (← ctx.fAt L T ctx.idx), ← mkLambdaFVars xs value)
     addDef ctx.dtor (← ctx.levelParamsOf [] #[type, value]) type value ctx.ref
   -- `corec` and `dtor_corec`, for a state `S` in any universe.
-  let fresh := ctx.freshLevels 1
+  let fresh := ctx.motiveLevels
   let wS := ctx.holeLevel (.param fresh[0]!)
   withLocalDecl (← ctx.userName `S) .implicit (← ctx.famType wS) fun S => do
   let FS ← ctx.fFam wS S
@@ -109,7 +109,7 @@ def genContract : TermElabM Unit := do
   let xs := ctx.params ++ #[S, c] ++ ctx.idx ++ #[s]
   let (type, value) ← withBinderInfo (ctx.params ++ ctx.idx) .implicit do
     return (← mkForallFVars xs (← ctx.tAt ctx.idx), ← mkLambdaFVars xs corecC)
-  addDef ctx.corec (← ctx.levelParamsOf fresh #[type, value]) type value ctx.ref
+  addDef ctx.corec (← ctx.elimLevelParamsOf fresh #[type, value]) type value ctx.ref
   let corecAt (idx : Array Expr) (s : Expr) : MetaM Expr := do
     ctx.genAt ctx.corec [wS] (#[S, c] ++ idx ++ #[s])
   let dtorAt (idx : Array Expr) (t : Expr) : MetaM Expr := do
@@ -143,7 +143,7 @@ def genContract : TermElabM Unit := do
   let value ← mkAppOptM ``Codata.Signature.dtor_corec_of
     (#[σ, Sp, FSp, FTp, toC, ofCS, ofCT, map, ofC_toC, ofC_map, ← ctx.uncurryN c 1, pI, s].map some)
   let value ← mkLambdaFVars xs value
-  addThm ctx.dtor_corec (← ctx.levelParamsOf fresh #[type]) type value ctx.ref
+  addThm ctx.dtor_corec (← ctx.elimLevelParamsOf fresh #[type]) type value ctx.ref
   -- `bisim`
   withLocalDeclD `R (← ctx.famRel T T) fun R => do
   let HTy ← withLocalDeclD `x (← ctx.tAt ctx.idx) fun x => do
@@ -277,7 +277,7 @@ def genDataContract : TermElabM Unit := do
       return (← mkForallFVars xs (← ctx.tAt ctx.idx), ← mkLambdaFVars xs value)
     addDef ctx.ctor (← ctx.levelParamsOf [] #[type, value]) type value ctx.ref
   -- `fold` and `fold_ctor`, into a family `S` in any universe.
-  let fresh := ctx.freshLevels 1
+  let fresh := ctx.motiveLevels
   let wS := ctx.holeLevel (.param fresh[0]!)
   withLocalDecl (← ctx.userName `S) .implicit (← ctx.famType wS) fun S => do
   let FS ← ctx.fFam wS S
@@ -292,7 +292,7 @@ def genDataContract : TermElabM Unit := do
   let xs := ctx.params ++ #[S, a] ++ ctx.idx ++ #[t]
   let (type, value) ← withBinderInfo (ctx.params ++ ctx.idx) .implicit do
     return (← mkForallFVars xs (mkAppN S ctx.idx), ← mkLambdaFVars xs foldI)
-  addDef ctx.fold (← ctx.levelParamsOf fresh #[type, value]) type value ctx.ref
+  addDef ctx.fold (← ctx.elimLevelParamsOf fresh #[type, value]) type value ctx.ref
   let foldAt (idx : Array Expr) (t : Expr) : MetaM Expr := do
     ctx.genAt ctx.fold [wS] (#[S, a] ++ idx ++ #[t])
   let foldFn ← if ctx.k == 0 then
@@ -327,7 +327,7 @@ def genDataContract : TermElabM Unit := do
   let value ← mkAppOptM ``Codata.Signature.fold_ctor_of
     (#[σ, Sp, FSp, FTp, toCT, ofCT, ofCS, map, ofC_toC, ofC_map, ← ctx.uncurryN a 1, pI,
       y].map some)
-  addThm ctx.fold_ctor (← ctx.levelParamsOf fresh #[type]) type (← mkLambdaFVars xs value) ctx.ref
+  addThm ctx.fold_ctor (← ctx.elimLevelParamsOf fresh #[type]) type (← mkLambdaFVars xs value) ctx.ref
 
 /-- `T.contract : Data.Contract T F`, the model packaged for the framework; its `induction` is
 `Signature.induction_of` at the packed index. -/

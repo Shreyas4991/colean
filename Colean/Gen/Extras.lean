@@ -194,9 +194,7 @@ def openTFn (n : Nat) (ty : Expr) (k : Array Expr → Array Expr → TermElabM �
 indices), the occurrences being at the type. -/
 def nestToC (o x : Expr) : TermElabM Expr := do
   let T ← ctx.tFam
-  if ctx.idxed then
-    mkAppOptM ``Codata.IOcc.toC #[none, none, none, none, none, o, ← ctx.packFam T, x]
-  else mkAppOptM ``Codata.Occ.toC #[none, none, none, o, T, x]
+  ctx.occFn `toC o (← if ctx.idxed then ctx.packFam T else pure T) #[x]
 
 /-- Run `k` on a position `q` of the layer `t` of a nested argument with structure `n` (`σ` the
 substitution of the constructor's arguments), with the index arguments of the occurrence at
@@ -626,7 +624,7 @@ def genRec : TermElabM Unit := do
   let T ← ctx.tFam
   let σE ← ctx.sigE
   let fam ← ctx.modelFam
-  let fresh := ctx.freshLevels 1
+  let fresh := ctx.motiveLevels
   let v := Level.param fresh[0]!
   ctx.withMotive v fun motive => do
   -- `T.recPos` and its parts, with the hypotheses at the positions.
@@ -668,7 +666,7 @@ def genRec : TermElabM Unit := do
   let xs := ctx.params ++ #[motive] ++ minors ++ ctx.idx ++ #[y]
   let (type, value) ← withBinderInfo (ctx.params ++ ctx.idx) .implicit do
     return (← mkForallFVars xs (← body ctx.idx y), ← mkLambdaFVars xs value)
-  addDef ctx.recAux (← ctx.levelParamsOf fresh #[type, value]) type value ctx.ref
+  addDef ctx.recAux (← ctx.elimLevelParamsOf fresh #[type, value]) type value ctx.ref
   -- The instances of `rec_of` and `rec_of_ctor`.
   let FTp ← ctx.packFam (← ctx.fFam L T)
   let recAuxAt (idx : Array Expr) (y ih : Expr) : MetaM Expr := do
@@ -695,7 +693,7 @@ def genRec : TermElabM Unit := do
     let xs := ctx.params ++ #[motive] ++ minors ++ ctx.idx ++ #[t]
     let (type, value) ← withBinderInfo (ctx.params ++ ctx.idx) .implicit do
       return (← mkForallFVars xs (mkAppN motive (ctx.idx.push t)), ← mkLambdaFVars xs value)
-    addDef ctx.recPos (← ctx.levelParamsOf fresh #[type, value]) type value ctx.ref
+    addDef ctx.recPos (← ctx.elimLevelParamsOf fresh #[type, value]) type value ctx.ref
   -- `recPos_ctor`
   let recPosAt (idx : Array Expr) (t : Expr) : MetaM Expr := do
     ctx.genAt ctx.recPos [v] (#[motive] ++ minors ++ idx ++ #[t])
@@ -712,7 +710,7 @@ def genRec : TermElabM Unit := do
   let type ← withBinderInfo (ctx.params ++ ctx.idx) .implicit do mkForallFVars xs (← mkEq lhs rhs)
   let value ← mkAppOptM ``Codata.Signature.rec_of_ctor
     (#[σE, FTp, toCT, ofCT, toC_ofC, ofC_toC, motiveP, H, pI, y].map some)
-  addThm ctx.recPos_ctor (← ctx.levelParamsOf fresh #[type]) type (← mkLambdaFVars xs value)
+  addThm ctx.recPos_ctor (← ctx.elimLevelParamsOf fresh #[type]) type (← mkLambdaFVars xs value)
     ctx.ref
   -- `rec`: `recPos` at the minor premises with the hypotheses by membership.
   ctx.withMinors (·.fname) (ctx.recMinorTy motive) fun minors => do

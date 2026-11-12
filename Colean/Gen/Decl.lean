@@ -10,12 +10,13 @@ syntax: inductive types with the auxiliary constructions Lean's `inductive` adds
 (`addInductive`), definitions, all noncomputable (`addDef`), theorems with a proof term
 (`addThm`) or with a proof found by a tactic on a goal metavariable (`prove`, `proveHere`,
 `runTac`, `simpOnly`), and attributes (`addSimp`, `addAttrs`); `mkCasesOnApp`, definition by
-cases on an inductive type; and `withUnfolding`, the definitional unfolding of Lean before 4.34
-for the proofs that need it. Their inputs are closed terms: the generators build types and
-values over the free variables of the analysis (`Gen/Ctx.lean`) and close them with
-`mkForallFVars`/`mkLambdaFVars`; the universe parameters come from `levelParamsOf`. A generated
-declaration has the declaration range of the user's declaration, unless its name repeats a
-component (`addRanges`).
+cases on an inductive type; `withUnfolding`, the definitional unfolding of Lean before 4.34 for
+the proofs that need it; and the generated declarations that are `protected`, listed here only
+(`protectedGen`, applied by `protectGenerated` once a command has declared everything). Their
+inputs are closed terms: the generators build types and values over the free variables of the
+analysis (`Gen/Ctx.lean`) and close them with `mkForallFVars`/`mkLambdaFVars`; the universe
+parameters come from `levelParamsOf`. A generated declaration has the declaration range of the
+user's declaration, unless its name repeats a component (`addRanges`).
 
 Lean's elaborators do more than these helpers on purpose: definitions are not compiled
 (everything generated is noncomputable), and there are no matchers (definitions by cases use
@@ -288,6 +289,59 @@ def addThm (name : Name) (levelParams : List Name) (type value : Expr) (ref : Sy
   addDeclSync <| .thmDecl { name, levelParams, type, value }
   addRanges name ref
   enableRealizationsForConst name
+
+/-! ### Protection -/
+
+/-- The generated declarations `T.s` that are `protected`, by `s`, relative to their type `T`
+(a block `Blk`, an open type `T.Open` of a mixed block): after `open T` they are not `s`, only
+`T.s` (and `t.s` by dot notation). As Lean's `inductive` protects its auxiliary constructions
+(`recOn`, `noConfusion`, `below`, `brecOn`, `ctorIdx`, …, which the inductive types generated here
+get from it), the other generated declarations that are not user API: `ctor`, `bisim`, the
+functor `F`, `contract`; and the internals: the signature (`Shape`, `B`, `Ix`, `ShapeP`, `idx`, `sig`), the
+isomorphism and its laws (`toC`, `ofC`, `ofC_toC`, `toC_ofC`, `ofC_map`, `rel_ofC`), the model's
+recursor and its rule (`recPos`, `recAux`, `recPos_ctor`), the model's `fold_ctor`, the cases
+before the cast (`casesOnAux`, `casesOn_ctor`), and the open type `T.Open` of a mixed block.
+Everything under `T.Poly` (step 5) is protected too (`isProtectedGen`). Not protected, as with
+`inductive`: the types, the constructors `T.cᵢ`, the eliminators `rec` and `casesOn` (as Lean
+leaves them) and our `fold`, `corec`, `dtor`, and the user-facing lemmas (`T.cᵢ_inj`,
+`T.cᵢ_ne_cⱼ`, `T.rec_cᵢ`, `T.fold_cᵢ`, `T.casesOn_cᵢ`, `T.dtor_cᵢ`, `T.ctor_cᵢ`, `dtor_corec`,
+`corec_eq`, `corec_unique`, `fold_eq`, `fold_unique`, `ctor_dtor`, `dtor_ctor`, `ctor_injective`,
+and those of `T.F`). -/
+def protectedGen : List String :=
+  ["ctor", "bisim", "F", "contract",
+    "Shape", "B", "Ix", "ShapeP", "idx", "sig",
+    "toC", "ofC", "ofC_toC", "toC_ofC", "ofC_map", "rel_ofC",
+    "recPos", "recAux", "recPos_ctor", "fold_ctor", "casesOnAux", "casesOn_ctor",
+    "Open"]
+
+/-- Is `n` a generated declaration of the type (block, open type) `owner` to protect: `owner.s`
+with `s` in `protectedGen` (or `s'`, the name `owner.s` takes when `s` is the type's own name,
+`Ctx.gen`), or under `owner.Poly`? -/
+def isProtectedGen (owner n : Name) : Bool :=
+  if !owner.isPrefixOf n || owner == n then false else
+  match (n.replacePrefix owner .anonymous).components.map (·.toString (escape := false)) with
+  | [s] =>
+    let last := match owner with | .str _ l => l | _ => ""
+    protectedGen.contains s || (s == last ++ "'" && protectedGen.contains last)
+  | "Poly" :: _ :: _ => true
+  | _ => false
+
+/-- Protect the generated declarations of the types (blocks, open types) `owners` that
+`isProtectedGen` names, but for the names the user wrote, `user` (the types, the constructors).
+Run once a command has declared everything, so that protection changes no generated statement. -/
+def protectGenerated (owners user : Array Name) : CoreM Unit := do
+  let env ← getEnv
+  let mut ns : Array Name := #[]
+  for o in owners do
+    for s in protectedGen do
+      ns := ns.push (.str o s)
+      if let .str _ l := o then
+        if l == s then ns := ns.push (.str o (s ++ "'"))
+  ns := env.constants.foldStage2 (fun ns n _ =>
+    if owners.any fun o => (o ++ `Poly).isPrefixOf n then ns.push n else ns) ns
+  for n in ns do
+    if env.contains n && !user.contains n && owners.any (isProtectedGen · n) then
+      modifyEnv (addProtected · n)
 
 /-! ### Proofs by tactic -/
 

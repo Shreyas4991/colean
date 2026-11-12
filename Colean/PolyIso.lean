@@ -918,6 +918,39 @@ value: what `simp` makes of a hypothesis by membership at `F (X i)` after `mem_a
     cases hc
     exact h x hx⟩
 
+/-- A property of some member at a hole is one of its content: what `simp` makes of a member by
+membership at a hole after `mem_hole`, `∃ j t, (i = j ∧ HEq c t) ∧ P j t`. -/
+@[simp] theorem exists_eq_heq_and {X : J → Type u} {i : J} {c : X i} {P : ∀ j, X j → Prop} :
+    (∃ j, ∃ t : X j, (i = j ∧ HEq c t) ∧ P j t) ↔ P i c :=
+  ⟨fun ⟨_, _, ⟨e, hc⟩, h⟩ => by
+    subst e
+    cases hc
+    exact h, fun h => ⟨i, c, ⟨rfl, HEq.rfl⟩, h⟩⟩
+
+/-- A property of some member at a hole or elsewhere: the hole's content or another member,
+`∃ j t, ((i = j ∧ HEq c t) ∨ Q j t) ∧ P j t`. -/
+@[simp] theorem exists_eq_heq_or_and {X : J → Type u} {i : J} {c : X i}
+    {Q P : ∀ j, X j → Prop} :
+    (∃ j, ∃ t : X j, ((i = j ∧ HEq c t) ∨ Q j t) ∧ P j t) ↔ P i c ∨ ∃ j t, Q j t ∧ P j t := by
+  simp only [or_and_right, exists_or, exists_eq_heq_and]
+
+/-- The same with the hole last: `∃ j t, (Q j t ∨ (i = j ∧ HEq c t)) ∧ P j t`. -/
+@[simp] theorem exists_or_eq_heq_and {X : J → Type u} {i : J} {c : X i}
+    {Q P : ∀ j, X j → Prop} :
+    (∃ j, ∃ t : X j, (Q j t ∨ (i = j ∧ HEq c t)) ∧ P j t) ↔ (∃ j t, Q j t ∧ P j t) ∨ P i c := by
+  simp only [or_and_right, exists_or, exists_eq_heq_and]
+
+/-- A property of some member at an index through a leaf is one of some member of the leaf's
+value: what `simp` makes of a member by membership at `F (X i)` after `mem_at`,
+`∃ j t, (∃ x, Q x ∧ i = j ∧ HEq x t) ∧ P j t`. -/
+@[simp] theorem exists_exists_eq_heq_and {X : J → Type u} {i : J} {Q : X i → Prop}
+    {P : ∀ j, X j → Prop} :
+    (∃ j, ∃ t : X j, (∃ x, Q x ∧ i = j ∧ HEq x t) ∧ P j t) ↔ ∃ x, Q x ∧ P i x :=
+  ⟨fun ⟨_, _, ⟨x, hx, e, hc⟩, h⟩ => by
+    subst e
+    cases hc
+    exact ⟨x, hx, h⟩, fun ⟨x, hx, h⟩ => ⟨i, x, ⟨x, hx, rfl, HEq.rfl⟩, h⟩⟩
+
 @[simp] theorem not_mem_const (A : Type v) {X : J → Type u} (j : J) (x : X j) (c : A) :
     ¬ Mem (fun _ : J → Type u => A) j x c :=
   fun ⟨q, _⟩ => q.elim
@@ -931,6 +964,42 @@ value: what `simp` makes of a hypothesis by membership at `F (X i)` after `mem_a
     exact ⟨_, ⟨q, rfl⟩, e⟩
   · rintro ⟨_, ⟨q, rfl⟩, e⟩
     exact ⟨q, e⟩
+
+/-! A property of every member, or of some member, at any index, by the form of the functor
+(`forall_mem_prod`, `exists_mem_prod`, …): `simp` rewrites these before the membership inside
+(`simp ↓`), so that the quantifiers over the index and the member reach the holes, where the
+lemmas above take them away. Through a list of pairs at one index, `∀ j t, Mem (fun X => List
+(X n × X n)) j t c → P j t` becomes `∀ a b, (a, b) ∈ c → P n a ∧ P n b`. -/
+
+@[simp ↓] theorem forall_mem_prod [IPolyIso G₁ Sh₁ Pos₁ pidx₁] [IPolyIso G₂ Sh₂ Pos₂ pidx₂]
+    {X : J → Type u} {P : ∀ j, X j → Prop} (c : G₁ X × G₂ X) :
+    (∀ j x, Mem (fun X => G₁ X × G₂ X) j x c → P j x) ↔
+      (∀ j x, Mem G₁ j x c.1 → P j x) ∧ ∀ j x, Mem G₂ j x c.2 → P j x := by
+  simp only [mem_prod, or_imp, forall_and]
+
+@[simp ↓] theorem exists_mem_prod [IPolyIso G₁ Sh₁ Pos₁ pidx₁] [IPolyIso G₂ Sh₂ Pos₂ pidx₂]
+    {X : J → Type u} {P : ∀ j, X j → Prop} (c : G₁ X × G₂ X) :
+    (∃ j x, Mem (fun X => G₁ X × G₂ X) j x c ∧ P j x) ↔
+      (∃ j x, Mem G₁ j x c.1 ∧ P j x) ∨ ∃ j x, Mem G₂ j x c.2 ∧ P j x := by
+  simp only [mem_prod, or_and_right, exists_or]
+
+/-- Through a sum at any value: on the side the value is on, as `mem_sum`. -/
+@[simp ↓] theorem forall_mem_sum [IPolyIso G₁ Sh₁ Pos₁ pidx₁] [IPolyIso G₂ Sh₂ Pos₂ pidx₂]
+    {X : J → Type u} {P : ∀ j, X j → Prop} (c : G₁ X ⊕ G₂ X) :
+    (∀ j x, Mem (fun X => G₁ X ⊕ G₂ X) j x c → P j x) ↔
+      (∀ a, c = .inl a → ∀ j x, Mem G₁ j x a → P j x) ∧
+        ∀ b, c = .inr b → ∀ j x, Mem G₂ j x b → P j x := by
+  cases c <;> simp only [mem_sum_inl, mem_sum_inr, Sum.inl.injEq, Sum.inr.injEq, reduceCtorEq,
+    false_imp_iff, implies_true, and_true, true_and, forall_eq']
+
+/-- Through a sum at any value: on the side the value is on, as `mem_sum`. -/
+@[simp ↓] theorem exists_mem_sum [IPolyIso G₁ Sh₁ Pos₁ pidx₁] [IPolyIso G₂ Sh₂ Pos₂ pidx₂]
+    {X : J → Type u} {P : ∀ j, X j → Prop} (c : G₁ X ⊕ G₂ X) :
+    (∃ j x, Mem (fun X => G₁ X ⊕ G₂ X) j x c ∧ P j x) ↔
+      (∃ a, c = .inl a ∧ ∃ j x, Mem G₁ j x a ∧ P j x) ∨
+        ∃ b, c = .inr b ∧ ∃ j x, Mem G₂ j x b ∧ P j x := by
+  cases c <;> simp only [mem_sum_inl, mem_sum_inr, Sum.inl.injEq, Sum.inr.injEq, reduceCtorEq,
+    false_and, exists_false, or_false, false_or, exists_eq_left']
 
 end Forms
 
@@ -1010,6 +1079,30 @@ variable {A}
     Mem (fun X => Σ x, GA x X) j y z ↔ Mem (GA z.1) j y z.2 :=
   Iff.rfl
 
+@[simp ↓] theorem forall_mem_pi [∀ x, IPolyIso (GA x) (ShA x) (PosA x) (pidxA x)]
+    {X : J → Type u} {P : ∀ j, X j → Prop} (k : ∀ x, GA x X) :
+    (∀ j y, Mem (fun X => ∀ x, GA x X) j y k → P j y) ↔
+      ∀ x, ∀ j y, Mem (GA x) j y (k x) → P j y := by
+  simp only [mem_pi]
+  exact ⟨fun h x j y hy => h j y ⟨x, hy⟩, fun h j y ⟨x, hy⟩ => h x j y hy⟩
+
+@[simp ↓] theorem exists_mem_pi [∀ x, IPolyIso (GA x) (ShA x) (PosA x) (pidxA x)]
+    {X : J → Type u} {P : ∀ j, X j → Prop} (k : ∀ x, GA x X) :
+    (∃ j y, Mem (fun X => ∀ x, GA x X) j y k ∧ P j y) ↔
+      ∃ x, ∃ j y, Mem (GA x) j y (k x) ∧ P j y := by
+  simp only [mem_pi]
+  exact ⟨fun ⟨j, y, ⟨x, hy⟩, h⟩ => ⟨x, j, y, hy, h⟩, fun ⟨x, j, y, hy, h⟩ => ⟨j, y, ⟨x, hy⟩, h⟩⟩
+
+@[simp ↓] theorem forall_mem_sigma [∀ x, IPolyIso (GA x) (ShA x) (PosA x) (pidxA x)]
+    {X : J → Type u} {P : ∀ j, X j → Prop} (z : Σ x, GA x X) :
+    (∀ j y, Mem (fun X => Σ x, GA x X) j y z → P j y) ↔ ∀ j y, Mem (GA z.1) j y z.2 → P j y :=
+  Iff.rfl
+
+@[simp ↓] theorem exists_mem_sigma [∀ x, IPolyIso (GA x) (ShA x) (PosA x) (pidxA x)]
+    {X : J → Type u} {P : ∀ j, X j → Prop} (z : Σ x, GA x X) :
+    (∃ j y, Mem (fun X => Σ x, GA x X) j y z ∧ P j y) ↔ ∃ j y, Mem (GA z.1) j y z.2 ∧ P j y :=
+  Iff.rfl
+
 end Dependent
 
 section Prop'
@@ -1049,6 +1142,20 @@ variable {P}
     (j : J) (y : X j) (k : ∀ h, GP h X) :
     Mem (fun X => ∀ h, GP h X) j y k ↔ ∃ h, Mem (GP h) j y (k h) :=
   ⟨fun ⟨q, e⟩ => ⟨q.1, q.2, e⟩, fun ⟨x, q, e⟩ => ⟨⟨x, q⟩, e⟩⟩
+
+@[simp ↓] theorem forall_mem_piP [∀ h, IPolyIso (GP h) (ShP h) (PosP h) (pidxP h)]
+    {X : J → Type u} {Q : ∀ j, X j → Prop} (k : ∀ h, GP h X) :
+    (∀ j y, Mem (fun X => ∀ h, GP h X) j y k → Q j y) ↔
+      ∀ h, ∀ j y, Mem (GP h) j y (k h) → Q j y := by
+  simp only [mem_piP]
+  exact ⟨fun H h j y hy => H j y ⟨h, hy⟩, fun H j y ⟨h, hy⟩ => H h j y hy⟩
+
+@[simp ↓] theorem exists_mem_piP [∀ h, IPolyIso (GP h) (ShP h) (PosP h) (pidxP h)]
+    {X : J → Type u} {Q : ∀ j, X j → Prop} (k : ∀ h, GP h X) :
+    (∃ j y, Mem (fun X => ∀ h, GP h X) j y k ∧ Q j y) ↔
+      ∃ h, ∃ j y, Mem (GP h) j y (k h) ∧ Q j y := by
+  simp only [mem_piP]
+  exact ⟨fun ⟨j, y, ⟨h, hy⟩, H⟩ => ⟨h, j, y, hy, H⟩, fun ⟨h, j, y, hy, H⟩ => ⟨j, y, ⟨h, hy⟩, H⟩⟩
 
 end Prop'
 
@@ -1148,6 +1255,23 @@ instance (priority := 1100) instCompI {pidx : (sh : Sh) → Pos sh → K}
     exact ⟨_, ⟨r.1, rfl⟩, r.2, e⟩
   · rintro ⟨_, ⟨q, rfl⟩, r, e⟩
     exact ⟨⟨q, r⟩, e⟩
+
+@[simp ↓] theorem forall_mem_compC {G : Type u' → Type v} [PolyIso G Sh Pos]
+    {pidx' : (sh : Sh') → Pos' sh → J} {H : (J → Type u) → Type u'} [IPolyIso H Sh' Pos' pidx']
+    {X : J → Type u} {P : ∀ j, X j → Prop} (c : G (H X)) :
+    (∀ j x, Mem (fun X => G (H X)) j x c → P j x) ↔
+      ∀ y, PolyIso.Mem G y c → ∀ j x, Mem H j x y → P j x := by
+  simp only [mem_compC]
+  exact ⟨fun h y hy j x hx => h j x ⟨y, hy, hx⟩, fun h j x ⟨y, hy, hx⟩ => h y hy j x hx⟩
+
+@[simp ↓] theorem exists_mem_compC {G : Type u' → Type v} [PolyIso G Sh Pos]
+    {pidx' : (sh : Sh') → Pos' sh → J} {H : (J → Type u) → Type u'} [IPolyIso H Sh' Pos' pidx']
+    {X : J → Type u} {P : ∀ j, X j → Prop} (c : G (H X)) :
+    (∃ j x, Mem (fun X => G (H X)) j x c ∧ P j x) ↔
+      ∃ y, PolyIso.Mem G y c ∧ ∃ j x, Mem H j x y ∧ P j x := by
+  simp only [mem_compC]
+  exact ⟨fun ⟨j, x, ⟨y, hy, hx⟩, h⟩ => ⟨y, hy, j, x, hx, h⟩,
+    fun ⟨y, hy, j, x, hx, h⟩ => ⟨j, x, ⟨y, hy, hx⟩, h⟩⟩
 
 /-- Through a functor on families at a reindexed family: a member of the functor's value, at its
 index read along the reindexing. -/
