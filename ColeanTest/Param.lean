@@ -37,8 +37,8 @@ data Rose (α : Type u)
   | node (a : α) (children : Forest (Rose α))
 
 /--
-info: @Rose.rec : {α : Type u_1} →
-  {motive : Rose α → Sort u_2} →
+info: @Rose.rec : {α : Type u_2} →
+  {motive : Rose α → Sort u_1} →
     ((a : α) →
         (children : Forest (Rose α)) →
           ((t : Rose α) → PolyIso.Mem (fun X => Forest X) t children → motive t) → motive (Rose.node a children)) →

@@ -21,8 +21,8 @@ data Rose (α : Type u)
   | node (a : α) (cs : List (Rose α))
 
 /--
-info: @Rose.rec : {α : Type u_1} →
-  {motive : Rose α → Sort u_2} →
+info: @Rose.rec : {α : Type u_2} →
+  {motive : Rose α → Sort u_1} →
     ((a : α) →
         (cs : List (Rose α)) →
           ((t : Rose α) → PolyIso.Mem (fun X => List X) t cs → motive t) → motive (Rose.node a cs)) →

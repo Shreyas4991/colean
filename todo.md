@@ -34,10 +34,11 @@ index is usually stored as data too, which forces the universe anyway.
 
 ## A single proposition as index
 
-`Signature.I : Type w`, so `codata T : (h : 0 < 5) → Type` is rejected, while proofs among
-several indices are fine through the `PSigma` packing. Switching to `I : Sort w` is not the
-one-line change it looks like: `Σ' i, Shape i` then lives in `Sort (max 1 w (u + 1))`, which
-Lean cannot unify with the `Type _` that the alphabet of `Raw` must be (no level subtraction).
+`Signature.I : Type w`, so `codata T : (h : 0 < 5) → Type` is rejected (an error at the index, in
+`Gen/Front.lean`), while proofs among several indices are fine through the `PSigma` packing.
+Switching to `I : Sort w` is not the one-line change it looks like: `Σ' i, Shape i` then lives in
+`Sort (max 1 w (u + 1))`, which Lean cannot unify with the `Type _` that the alphabet of `Raw`
+must be (no level subtraction).
 The route is at the command level: detect a lone `Prop` index by elaborating the index type,
 and pack it as `PLift p` (or as `PSigma` with `Unit`). Since a `Prop`-valued index is
 proof-irrelevant, such a family is a plain type with a precondition, so this is a convenience
@@ -62,3 +63,29 @@ for a leaf whose head is a user-defined structure or inductive, derive them ther
 definition has to be read from the environment, at the `Expr` level, since it may come from another
 file with other `open`s. If generation fails, the error stays the missing-instance one. Two
 independent files may then generate the same instance, so the names have to be unique per module.
+
+## Nesting: proposals left from the review (2026-11-11)
+
+* `PolyMap`/`IPolyMap` instances for the functors on families read as plain functors and their
+  composites, the counterparts of `PolyIso.instOfI`, `PolyIso.instCompI`,
+  `IPolyIso.instReidx`, `IPolyIso.instCompI` (definitions in `PolyIso.lean`): today only their
+  `PolyIso` instances and membership lemmas exist, so `PolyMap (fun X => Both fun _ => X) …`
+  fails and a declared type whose field goes through such a functor at a parameter cannot vary in
+  it. Each is the map of the family functor at the constant or reindexed family (`IPolyMap.map`
+  at `fun _ => f`, at `fun k => f (g k)`, through the inner maps), with `equiv_map` from the
+  parts', as for `instCompC`.
+* `PolyMap.map` from the functors alone (`PolyMap.map (F := List) (F' := List) f l`). Tried:
+  `outParam` on `Sh`, `Pos`, `hF`, `hF'` of `PolyMap` makes the call work, but breaks instance
+  search through nested forms (`PolyMap (fun X => List (X × ℕ)) …`, `(X × X) × ℕ`,
+  `E (X × ℕ) ℕ`), so it was reverted. What worked in a model of the classes: with the
+  presentations as `outParam`, every `PolyMap` instance with `PolyMap` premises takes the
+  `PolyIso` instances of its parts implicitly, `{h₁ : PolyIso F₁ Sh₁ Pos₁}`, determined by the
+  premises `[m₁ : PolyMap F₁ F₁']`, which changes the signatures of the form instances and of
+  the generated ones, and is easy to get wrong in a user's instance.
+* The rules of step 5 for a nested argument of a family at one index only after cases on its
+  positions (`List (T n × T n)`) state its members by `IPolyIso.Mem`, unlike the recursor: the
+  cases on the positions of the layer in the proof do not see those cases. `simp` leaves
+  `∃ j t, (n = j ∧ HEq a t) ∧ …` there; a `simp` lemma `∃ j t, (i = j ∧ HEq c t) ∧ P j t ↔ P i c`
+  (and through `∨`) would finish it.
+* The names of the positions `T.B.c_a` (and `T.Poly.P.c_a`) join the constructor and the argument
+  with `_`: a constructor `mk` with an argument `a_b` and one `mk_a` with `b` collide.

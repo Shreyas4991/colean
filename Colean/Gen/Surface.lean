@@ -6,14 +6,17 @@ import Colean.Gen.Extras
 *Spec.* Input: the constructor list and the declarations of steps 2–3. Output, assembled without
 tactic proofs from what exists:
 
-* the constructors `T.cᵢ := T.ctor (T.F.cᵢ …)` with the simp lemmas `T.dtor_cᵢ`, `T.ctor_cᵢ`,
-  injectivity `T.cᵢ_inj` (`Codata.inj_of` at `T.F.cᵢ.injEq`) and disjointness `T.cᵢ_ne_cⱼ`
-  (`Codata.ne_of`). As in `injEq`, injectivity shares between its two sides the arguments that
-  occur in the result index or in the type of an argument occurring there, and leaves the proofs
-  out of the conjunction; it is stated when something is left, and the other arguments are
-  explicit and mentioned by no type. Disjointness is stated where the result indices of the two
-  constructors unify, with the arguments of one at which they meet those of the other
-  (`withMeet`);
+* the constructors `T.cᵢ := T.ctor (T.F.cᵢ …)`, with the default values and tactics of their
+  arguments and the declaration ranges of their own syntax, as in `inductive`, and the simp
+  lemmas `T.dtor_cᵢ`, `T.ctor_cᵢ`, injectivity `T.cᵢ_inj` (`Codata.inj_of` at `T.F.cᵢ.injEq`)
+  and disjointness `T.cᵢ_ne_cⱼ` (`Codata.ne_of`). As in `injEq`, injectivity shares between its
+  two sides the arguments that occur in the result index or in the type of an argument occurring
+  there, leaves the proofs out of the conjunction, relates an argument by `HEq` where the types
+  of the two sides differ (`v : Fin n` with `n` not shared), and is stated when something is
+  left; the other arguments are copied with their binder infos, an instance's copy implicit.
+  Disjointness is stated where reducible unification finds where the result indices of the two
+  constructors meet, with the arguments of one at which they meet those of the other
+  (`withMeet`), and not otherwise;
 * the case analysis `T.casesOn` (by cases on `F` after `dtor`, cast along `ctor_dtor`; the
   `cases` eliminator), `T.casesOnAux`, `T.casesOn_ctor` and the simp lemmas `T.casesOn_cᵢ`;
 * for `data`, the computation rules `T.rec_cᵢ` and `T.fold_cᵢ` (simp lemmas), the hypothesis of
@@ -47,14 +50,16 @@ def sharedArgs (ys idx : Array Expr) : MetaM (Array Bool) := do
   return ys.map fun y => idx.any (occursOrInType lctx y)
 
 /-- Run `k` on the local variables `ys` with a primed copy of each but those marked `shared`:
-the arguments of the other side of an equation, kept or copied, and the copies. -/
+the arguments of the other side of an equation, kept or copied, and the copies. A copy has the
+binder info of its original, but for an instance, which the equation determines: implicit. -/
 def withPrimed (ys : Array Expr) (shared : Array Bool)
     (k : Array Expr → Array Expr → TermElabM α) : TermElabM α := do
   let rec go (i : Nat) (ys' new : Array Expr) : TermElabM α := do
     if h : i < ys.size then
       if shared[i]! then go (i + 1) (ys'.push ys[i]) new else
       let d ← ys[i].fvarId!.getDecl
-      withLocalDecl (d.userName.appendAfter "'") d.binderInfo
+      let bi := if d.binderInfo.isInstImplicit then .implicit else d.binderInfo
+      withLocalDecl (d.userName.appendAfter "'") bi
           (d.type.replaceFVars (ys.extract 0 i) ys') fun y =>
         go (i + 1) (ys'.push y) (new.push y)
     else k ys' new
@@ -112,38 +117,37 @@ def genCtors : TermElabM Unit := do
     addThm n (← ctx.levelParamsOf [] #[type]) type value ctx.types[c.owner]!.ref
     addSimp n
   for c in ctx.ctors do
+    -- The constructor, with the default values and tactics of its arguments, and the range of its
+    -- own syntax, as in `inductive`.
+    ctx.withTArgs c (annotated := true) fun ys σ => do
+      let idx := c.idx.map σ
+      let fapp ← ctx.fCtorApp c L T ys
+      let (type, value) ← withBinderInfo ctx.params .implicit do
+        return (← mkForallFVars (ctx.params ++ ys) (← ctx.tyAt c.owner (c.uidx.map σ)),
+          ← mkLambdaFVars (ctx.params ++ ys) (← ctx.appAt ctx.ctor idx #[fapp]))
+      addDef (ctx.tCtor c) (← ctx.levelParamsOf [] #[type, value]) type value c.ref
+      addRangesUser (ctx.tCtor c) c.ref c.nameRef
     ctx.withTArgs c fun ys σ => do
     let idx := c.idx.map σ
     let fapp ← ctx.fCtorApp c L T ys
-    let (type, value) ← withBinderInfo ctx.params .implicit do
-      return (← mkForallFVars (ctx.params ++ ys) (← ctx.tyAt c.owner (c.uidx.map σ)),
-        ← mkLambdaFVars (ctx.params ++ ys) (← ctx.appAt ctx.ctor idx #[fapp]))
-    let ref := ctx.types[c.owner]!.ref
-    addDef (ctx.tCtor c) (← ctx.levelParamsOf [] #[type, value]) type value ref
-    addRangesUser (ctx.tCtor c) ref
     let capp ← ctx.tCtorApp c ys
     thm c (ctx.tName' c "dtor_" "") ys (← mkEq (← ctx.appAt ctx.dtor idx #[capp]) fapp)
       (← ctx.appAt ctx.dtor_ctor idx #[fapp])
     thm c (ctx.tName' c "ctor_" "") ys (← mkEq (← ctx.appAt ctx.ctor idx #[fapp]) capp)
       (← mkEqRefl capp)
   -- Injectivity, as `T.F.c.injEq`: the arguments the result index needs are shared by the two
-  -- sides (`sharedArgs`), the proofs are left out of the conjunction, and there is no lemma if
-  -- nothing is left. The other arguments must be explicit, and no type may mention them.
+  -- sides (`sharedArgs`), the proofs are left out of the conjunction, an argument whose type
+  -- mentions another one not shared is related by `HEq` when the two types differ, and there is
+  -- no lemma if nothing is left.
   for c in ctx.ctors do
     ctx.withTArgs c fun ys σ => do
     let shared ← sharedArgs ys (c.uidx.map σ)
-    let fresh := (ys.zip shared).filterMap fun (y, s) => if s then none else some y
-    if fresh.isEmpty then return
-    if ← fresh.anyM fun y => return !(← y.fvarId!.getBinderInfo).isExplicit then return
-    if ← ys.anyM fun y => do
-        let ty ← inferType y
-        return fresh.any fun z => ty.containsFVar z.fvarId! then
-      return
+    if shared.all id then return
     withPrimed ys shared fun ys' new => do
     let idx := c.idx.map σ
     let eqs ← (ys.zip ys').filterMapM fun (y, y') => do
       if y == y' || (← isProof y) then return none
-      return some (← mkEq y y')
+      return some (← mkEqHEq y y')
     if eqs.isEmpty then return
     let conj := eqs.pop.foldr (init := eqs.back!) mkAnd
     let stmt := mkIff (← mkEq (← ctx.tCtorApp c ys) (← ctx.tCtorApp c ys')) conj
@@ -246,7 +250,7 @@ def genCasesOf (m : Nat) : TermElabM Unit := do
     let value ← mkAppM ``Eq.mp #[h, ← auxAt (← ctx.appAt ctx.dtor idx #[t])]
     let (type, value) ← impl (ctx.params ++ #[motive] ++ uidx ++ #[t] ++ minors)
       (mkAppN motive (uidx.push t)) value
-    addDef casesN (← lvls #[type, value]) type value ref
+    addDef casesN (← ctx.elimLevelParamsOf fresh #[type, value]) type value ref
     addAttrs casesN #[← `(Parser.Term.attrInstance| elab_as_elim),
       ← `(Parser.Term.attrInstance| cases_eliminator)]
   -- `casesOn_ctor`: the cast disappears once `dtor (ctor y) = y` is substituted.
@@ -286,9 +290,9 @@ def genTypes : TermElabM Unit := do
     let t := ctx.types[m]!
     let xs := ctx.params ++ t.idx
     let value ← mkLambdaFVars xs (← ctx.tAt (ctx.wrap m t.idx))
-    let type ← withBinderInfo ctx.declParams .default do mkForallFVars xs (mkSort L.succ)
+    let type ← mkForallFVars xs (mkSort L.succ)
     addDef t.name (← ctx.levelParamsOf [] #[type, value]) type value t.ref
-    addRangesUser t.name t.ref
+    addRangesUser t.name t.ref t.nameRef
 
 /-- In a `codata` block, the block-level `corec` and `bisim` restricted to each type. `dtor` and
 `ctor` are not aliased: dot notation `t.dtor` resolves to the block-level `dtor` through the
@@ -546,7 +550,7 @@ def genTypeRecs : TermElabM Unit := do
     let (type, value) ← withBinderInfo (ctx.params ++ t.idx) .implicit do
       return (← mkForallFVars xs (mkAppN motives[m]! (t.idx.push tv)), ← mkLambdaFVars xs value)
     let n := ctx.tyGen m "rec"
-    addDef n (← ctx.levelParamsOf fresh #[type, value]) type value t.ref
+    addDef n (← ctx.elimLevelParamsOf fresh #[type, value]) type value t.ref
     addAttrs n #[← `(Parser.Term.attrInstance| elab_as_elim)]
   -- `Tₘ.rec_cᵢ`
   let recAt (idx : Array Expr) (x : Expr) : TermElabM Expr := do

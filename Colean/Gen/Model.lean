@@ -73,10 +73,9 @@ def genType : TermElabM Unit := do
     | 0 => mkLambdaFVars ctx.params (mkApp fam (Lean.mkConst ``Unit.unit))
     | 1 => mkLambdaFVars ctx.params fam
     | _ => mkLambdaFVars (ctx.params ++ ctx.idx) (mkApp fam (← ctx.packI))
-  let type ← withBinderInfo ctx.declParams .default do
-    mkForallFVars (ctx.params ++ ctx.idx) (mkSort L.succ)
+  let type ← mkForallFVars (ctx.params ++ ctx.idx) (mkSort L.succ)
   addDef ctx.name (← ctx.levelParamsOf [] #[type, value]) type value ctx.ref
-  unless ctx.isBlock do addRangesUser ctx.name ctx.ref
+  unless ctx.isBlock do addRangesUser ctx.name ctx.ref ctx.types[0]!.nameRef
 
 /-! ### The coinductive contract -/
 

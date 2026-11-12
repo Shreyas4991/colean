@@ -625,9 +625,9 @@ The members of a value in `X` are the contents of its positions in `X` (`MemX`),
 `Y` the contents of its positions in `Y` with their indices, as dependent pairs (`MemY`), defined
 from the presentation as `PolyIso.Mem` and `IPolyIso.Mem` are. A member is a pair so that `simp`
 eliminates it from `∃ t, MemY o t y ∧ P t.1 t.2` once it has computed `MemY` down to the leaves:
-a part in `X` alone has the members of its structure, written as in `Model/Occ2.lean`
-(`Occ₂.MemX (Occ₂.ofX o)`), an occurrence at an index its value with that index
-(`memY_ofY_hole`), a plain structure at an index its members with that index (`memY_ofOcc₂`). -/
+a part in `X` alone has the members of its structure (`Occ.Mem`), an occurrence at an index its
+value with that index (`memY_ofY_hole`), a plain structure at an index its members with that
+index (`memY_ofOcc₂`). -/
 
 section Mem
 
@@ -680,8 +680,7 @@ variable {J : Type j} {X : Type u} {Y : J → Type w}
 
 /-- The members of a part in `X` alone are those of its structure. -/
 @[simp] theorem memX_ofX {ShX : Type s} {PosX : ShX → Type p} {GX : Type u → Type v}
-    (o : Occ ShX PosX GX) (x : X) (y : GX X) :
-    MemX (Y := Y) (ofX o) x y ↔ Occ₂.MemX (Y := PUnit.{w + 1}) (Occ₂.ofX o) x y :=
+    (o : Occ ShX PosX GX) (x : X) (y : GX X) : MemX (Y := Y) (ofX o) x y ↔ Occ.Mem o x y :=
   Iff.rfl
 
 theorem memY_ofY {ShY : Type s} {PosY : ShY → Type q} {pidxY : (sh : ShY) → PosY sh → J}
@@ -698,7 +697,7 @@ theorem memY_ofY {ShY : Type s} {PosY : ShY → Type q} {pidxY : (sh : ShY) → 
 @[simp] theorem memY_ofY_ofOcc {ShF : Type s} {PosF : ShF → Type q} {F : Type w → Type v}
     (oF : Occ ShF PosF F) (i : J) (t : Σ j, Y j) (y : F (Y i)) :
     MemY (X := X) (ofY (IOcc.ofOcc oF i)) t y ↔
-      ∃ z, Occ₂.MemX (Y := PUnit.{w + 1}) (Occ₂.ofX oF) z y ∧ (⟨i, z⟩ : Σ j, Y j) = t :=
+      ∃ z, Occ.Mem oF z y ∧ (⟨i, z⟩ : Σ j, Y j) = t :=
   ⟨fun ⟨q, e⟩ => ⟨_, ⟨q, rfl⟩, e⟩, fun ⟨_, ⟨q, e⟩, e'⟩ => by subst e; exact ⟨q, e'⟩⟩
 
 /-- The members through a functor on families: those of its instance. -/
@@ -830,14 +829,12 @@ variable {Sh : Type s} {Pos : Sh → Type p} {Sh' : Type s'} {PX' : Sh' → Type
 
 /-- Through a composite: a member of a member of the outer structure. -/
 @[simp] theorem memX_comp (x : X) (y : G (H X Y)) :
-    MemX (comp oG oH) x y ↔
-      ∃ z, Occ₂.MemX (Y := PUnit.{w' + 1}) (Occ₂.ofX oG) z y ∧ MemX oH x z :=
+    MemX (comp oG oH) x y ↔ ∃ z, Occ.Mem oG z y ∧ MemX oH x z :=
   ⟨fun ⟨r, e⟩ => ⟨_, ⟨r.1, rfl⟩, r.2, e⟩, fun ⟨_, ⟨q, e⟩, r, e'⟩ => by subst e; exact ⟨⟨q, r⟩, e'⟩⟩
 
 /-- Through a composite: a member of a member of the outer structure. -/
 @[simp] theorem memY_comp (t : Σ j, Y j) (y : G (H X Y)) :
-    MemY (comp oG oH) t y ↔
-      ∃ z, Occ₂.MemX (Y := PUnit.{w' + 1}) (Occ₂.ofX oG) z y ∧ MemY oH t z :=
+    MemY (comp oG oH) t y ↔ ∃ z, Occ.Mem oG z y ∧ MemY oH t z :=
   ⟨fun ⟨r, e⟩ => ⟨_, ⟨r.1, rfl⟩, r.2, e⟩, fun ⟨_, ⟨q, e⟩, r, e'⟩ => by subst e; exact ⟨⟨q, r⟩, e'⟩⟩
 
 end Comp
@@ -870,7 +867,7 @@ variable {J : Type j} {X : Type u} {Y : J → Type w} (P : (Σ j, Y j) → Prop)
 @[simp ↓] theorem exists_memY_ofY_ofOcc {ShF : Type s} {PosF : ShF → Type q}
     {F : Type w → Type v} (oF : Occ ShF PosF F) (i : J) (y : F (Y i)) :
     (∃ t, MemY (X := X) (ofY (IOcc.ofOcc oF i)) t y ∧ P t) ↔
-      ∃ z, Occ₂.MemX (Y := PUnit.{w + 1}) (Occ₂.ofX oF) z y ∧ P ⟨i, z⟩ :=
+      ∃ z, Occ.Mem oF z y ∧ P ⟨i, z⟩ :=
   ⟨fun ⟨_, ⟨q, e⟩, h⟩ => ⟨_, ⟨q, rfl⟩, e ▸ h⟩, fun ⟨_, ⟨q, e⟩, h⟩ => ⟨_, ⟨q, by subst e; rfl⟩, h⟩⟩
 
 @[simp ↓] theorem exists_memY_ofOcc₂ {Sh : Type s} {PX : Sh → Type p} {PY : Sh → Type q}
@@ -933,7 +930,7 @@ end Dependent
     {G : Type w' → Type v} {H : Type u → (J → Type w) → Type w'} (oG : Occ Sh Pos G)
     (oH : IOcc₂ Sh' PX' PY' pidx' H) (y : G (H X Y)) :
     (∃ t, MemY (comp oG oH) t y ∧ P t) ↔
-      ∃ z, Occ₂.MemX (Y := PUnit.{w' + 1}) (Occ₂.ofX oG) z y ∧ ∃ t, MemY oH t z ∧ P t := by
+      ∃ z, Occ.Mem oG z y ∧ ∃ t, MemY oH t z ∧ P t := by
   simp only [memY_comp]
   exact ⟨fun ⟨t, ⟨z, hz, m⟩, h⟩ => ⟨z, hz, t, m, h⟩, fun ⟨z, hz, t, m, h⟩ => ⟨t, ⟨z, hz, m⟩, h⟩⟩
 

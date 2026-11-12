@@ -15,16 +15,19 @@ end
 ```
 
 A `mutual … end` block whose declarations are all `codata`, or all `data`, with the same
-parameters, is one family: the block `Tree_Forest` (the names joined by `_`) is declared as a
+parameters (binder annotations included, as in `inductive`), is one family: the block
+`Tree_Forest` (the names joined by `_`, in their common namespace: `Foo.A_B` for `Foo.A` and
+`Foo.B`, `Qa_X_Qb_X` for `Qa.X` and `Qb.X`) is declared as a
 single family over the inductive `Tree_Forest.Ix`, which has a constructor per type, `Tree` and
-`Forest`, whose arguments are the indices of that type, and every declaration of the single
+`Forest` (`Qa_X` and `Qb_X`: the type's name in the block, its components joined by `_`), whose
+arguments are the indices of that type, and every declaration of the single
 type case is generated for the block (`Tree_Forest.F`, `Tree_Forest.corec`, `Tree_Forest.bisim`,
 `Tree_Forest.rec`, …). This is how Lean itself elaborates mutual fixpoints, and the generic
 theory needs nothing new. The types need not agree on their indices, since each has its own
 constructor of `Ix`; where their universe is written, it must be the same, the block's
 (`checkSorts`, `Gen/Command.lean`). The names the block declares, its types', its own and its
-`Ix`, must be free, and no type may occur twice (`checkNames`, `Gen/Front.lean`): both are checked
-before the types are declared. Then, per type:
+`Ix`, must be free, no type may occur twice, and no two types may give `Ix` one constructor
+(`checkNames`, `Gen/Front.lean`): all are checked before the types are declared. Then, per type:
 `Tree α := Tree_Forest α .Tree`, and `Even n := Even_Odd (.Even n)` with an index, its
 constructors `Tree.node` with their lemmas under `Tree`, `Tree.casesOn` with only the
 constructors of `Tree`, registered as the `cases` eliminator, and aliases `Tree.corec`,
@@ -41,15 +44,19 @@ block-level rules are `Rose_Forest.rec_cons`, …), or per type, with the recurs
 type's own indices. They are `Rose_Forest.rec` at the motive made of these by cases on `Ix`. As
 with Lean's mutual inductives, the other motives are given by name,
 `induction t using Rose.rec (motive_2 := …)`, and plain `induction t` does not apply. Their
-rules are `Rose.rec_node`, `Forest.rec_cons`, …, stated with the recursors per type. At a
-position of a nested argument whose index does not reduce to one type (`p : Own × Nat`, say),
-the induction hypothesis keeps the motive made by cases on `Ix`.
+rules are `Rose.rec_node`, `Forest.rec_cons`, …, stated with the recursors per type. A nested
+argument whose positions are at one type only after cases on them (`p : Own × Nat`) has its
+hypothesis by `PolyIso.Mem` at that type's motive; one with positions at several types of the
+block (`p : Rose α × Forest α`), one hypothesis by `IPolyIso.Mem` per type.
 
 The types get `PolyIso` and `PolyMap` instances at their index of the block, when the parameters
 allow it (step 5, `Gen/Derive.lean`): the presentation is per block, `Tree_Forest.Poly.*`, over
 `Tree_Forest.Poly.Ix`, the block's index without the parameters that vary, and the instances are
-per type, `Tree.Poly.instPolyIso`. A position of a nested argument whose index does not reduce to
-one type (`p : Own × Nat`) is not supported there: the generation fails with a warning.
+per type, `Tree.Poly.instPolyIso`. A nested argument with positions at one type only after cases
+on them is split through its products and sums (`p : Own α × Nat`), or inside a named type
+constructor has a structure in two variables (`p : List (Own α × Nat)`); at several types inside
+a named type constructor (`List (Rose α × Forest α)`) it gets its instances but not its `simp`
+lemmas, with a warning.
 
 Constructor names shared by several types of the block are qualified in the block-level
 inductives (`Even_succ`, `Odd_succ` in `Even_Odd.F`), and so are the minor premises of the
@@ -126,11 +133,13 @@ so they take the closed ones (`Forest.casesOn`).
 Scope: the instances of an open run in its extra parameters are those of step 5, so a run inside
 another needs extra parameters that are types, used in fields with an occurrence structure in
 them, with the block's parameters (`c : C.Open α X`, a run passing an outer type on to a run
-further inside) or with the run's own type through products and sums (`p : Tree α × Forest α`).
-An outer run with indices, or a block, makes the parameter a family (`IPolyIso` instances, not
-generated), and an outer type with the run's own type inside a named type constructor
-(`List (Tree α × Forest α)`) cannot vary: these blocks stop with the error of step 5 for the
-inner run. A `mixed_mutual` block of one kind is a `mutual` block, with a warning.
+further inside) or with the run's own type, through products and sums (`p : Tree α × Forest α`)
+or inside a named type constructor where the field has a structure in both
+(`List (Tree α × Forest α)`, `List (Tree α ⊕ Forest α)`). An outer run with indices, or a block,
+makes the parameter a family (`IPolyIso` instances, not generated), and an outer type with the
+run's own type in a field without a structure in both (`Two (Tree α) (Forest α)`) cannot vary:
+these blocks stop with the error of step 5 for the inner run. A `mixed_mutual` block of one kind
+is a `mutual` block, with a warning.
 -/
 
 open Lean Elab Command

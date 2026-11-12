@@ -34,8 +34,8 @@ end
 /-- info: @Trace.tick : {α : Type u_1} → Menu α → Trace α → Trace α -/
 #guard_msgs in #check @Trace.tick
 /--
-info: @Menu.rec : {α : Type u_1} →
-  {motive : Menu α → Sort u_2} →
+info: @Menu.rec : {α : Type u_2} →
+  {motive : Menu α → Sort u_1} →
     motive Menu.nil →
       ((p : Proc α) →
           (t : Trace α) →
@@ -55,7 +55,7 @@ info: @Trace.F.tick : {α : Type u_1} → {X : Type u_2} → Menu α → X → T
 -- The processes in a menu, directly or through its traces.
 /--
 info: @Menu.mem_cons : ∀ {α : Type u_1} (p : Proc α) (t : Trace α) (rest : Menu α) (x : Proc α),
-  x ∈ Menu.cons p t rest ↔ x = p ∨ (∃ t_1, t_1 ∈ t ∧ x ∈ t_1) ∨ x ∈ rest
+  x ∈ Menu.cons p t rest ↔ x = p ∨ (∃ t₀, t₀ ∈ t ∧ x ∈ t₀) ∨ x ∈ rest
 -/
 #guard_msgs in #check @Menu.mem_cons
 

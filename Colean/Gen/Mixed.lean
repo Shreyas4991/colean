@@ -32,6 +32,11 @@ open Lean Meta Elab Term Command
 
 namespace Codata.Gen
 
+/-- The name `n` of a type in the namespace `ns`, as a string for a generated name: its
+components joined by `_` (`Foo_Tree` for `Foo.Tree`). -/
+def nameIn (ns n : Name) : String :=
+  "_".intercalate ((n.replacePrefix ns .anonymous).components.map (·.toString (escape := false)))
+
 /-- The runs of a block, `decls` in the namespace `ns`, with their names. -/
 def mixRuns (ns : Name) (decls : Array DeclStx) : Array MixRun := Id.run do
   let mut groups : Array (Bool × Array Nat) := #[]
@@ -45,7 +50,7 @@ def mixRuns (ns : Name) (decls : Array DeclStx) : Array MixRun := Id.run do
     let shorts := ds.map (decls[·]!.T.getId)
     let closedNames := shorts.map (ns ++ ·)
     let isBlock := ds.size ≥ 2
-    let blk := ns ++ Name.mkSimple ("_".intercalate (shorts.map (·.toString)).toList)
+    let blk := blockName ns shorts
     let closedFam := if isBlock then blk else closedNames[0]!
     let opened (n : Name) : Name := if j == 0 then n else n ++ `Open
     { co, decls := ds, names := closedNames.map opened, fam := opened closedFam
@@ -65,10 +70,12 @@ def checkMixNames (decls : Array DeclStx) (runs : Array MixRun) (ref : Syntax) :
         checkFree n decls[d]!.T "a type `T` of a run inside the first is declared open, as \
           `T.Open`; rename the type, or declare the block in another namespace"
     if let some ix := run.ix? then
+      checkBlockShorts (run.decls.map (decls[·]!))
       for n in [run.closedFam, run.fam, ix].eraseDups do
-        checkFree n ref "a run of several types is named after its types, joined by `_`, with its \
-          index `Ix` and, inside the first run, its open form `Open` in that namespace; rename or \
-          reorder the types, or declare the block in another namespace"
+        checkFree n ref "a run of several types is named after its types, joined by `_`, in their \
+          common namespace, with its index `Ix` and, inside the first run, its open form `Open` in \
+          the run's namespace; rename or reorder the types, or declare the block in another \
+          namespace"
 
 /-- The declared sorts of a mixed block (`checkSorts`), once the runs inside are declared and
 before the outermost run is: the outermost run's types are in the universe of its model (`ctx`),
@@ -252,7 +259,7 @@ def memInstances (ctx : Ctx) (decls : Array DeclStx) (runs : Array MixRun) (fams
         let type ← mkAppM ``Membership #[E, C]
         let (type, value) ← withBinderInfo (params ++ idx) .implicit do
           return (← mkForallFVars (params ++ idx) type, ← mkLambdaFVars (params ++ idx) value)
-        let short := (rk.closedNames[0]!.replacePrefix ns .anonymous).toString
+        let short := nameIn ns rk.closedNames[0]!
         let name := run.closedNames[m]! ++ Name.mkSimple ("instMembership" ++ short)
         let us ← ctx.levelParamsOf [] #[type, value]
         addDef name us type value decls[run.decls[m]!]!.ref (reducible := true)
@@ -352,7 +359,7 @@ def memLemmas (decls : Array DeclStx) (runs : Array MixRun) (closed : Closed) : 
           ← mkLambdaFVars xs pf)
       let base := C ++ Name.mkSimple ("mem_" ++ ctor.raw[1].getId.toString)
       let n := if (← getEnv).contains base then
-          base.appendAfter ("_" ++ (r.elemN.replacePrefix ns .anonymous).toString)
+          base.appendAfter ("_" ++ nameIn ns r.elemN)
         else base
       let lps := ci.levelParams.filter (collectLevelParams {} type).params.contains
       addThm n lps type value decls[d]!.ref

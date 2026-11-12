@@ -70,8 +70,8 @@ end
 -/
 
 /--
-info: @DirB.rec : {α : Type u_1} →
-  {motive : DirB α → Sort u_2} →
+info: @DirB.rec : {α : Type u_2} →
+  {motive : DirB α → Sort u_1} →
     motive DirB.nil →
       ((e : EntryB α) → (d : DirB α) → ((t : DirB α) → t ∈ e → motive t) → motive d → motive (DirB.cons e d)) →
         (t : DirB α) → motive t

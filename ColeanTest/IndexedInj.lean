@@ -186,13 +186,16 @@ example {n : Nat} (o : Od n) (e : Ev (n + 1)) : Od.twice o ≠ Od.succ e := by
 
 /-! ### An argument whose type mentions one that is not shared
 
-The equation of `v` would be heterogeneous: there is no injectivity lemma, as before. -/
+The equations of `v` and `t` are heterogeneous, as in `injEq`. -/
 
 data H : Nat → Type
   | mk (k : Nat) (v : Fin k) (t : H k) : H 0
   | nil : H 0
 
-/-- error: Unknown constant `IndexedInjTest.H.mk_inj` -/
+/--
+info: H.mk_inj : ∀ (k : ℕ) (v : Fin k) (t : H k) (k' : ℕ) (v' : Fin k') (t' : H k'),
+  H.mk k v t = H.mk k' v' t' ↔ k = k' ∧ v ≍ v' ∧ t ≍ t'
+-/
 #guard_msgs in #check @H.mk_inj
 /-- info: H.mk_ne_nil : ∀ (k : ℕ) (v : Fin k) (t : H k), H.mk k v t ≠ H.nil -/
 #guard_msgs in #check @H.mk_ne_nil

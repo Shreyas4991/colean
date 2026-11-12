@@ -30,8 +30,8 @@ info: @IForest.cons : {α : Type u_1} → {n : ℕ} → ITree α → IForest α 
 -/
 #guard_msgs in #check @IForest.cons
 /--
-info: @IForest.rec : {α : Type u_1} →
-  {motive : (j₁ : ℕ) → IForest α j₁ → Sort u_2} →
+info: @IForest.rec : {α : Type u_2} →
+  {motive : (j₁ : ℕ) → IForest α j₁ → Sort u_1} →
     motive 0 IForest.nil →
       ({n : ℕ} → (t : ITree α) → (f : IForest α n) → motive n f → motive (n + 1) (IForest.cons t f)) →
         {i₁ : ℕ} → (t : IForest α i₁) → motive i₁ t
@@ -69,8 +69,8 @@ codata JForest (α : Type u) : Nat → Type u
 end
 
 /--
-info: @JTree.rec : {α : Type u_1} →
-  {motive : JTree α → Sort u_2} →
+info: @JTree.rec : {α : Type u_2} →
+  {motive : JTree α → Sort u_1} →
     ((a : α) → (n : ℕ) → (cs : JForest α n) → ((t : JTree α) → t ∈ cs → motive t) → motive (JTree.node a n cs)) →
       (t : JTree α) → motive t
 -/

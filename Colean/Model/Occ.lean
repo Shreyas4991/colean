@@ -34,10 +34,11 @@ universe and `G'` at another (`List.{u}` and `List.{v}`): this is what keeps the
 and `fold` in any universe. The simp lemmas `map_list`, `map_prod`, `map_comp`, … compute `map`
 through the combinators back to the usual maps (`List.map`, pairs, composition), the `rel_*`
 lemmas do the same for `Rel`, and `forall_toC_*` turn "for every position" into membership or
-components. The instances of `PolyIso.lean` for products, sums, functions, dependent pairs and
-composites are these combinators by definition (`ofIso_prod`, …, at the end, simp lemmas too), so
-a hypothesis at every position of a structure is one by membership for the instance
-(`PolyIso.memRec`): this is how the recursor states the induction hypotheses of nested arguments.
+components; the members of a value (`Mem`) are computed by `simp` the same way. The instances of
+`PolyIso.lean` for products, sums, functions, dependent pairs and composites are these
+combinators by definition (`ofIso_prod`, …, at the end, simp lemmas too), so a hypothesis at
+every position of a structure is one by membership for the instance (`PolyIso.memRec`): this is
+how the recursor states the induction hypotheses of nested arguments.
 
 The indexed version `IOcc` is for occurrences of a *family*: every position carries an index,
 `G X ≃ Σ sh, (q : Pos sh) → X (pidx sh q)`, so that occurrences at different indices may live
@@ -45,7 +46,8 @@ in one argument (`T i × T j`), and a functor on families with an `IPolyIso` ins
 indexed leaf (`IOcc.ofIso`). `Occ` is the case of a single index; `IOcc.ofOcc` puts a plain
 structure at a fixed index, `IOcc.reidx` and `Occ.ofI` reindex a family leaf, and `compC`,
 `compI`, `Occ.compI` are the compositions across the two kinds. `simp` computes `IOcc.map` through
-the combinators as `Occ.map` (`IOcc.map_prod`, …).
+the combinators as `Occ.map` (`IOcc.map_prod`, …), and the map of an indexed structure whose
+positions are all at one index is that of the plain one at that index (`IOcc.map_flat_sum`, …).
 -/
 
 universe u u' u'' v v' v'' w w' s s' p p' j k a
@@ -298,6 +300,9 @@ theorem toC_option_some (x : X) : option.toC (some x) = ⟨true, fun _ => x⟩ :
 
 /-- Arrays. -/
 abbrev array : Occ Nat Fin Array.{u} := ofIso Array
+
+@[simp] theorem map_array (f : X → Y) (a : Array X) : map array array f a = a.map f :=
+  map_ofIso f a
 
 /-! ### The combinators, plain
 
@@ -846,6 +851,157 @@ theorem forall_toC_comp {P : X → Prop} (x : G (H X)) :
 
 end ComputeComp
 
+/-! ### Membership
+
+The members of a value are the contents of its positions, as for `PolyIso.Mem`: at a leaf those
+of the instance (`mem_ofIso`), and `simp` computes them through the combinators, a sum at any
+value too (`mem_sum`). The members of a structure in two variables in each variable
+(`Model/Occ2.lean`) are these at its parts in one variable. -/
+
+section Mem
+
+variable {Sh : Type s} {Pos : Sh → Type p} {G : Type u → Type v} {X : Type u}
+
+/-- `x` is a member of `y`: some position of `y` holds `x`. -/
+def Mem (o : Occ Sh Pos G) (x : X) (y : G X) : Prop :=
+  ∃ q, (o.toC y).2 q = x
+
+theorem mem_iff (o : Occ Sh Pos G) {x : X} {y : G X} : Mem o x y ↔ ∃ q, (o.toC y).2 q = x :=
+  Iff.rfl
+
+end Mem
+
+section MemCompute
+
+variable {X : Type u}
+
+/-- At a leaf, the members are those of the instance. -/
+@[simp] theorem mem_ofIso (F : Type u → Type v) {ShF : Type s} {PosF : ShF → Type p}
+    [PolyIso F ShF PosF] (x : X) (y : F X) : Mem (ofIso F) x y ↔ PolyIso.Mem F x y :=
+  Iff.rfl
+
+@[simp] theorem mem_hole (x y : X) : Mem hole x y ↔ x = y :=
+  ⟨fun ⟨_, e⟩ => e.symm, fun e => ⟨(), e.symm⟩⟩
+
+@[simp] theorem not_mem_const (A : Type v) (x : X) (a : A) : ¬ Mem (const A) x a :=
+  fun ⟨q, _⟩ => q.elim
+
+section Forms
+
+variable {Sh₁ : Type s} {Pos₁ : Sh₁ → Type p} {Sh₂ : Type s'} {Pos₂ : Sh₂ → Type p'}
+  {G₁ : Type u → Type v} {G₂ : Type u → Type v'} (o₁ : Occ Sh₁ Pos₁ G₁) (o₂ : Occ Sh₂ Pos₂ G₂)
+
+@[simp] theorem mem_prod (x : X) (y : G₁ X × G₂ X) :
+    Mem (prod o₁ o₂) x y ↔ Mem o₁ x y.1 ∨ Mem o₂ x y.2 :=
+  ⟨fun ⟨q, e⟩ => match q, e with
+    | .inl q, e => .inl ⟨q, e⟩
+    | .inr q, e => .inr ⟨q, e⟩,
+    fun h => h.elim (fun ⟨q, e⟩ => ⟨.inl q, e⟩) (fun ⟨q, e⟩ => ⟨.inr q, e⟩)⟩
+
+@[simp] theorem mem_sum_inl (x : X) (y : G₁ X) : Mem (sum o₁ o₂) x (.inl y) ↔ Mem o₁ x y :=
+  ⟨fun ⟨q, e⟩ => ⟨q.down, e⟩, fun ⟨q, e⟩ => ⟨⟨q⟩, e⟩⟩
+
+@[simp] theorem mem_sum_inr (x : X) (y : G₂ X) : Mem (sum o₁ o₂) x (.inr y) ↔ Mem o₂ x y :=
+  ⟨fun ⟨q, e⟩ => ⟨q.down, e⟩, fun ⟨q, e⟩ => ⟨⟨q⟩, e⟩⟩
+
+/-- Through a sum at any value: on the side the value is on. -/
+@[simp] theorem mem_sum (x : X) (y : G₁ X ⊕ G₂ X) :
+    Mem (sum o₁ o₂) x y ↔ (∃ a, y = .inl a ∧ Mem o₁ x a) ∨ ∃ b, y = .inr b ∧ Mem o₂ x b := by
+  cases y with
+  | inl a => simp only [mem_sum_inl, Sum.inl.injEq, exists_eq_left', reduceCtorEq, false_and,
+      exists_false, or_false]
+  | inr b => simp only [mem_sum_inr, Sum.inr.injEq, exists_eq_left', reduceCtorEq, false_and,
+      exists_false, false_or]
+
+end Forms
+
+section Dependent
+
+variable {A : Type a} {ShA : A → Type s} {PosA : ∀ x, ShA x → Type p} {GA : A → Type u → Type v}
+  (o : ∀ x, Occ (ShA x) (PosA x) (GA x))
+
+@[simp] theorem mem_pi (x : X) (k : ∀ a, GA a X) : Mem (pi A o) x k ↔ ∃ a, Mem (o a) x (k a) :=
+  ⟨fun ⟨q, e⟩ => ⟨q.1, q.2, e⟩, fun ⟨a, q, e⟩ => ⟨⟨a, q⟩, e⟩⟩
+
+@[simp] theorem mem_sigma (x : X) (z : Σ a, GA a X) : Mem (sigma A o) x z ↔ Mem (o z.1) x z.2 :=
+  Iff.rfl
+
+end Dependent
+
+@[simp] theorem mem_piP {P : Prop} {ShP : P → Type s} {PosP : ∀ h, ShP h → Type p}
+    {GP : P → Type u → Type v} (o : ∀ h, Occ (ShP h) (PosP h) (GP h)) (x : X) (k : ∀ h, GP h X) :
+    Mem (piP P o) x k ↔ ∃ h, Mem (o h) x (k h) :=
+  ⟨fun ⟨q, e⟩ => ⟨q.1, q.2, e⟩, fun ⟨h, q, e⟩ => ⟨⟨h, q⟩, e⟩⟩
+
+/-- Through a composite: a member of a member of the outer structure. -/
+@[simp] theorem mem_comp {Sh : Type s} {Pos : Sh → Type p} {Sh' : Type s'} {Pos' : Sh' → Type p'}
+    {G : Type u' → Type v} {H : Type u → Type u'} (oG : Occ Sh Pos G) (oH : Occ Sh' Pos' H) (x : X)
+    (y : G (H X)) : Mem (comp oG oH) x y ↔ ∃ z, Mem oG z y ∧ Mem oH x z :=
+  ⟨fun ⟨r, e⟩ => ⟨_, ⟨r.1, rfl⟩, r.2, e⟩, fun ⟨_, ⟨q, e⟩, r, e'⟩ => by subst e; exact ⟨⟨q, r⟩, e'⟩⟩
+
+end MemCompute
+
+/-! What `simp` makes of `∃ t, Mem o t y ∧ P t`, the members of a value with a property, before it
+computes the membership (`simp ↓`): the combinators are gone through first, so that the member is
+eliminated at each leaf also where several occurrences make a disjunction (`List (α × α)`), which
+the membership computed first would leave under an existential. -/
+
+section ExistsMem
+
+variable {X : Type u} (P : X → Prop)
+
+@[simp ↓] theorem exists_mem_hole (y : X) : (∃ t, Mem hole t y ∧ P t) ↔ P y := by
+  simp only [mem_hole, exists_eq_left]
+
+@[simp ↓] theorem exists_mem_const (A : Type v) (a : A) : (∃ t, Mem (const A) t a ∧ P t) ↔ False :=
+  ⟨fun ⟨_, h, _⟩ => not_mem_const A _ a h, False.elim⟩
+
+section Forms
+
+variable {Sh₁ : Type s} {Pos₁ : Sh₁ → Type p} {Sh₂ : Type s'} {Pos₂ : Sh₂ → Type p'}
+  {G₁ : Type u → Type v} {G₂ : Type u → Type v'} (o₁ : Occ Sh₁ Pos₁ G₁) (o₂ : Occ Sh₂ Pos₂ G₂)
+
+@[simp ↓] theorem exists_mem_prod (y : G₁ X × G₂ X) :
+    (∃ t, Mem (prod o₁ o₂) t y ∧ P t) ↔ (∃ t, Mem o₁ t y.1 ∧ P t) ∨ ∃ t, Mem o₂ t y.2 ∧ P t := by
+  simp only [mem_prod, or_and_right, exists_or]
+
+@[simp ↓] theorem exists_mem_sum (y : G₁ X ⊕ G₂ X) :
+    (∃ t, Mem (sum o₁ o₂) t y ∧ P t) ↔
+      (∃ a, y = .inl a ∧ ∃ t, Mem o₁ t a ∧ P t) ∨ ∃ b, y = .inr b ∧ ∃ t, Mem o₂ t b ∧ P t := by
+  cases y with
+  | inl a => simp only [mem_sum_inl, Sum.inl.injEq, exists_eq_left', reduceCtorEq, false_and,
+      exists_false, or_false]
+  | inr b => simp only [mem_sum_inr, Sum.inr.injEq, exists_eq_left', reduceCtorEq, false_and,
+      exists_false, false_or]
+
+end Forms
+
+@[simp ↓] theorem exists_mem_pi {A : Type a} {ShA : A → Type s} {PosA : ∀ x, ShA x → Type p}
+    {GA : A → Type u → Type v} (o : ∀ x, Occ (ShA x) (PosA x) (GA x)) (k : ∀ a, GA a X) :
+    (∃ t, Mem (pi A o) t k ∧ P t) ↔ ∃ a, ∃ t, Mem (o a) t (k a) ∧ P t := by
+  simp only [mem_pi]
+  exact ⟨fun ⟨t, ⟨a, h⟩, h'⟩ => ⟨a, t, h, h'⟩, fun ⟨a, t, h, h'⟩ => ⟨t, ⟨a, h⟩, h'⟩⟩
+
+@[simp ↓] theorem exists_mem_sigma {A : Type a} {ShA : A → Type s} {PosA : ∀ x, ShA x → Type p}
+    {GA : A → Type u → Type v} (o : ∀ x, Occ (ShA x) (PosA x) (GA x)) (z : Σ a, GA a X) :
+    (∃ t, Mem (sigma A o) t z ∧ P t) ↔ ∃ t, Mem (o z.1) t z.2 ∧ P t :=
+  Iff.rfl
+
+@[simp ↓] theorem exists_mem_piP {Q : Prop} {ShP : Q → Type s} {PosP : ∀ h, ShP h → Type p}
+    {GP : Q → Type u → Type v} (o : ∀ h, Occ (ShP h) (PosP h) (GP h)) (k : ∀ h, GP h X) :
+    (∃ t, Mem (piP Q o) t k ∧ P t) ↔ ∃ h, ∃ t, Mem (o h) t (k h) ∧ P t := by
+  simp only [mem_piP]
+  exact ⟨fun ⟨t, ⟨h, m⟩, h'⟩ => ⟨h, t, m, h'⟩, fun ⟨h, t, m, h'⟩ => ⟨t, ⟨h, m⟩, h'⟩⟩
+
+@[simp ↓] theorem exists_mem_comp {Sh : Type s} {Pos : Sh → Type p} {Sh' : Type s'}
+    {Pos' : Sh' → Type p'} {G : Type u' → Type v} {H : Type u → Type u'} (oG : Occ Sh Pos G)
+    (oH : Occ Sh' Pos' H) (y : G (H X)) :
+    (∃ t, Mem (comp oG oH) t y ∧ P t) ↔ ∃ z, Mem oG z y ∧ ∃ t, Mem oH t z ∧ P t := by
+  simp only [mem_comp]
+  exact ⟨fun ⟨t, ⟨z, hz, m⟩, h⟩ => ⟨z, hz, t, m, h⟩, fun ⟨z, hz, t, m, h⟩ => ⟨t, ⟨z, hz, m⟩, h⟩⟩
+
+end ExistsMem
+
 end Occ
 
 /-! ### The computation of `map` through the indexed combinators
@@ -931,6 +1087,105 @@ of the maps. -/
     map (compI oG oH) (compI oG' oH') f x = map oG oG' (fun k => map (oH k) (oH' k) f) x := rfl
 
 end ComputeComp
+
+/-! ### An indexed structure at one index
+
+The map of an indexed structure whose positions are all at the index `i` is the map at `i` of the
+plain structure of the same form: `Occ.hole` for `hole i`, the plain combinators for the indexed
+ones. It is so by definition through every combinator but a sum, where the two agree only after
+cases on the value, so the agreement goes through the combinators (`map_flat_sum`, …). The
+command uses it for a nested argument of a family or of a type of a block whose positions are at
+one index after cases on them (`Gen/Derive.lean`). -/
+
+section MapFlat
+
+variable {J : Type j} (i : J)
+
+section Forms
+
+variable {Sh₁ : Type s} {Pos₁ : Sh₁ → Type p} {Sh₂ : Type s'} {Pos₂ : Sh₂ → Type p'}
+  {F₁ : Type u → Type v} {F₂ : Type u → Type v'} {F₁' : Type u' → Type w} {F₂' : Type u' → Type w'}
+  (p₁ : Occ Sh₁ Pos₁ F₁) (p₁' : Occ Sh₁ Pos₁ F₁') (p₂ : Occ Sh₂ Pos₂ F₂) (p₂' : Occ Sh₂ Pos₂ F₂')
+  {pidx₁ : (sh : Sh₁) → Pos₁ sh → J} {pidx₂ : (sh : Sh₂) → Pos₂ sh → J}
+  (o₁ : IOcc Sh₁ Pos₁ pidx₁ fun Y : J → Type u => F₁ (Y i))
+  (o₁' : IOcc Sh₁ Pos₁ pidx₁ fun Y : J → Type u' => F₁' (Y i))
+  (o₂ : IOcc Sh₂ Pos₂ pidx₂ fun Y : J → Type u => F₂ (Y i))
+  (o₂' : IOcc Sh₂ Pos₂ pidx₂ fun Y : J → Type u' => F₂' (Y i))
+
+theorem map_flat_prod
+    (h₁ : ∀ {Y : J → Type u} {Y' : J → Type u'} (g : ∀ j, Y j → Y' j) (y : F₁ (Y i)),
+      map o₁ o₁' g y = Occ.map p₁ p₁' (g i) y)
+    (h₂ : ∀ {Y : J → Type u} {Y' : J → Type u'} (g : ∀ j, Y j → Y' j) (y : F₂ (Y i)),
+      map o₂ o₂' g y = Occ.map p₂ p₂' (g i) y)
+    {Y : J → Type u} {Y' : J → Type u'} (g : ∀ j, Y j → Y' j) (y : F₁ (Y i) × F₂ (Y i)) :
+    map (prod o₁ o₂) (prod o₁' o₂') g y = Occ.map (Occ.prod p₁ p₂) (Occ.prod p₁' p₂') (g i) y :=
+  Prod.ext (h₁ g y.1) (h₂ g y.2)
+
+/-- Through a sum, by cases on the value. -/
+theorem map_flat_sum
+    (h₁ : ∀ {Y : J → Type u} {Y' : J → Type u'} (g : ∀ j, Y j → Y' j) (y : F₁ (Y i)),
+      map o₁ o₁' g y = Occ.map p₁ p₁' (g i) y)
+    (h₂ : ∀ {Y : J → Type u} {Y' : J → Type u'} (g : ∀ j, Y j → Y' j) (y : F₂ (Y i)),
+      map o₂ o₂' g y = Occ.map p₂ p₂' (g i) y)
+    {Y : J → Type u} {Y' : J → Type u'} (g : ∀ j, Y j → Y' j) :
+    ∀ y : F₁ (Y i) ⊕ F₂ (Y i),
+      map (sum o₁ o₂) (sum o₁' o₂') g y = Occ.map (Occ.sum p₁ p₂) (Occ.sum p₁' p₂') (g i) y
+  | .inl y => congrArg Sum.inl (h₁ g y)
+  | .inr y => congrArg Sum.inr (h₂ g y)
+
+end Forms
+
+section Dependent
+
+variable {A : Type a} {ShA : A → Type s} {PosA : ∀ x, ShA x → Type p}
+  {FA : A → Type u → Type v} {FA' : A → Type u' → Type w}
+  (p : ∀ x, Occ (ShA x) (PosA x) (FA x)) (p' : ∀ x, Occ (ShA x) (PosA x) (FA' x))
+  {pidxA : ∀ x (sh : ShA x), PosA x sh → J}
+  (o : ∀ x, IOcc (ShA x) (PosA x) (pidxA x) fun Y : J → Type u => FA x (Y i))
+  (o' : ∀ x, IOcc (ShA x) (PosA x) (pidxA x) fun Y : J → Type u' => FA' x (Y i))
+
+theorem map_flat_pi
+    (h : ∀ x {Y : J → Type u} {Y' : J → Type u'} (g : ∀ j, Y j → Y' j) (y : FA x (Y i)),
+      map (o x) (o' x) g y = Occ.map (p x) (p' x) (g i) y)
+    {Y : J → Type u} {Y' : J → Type u'} (g : ∀ j, Y j → Y' j) (k : ∀ x, FA x (Y i)) :
+    map (pi A o) (pi A o') g k = Occ.map (Occ.pi A p) (Occ.pi A p') (g i) k :=
+  funext fun x => h x g (k x)
+
+theorem map_flat_sigma
+    (h : ∀ x {Y : J → Type u} {Y' : J → Type u'} (g : ∀ j, Y j → Y' j) (y : FA x (Y i)),
+      map (o x) (o' x) g y = Occ.map (p x) (p' x) (g i) y)
+    {Y : J → Type u} {Y' : J → Type u'} (g : ∀ j, Y j → Y' j) (z : Σ x, FA x (Y i)) :
+    map (sigma A o) (sigma A o') g z = Occ.map (Occ.sigma A p) (Occ.sigma A p') (g i) z :=
+  congrArg (Sigma.mk z.1) (h z.1 g z.2)
+
+end Dependent
+
+theorem map_flat_piP {P : Prop} {ShP : P → Type s} {PosP : ∀ h, ShP h → Type p}
+    {FP : P → Type u → Type v} {FP' : P → Type u' → Type w}
+    (p : ∀ h, Occ (ShP h) (PosP h) (FP h)) (p' : ∀ h, Occ (ShP h) (PosP h) (FP' h))
+    {pidxP : ∀ h (sh : ShP h), PosP h sh → J}
+    (o : ∀ h, IOcc (ShP h) (PosP h) (pidxP h) fun Y : J → Type u => FP h (Y i))
+    (o' : ∀ h, IOcc (ShP h) (PosP h) (pidxP h) fun Y : J → Type u' => FP' h (Y i))
+    (hy : ∀ h {Y : J → Type u} {Y' : J → Type u'} (g : ∀ j, Y j → Y' j) (y : FP h (Y i)),
+      map (o h) (o' h) g y = Occ.map (p h) (p' h) (g i) y)
+    {Y : J → Type u} {Y' : J → Type u'} (g : ∀ j, Y j → Y' j) (k : ∀ h, FP h (Y i)) :
+    map (piP P o) (piP P o') g k = Occ.map (Occ.piP P p) (Occ.piP P p') (g i) k :=
+  funext fun h => hy h g (k h)
+
+/-- Through a plain type constructor applied to an indexed expression: inside it. -/
+theorem map_flat_compC {Sh : Type s} {Pos : Sh → Type p} {Sh' : Type s'} {Pos' : Sh' → Type p'}
+    {G : Type u'' → Type v} {G' : Type v'' → Type v'} (oG : Occ Sh Pos G) (oG' : Occ Sh Pos G')
+    {F : Type u → Type u''} {F' : Type u' → Type v''} (p : Occ Sh' Pos' F) (p' : Occ Sh' Pos' F')
+    {pidx' : (sh : Sh') → Pos' sh → J}
+    (o : IOcc Sh' Pos' pidx' fun Y : J → Type u => F (Y i))
+    (o' : IOcc Sh' Pos' pidx' fun Y : J → Type u' => F' (Y i))
+    (h : ∀ {Y : J → Type u} {Y' : J → Type u'} (g : ∀ j, Y j → Y' j) (y : F (Y i)),
+      map o o' g y = Occ.map p p' (g i) y)
+    {Y : J → Type u} {Y' : J → Type u'} (g : ∀ j, Y j → Y' j) (y : G (F (Y i))) :
+    map (compC oG o) (compC oG' o') g y = Occ.map (Occ.comp oG p) (Occ.comp oG' p') (g i) y :=
+  congrArg (fun k => Occ.map oG oG' k y) (funext fun z => h g z)
+
+end MapFlat
 
 end IOcc
 

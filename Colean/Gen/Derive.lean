@@ -9,14 +9,19 @@ import Colean.Model.IOcc2
 of a block, with its context: the analysis of its declaration and its public declarations (`T`,
 `T.F`, `T.dtor`, `T.corec`, `T.fold`, `T.contract`, …). Output: the instances `PolyIso` and
 `PolyMap` for `fun X => T (H₁ X) … (Hₙ X) idx` at every index `idx`, for `H₁`, …, `Hₙ` themselves
-instances, so that later declarations can nest through `T`; and for every constructor `c` the
+instances (`PolyMap` from `PolyMap` instances of the `Hᵢ`, as the instances of the built-in
+forms), so that later declarations can nest through `T`; and for every constructor `c` the
 `simp` lemmas `T.Poly.map_c` and `T.Poly.mem_c`, the map and membership on `T.c` (see "The simp
 lemmas" below), so that `simp` computes through the instances.
 
 This step is separate from the declaration of the type. It runs after it, nothing in the
 declaration depends on it, and it cannot affect it: on failure every declaration of this step is
-rolled back and a warning is logged, and the type is simply not available for nesting. A failure
-of the `simp` lemmas alone rolls back only them, with a warning; the instances stay. In an open
+rolled back and a warning is logged, and the type is simply not available for nesting. The warning
+gives a short reason: a limit of the step or of the analysis as it is, an error of the generator by
+what it failed to generate (`stepPhase`), with the error itself under
+`set_option codata.deriveDetails true`. When no parameter may vary because of a field, an info
+says so and why. A failure of the `simp` lemmas alone rolls back only them, with a warning; the
+instances stay. In an open
 run of a `mixed_mutual` block that an outer run nests through, the outer run needs the
 instances in the run's extra parameters: a failure, or such a parameter that cannot vary, is an
 error, which stops the block.
@@ -28,7 +33,7 @@ parameter's type and no index's type depends on and that are used, outside the o
 depends on. Such a field is at a *parameter position*; it may mention several holes, and its
 structure in the premises is that structure with `Occ.ofIso Hᵢ` at the occurrences of the `i`-th
 hole (`Holes.atHole?`, `fieldOcc`). When a field has no structure in all the holes it mentions,
-they are dropped one at a time, the first ones first, until the others have one (`refineHoles`).
+the fewest are dropped, the first ones first, so that the others have one (`refineHoles`).
 A nested argument that mentions a hole outside the occurrences counts too when it splits through
 products and sums into parts with only holes or only occurrences, or into such parts and parts
 with both under a named type constructor or a function that have a structure in two variables
@@ -37,9 +42,12 @@ with both under a named type constructor or a function that have a structure in 
 With the holes fixed, the constructors of the presentation are those of `T` with such nested
 arguments split (`VCtor`, `withVCtors`): an argument `p : α × T α` becomes its parts `p.1`, a field
 at a parameter position, and `p.2`, a recursive argument, and through a sum `f : T α ⊕ α` the
-constructor becomes one constructor of the presentation per side, `app_inl` and `app_inr`. With
-indices a nested argument is split as well when its positions are at an index only after cases
-on them (`severalIdx`, `T n × T (n + 1)`, `A × B` in a block). A part with both a hole and the
+constructor becomes one constructor of the presentation per side, `app_inl` and `app_inr` (with a
+suffix when a name is taken, as are the names of the parts). With indices a nested argument is
+split as well when its positions are at an index only after cases on them (`severalIdx`,
+`T n × T (n + 1)`, `A × B` in a block). Through sums, at most `maxSplit` constructors of the
+presentation come from one constructor: beyond, the arguments through sums are not split, and
+have a structure in two variables or their indexed structure. A part with both a hole and the
 type under a named type constructor or a function (`p : List (α × T α)`, `k : Nat → α × T α`,
 `p : List (α ⊕ T α)`) has a structure in two variables (`Occ₂`, `Model/Occ2.lean`, a
 `MixField`): its structure in the occurrences alone, the holes constant, gone through by its
@@ -51,15 +59,16 @@ the index of the presentation (`IOcc₂`, `Model/IOcc2.lean`, `imixOcc`), and in
 argument whose positions are at a type of the block only after cases on them inside a named type
 constructor (`p : List (RA α × Nat)`) has one too, with no part in the holes: its positions then
 carry the presentation's index by construction. When its positions are at one index after cases
-(`oneIdx₂`), it is the plain structure at that index (`IOcc₂.ofOcc₂`, `flatOcc`, `mixOcc`), and its
-rules are stated as without indices; `T.F.map` is its map by `IOcc₂.AgreeY`. The layer
-`T.F (H X) Y` is then
+(`oneIdx`, the recursor's analysis too), it is the plain structure at that index
+(`IOcc₂.ofOcc₂`, `flatOcc?`, `mixOcc`), and its rules are stated as without indices; `T.F.map` is
+its map by `IOcc₂.AgreeY`, through a sum too (`proveMapFlat`). The layer `T.F (H X) Y` is then
 presented as `Lay P B X Y` (`T.Poly.S`, `T.Poly.P`, `T.Poly.B`, `T.Poly.toL`, `T.Poly.ofL` and
 their laws; `toL` through the products by projections and through the sums by `Sum.casesOn`,
 `ofL` building the pairs and injections, `polyDispatch`, `applyVCtor`), and the generic theorems
 of `Model/Poly.lean` do the rest from the contract (`T.Poly.fix`, the instances
 `T.Poly.instPolyIso`, `T.Poly.instPolyMap`, and when the last parameter is the last hole,
-`T.Poly.instPolyIsoEta` and `T.Poly.instPolyMapEta` for `T a₁ … aₙ₋₁` itself).
+`T.Poly.instPolyIsoEta` and `T.Poly.instPolyMapEta` for `T a₁ … aₙ₋₁` itself, the latter across
+universes when the universe of that parameter is its own, `u` or `u + 1` say).
 
 With indices, the presentation is a family over an index `I`, with the index of a position
 (`T.Poly.idx`) and the signature of the trees of shapes (`T.Poly.sig`): `I` is the packed index of
@@ -88,7 +97,36 @@ a type.
 
 open Lean Meta Elab Term
 
+register_option codata.deriveDetails : Bool := {
+  defValue := false
+  descr := "show the error itself when the instances of a declared type are not generated \
+    (step 5 of the `codata` and `data` commands)"
+}
+
 namespace Codata.Gen
+
+/-- An error of step 5 worded for the declaration, a limit of the step, which the report of a
+failure keeps as it is (`stepPhase`). -/
+def throwLimit (msg : MessageData) : MetaM α :=
+  throwError (MessageData.tagged `Codata.Gen.limit msg)
+
+/-- Is `e` an internal error of the generators, rather than an expected failure of the analysis
+(no occurrence structure, no instance)? Those are not caught. -/
+def isInternalError (e : Exception) : MetaM Bool := do
+  return (← e.toMessageData.toString).startsWith "internal error"
+
+/-- Run the part `k` of step 5, which generates `what`. A limit of the step (`throwLimit`), a
+timeout, and with `worded` any error but an internal one (those of the analysis are worded for the
+declaration), go through as they are; any other error, of the generator, is reported by what
+failed, with the error itself under `set_option codata.deriveDetails true`. -/
+def stepPhase (what : MessageData) (k : TermElabM α) (worded := false) : TermElabM α := do
+  try k catch e =>
+    if e.toMessageData.hasTag (· == `Codata.Gen.limit) then throw e
+    if worded && !(← isInternalError e) then throw e
+    if codata.deriveDetails.get (← getOptions) then
+      throwError "generating {what} failed:\n{e.toMessageData}"
+    throwError "generating {what} failed, an error of the generator \
+      (`set_option codata.deriveDetails true` shows it)"
 
 /-- The holes of the structure of a field in the parameters `as`: their occurrences, with the
 structure `atHole?` put at each; without, a single parameter `a : Type lvl` as the hole. -/
@@ -224,52 +262,33 @@ partial def imixOcc (holes oHs : Array Expr) (lx ly : Level) (I : Expr) (tr : Ex
     mkAppM ``Codata.IOcc₂.comp #[ex[0]!, ← go ex[1]!]
   | _ => throwError "a parameter and the type in one argument of a functor on families"
 
-/-- Are the positions of the indexed structure `o` at one index after cases on them, through
-products, sums, functions, dependent pairs and plain type constructors down to occurrences and
-plain leaves at an index? That index (`some none` without positions). -/
-partial def oneIdx₂ (o : Expr) : MetaM (Option (Option Expr)) := do
-  let ex ← explicitArgs o
-  let both (i j : Option Expr) : MetaM (Option (Option Expr)) := do
-    match i, j with
-    | some i, some j => return if ← isDefEq i j then some (some i) else none
-    | some i, none | none, some i => return some (some i)
-    | none, none => return some none
-  let under (f : Expr) : MetaM (Option (Option Expr)) :=
-    lambdaBoundedTelescope f 1 fun xs b => do
-      let some i ← oneIdx₂ b | return none
-      return if i.any fun i => xs.any (i.containsFVar ·.fvarId!) then none else some i
-  match o.getAppFn.constName? with
-  | some ``Codata.IOcc.const => return some none
-  | some ``Codata.IOcc.hole => return some (some ex[0]!)
-  | some ``Codata.IOcc.ofOcc => return some (some ex[1]!)
-  | some ``Codata.IOcc.prod | some ``Codata.IOcc.sum =>
-    let some i ← oneIdx₂ ex[0]! | return none
-    let some j ← oneIdx₂ ex[1]! | return none
-    both i j
-  | some ``Codata.IOcc.pi | some ``Codata.IOcc.piP | some ``Codata.IOcc.sigma => under ex[1]!
-  | some ``Codata.IOcc.compC => oneIdx₂ ex[1]!
-  | _ => return none
-
 /-- The plain structure, at the occurrences' universe `ly`, of an indexed structure whose
-positions are all at one index (`oneIdx₂`): an occurrence is the occurrence, a plain leaf at the
-index the leaf, the combinators the plain ones. -/
-partial def flatOcc (ly : Level) (o : Expr) : TermElabM Expr := do
+positions are all at one index (`oneIdx`): an occurrence is the occurrence, a plain leaf at the
+index the leaf, the combinators the plain ones; `none` through a functor on families. -/
+partial def flatOcc? (ly : Level) (o : Expr) : TermElabM (Option Expr) := do
   let ex ← explicitArgs o
-  let under (n : Name) (A f : Expr) : TermElabM Expr := do
-    let f' ← withLocalDeclD `x A fun x => do mkLambdaFVars #[x] (← flatOcc ly (f.beta #[x]))
-    mkAppM n #[A, f']
+  let under (n : Name) (A f : Expr) : TermElabM (Option Expr) := do
+    let f'? ← withLocalDeclD `x A fun x => do
+      (← flatOcc? ly (f.beta #[x])).mapM fun b => mkLambdaFVars #[x] b
+    f'?.mapM fun f' => mkAppM n #[A, f']
+  let two (n : Name) : TermElabM (Option Expr) := do
+    let some l ← flatOcc? ly ex[0]! | return none
+    let some r ← flatOcc? ly ex[1]! | return none
+    some <$> mkAppM n #[l, r]
   match o.getAppFn.constName? with
   | some ``Codata.IOcc.const =>
     return mkApp (← constAt ``Codata.Occ.const [(`u, ly), (`v, ← typeLevel ex[0]!)]) ex[0]!
   | some ``Codata.IOcc.hole => constAt ``Codata.Occ.hole [(`u, ly)]
   | some ``Codata.IOcc.ofOcc => return ex[0]!
-  | some ``Codata.IOcc.prod => mkAppM ``Codata.Occ.prod #[← flatOcc ly ex[0]!, ← flatOcc ly ex[1]!]
-  | some ``Codata.IOcc.sum => mkAppM ``Codata.Occ.sum #[← flatOcc ly ex[0]!, ← flatOcc ly ex[1]!]
+  | some ``Codata.IOcc.prod => two ``Codata.Occ.prod
+  | some ``Codata.IOcc.sum => two ``Codata.Occ.sum
   | some ``Codata.IOcc.pi => under ``Codata.Occ.pi ex[0]! ex[1]!
   | some ``Codata.IOcc.piP => under ``Codata.Occ.piP ex[0]! ex[1]!
   | some ``Codata.IOcc.sigma => under ``Codata.Occ.sigma ex[0]! ex[1]!
-  | some ``Codata.IOcc.compC => mkAppM ``Codata.Occ.comp #[ex[0]!, ← flatOcc ly ex[1]!]
-  | _ => throwError "internal error: no plain structure for{indentExpr o}"
+  | some ``Codata.IOcc.compC =>
+    let some r ← flatOcc? ly ex[1]! | return none
+    some <$> mkAppM ``Codata.Occ.comp #[ex[0]!, r]
+  | _ => return none
 
 /-- Run `k` on `n` local variables, the `i`-th with the name, binder info and type `mk i`. -/
 def withLocalsN (n : Nat) (mk : Nat → TermElabM (Name × BinderInfo × Expr))
@@ -324,6 +343,14 @@ def polyName (s : String) : Name := .str (.str ctx.name "Poly") s
 
 /-! ### The holes -/
 
+/-- Run `k` with local instances `PolyMap Hᵢ Hᵢ` for the premises `Hs` with their instances
+`insts`: a leaf at the premises (`fun X => E (H₁ X) (H₂ X)`) has a `PolyMap` instance only with
+those of its premises, which the analysis of a field checks (`leafOcc`). Nothing generated
+mentions them. -/
+def withSelfMaps (Hs Ss Rs insts : Array Expr) (k : TermElabM α) : TermElabM α :=
+  withLocalsN Hs.size (fun i => return (`map, .instImplicit, ← mkAppOptM ``Codata.PolyMap
+    (#[Hs[i]!, Hs[i]!, Ss[i]!, Rs[i]!, insts[i]!, insts[i]!].map some))) fun _ => k
+
 /-- Run `k` on premises for the parameters `cands`, as the instances will have them: for each
 `Hᵢ : Type x → Aᵢ` with an instance `PolyIso Hᵢ Sᵢ Rᵢ`, given to `k` as `Occ.ofIso Hᵢ`, and the
 universe `x`. For the checks of `refineHoles` only. -/
@@ -338,7 +365,8 @@ def withCheckPremises (cands : Array Expr) (k : Array Expr → Level → TermEla
   withLocalsN n (fun i => return (`R, .default, ← mkArrow Ss[i]! (mkSort (lv (2 + 2 * i)).succ)))
     fun Rs => do
   withLocalsN n (fun i => return (`inst, .instImplicit,
-      ← mkAppM ``Codata.PolyIso #[Hs[i]!, Ss[i]!, Rs[i]!])) fun _ => do
+      ← mkAppM ``Codata.PolyIso #[Hs[i]!, Ss[i]!, Rs[i]!])) fun insts => do
+  withSelfMaps Hs Ss Rs insts do
   k (← Hs.mapM fun H => mkAppOptM ``Codata.Occ.ofIso #[some H, none, none, none]) (lv 0)
 
 /-- The parameters among `cands` that `ty` mentions outside the occurrences of the types being
@@ -369,13 +397,22 @@ def mixOf (holes oHs : Array Expr) (lx : Level) (ty : Expr) : TermElabM Expr := 
   if ctx.idxed then return ← imixOcc holes oHs lx ctx.lvl ctx.J id o
   mixOcc holes oHs lx ctx.lvl o
 
+/-- The sublists of `k` elements of `l`, in lexicographic order: those with the first ones first.
+-/
+def sublistsOf {α : Type} : List α → Nat → List (List α)
+  | _, 0 => [[]]
+  | [], _ + 1 => []
+  | x :: xs, k + 1 => (sublistsOf xs k).map (x :: ·) ++ sublistsOf xs (k + 1)
+
 /-- Remove the candidates that may not vary, until none is removed. A field may mention several:
-it has a structure in all of them, each at its premise (`fieldOcc`). When it has none, the
-candidates are dropped one at a time, the first ones first (in an open run of a `mixed_mutual`
-block the parameters for the outer types come last), until the others have one; if none can be
-dropped so, all of them are. A nested argument with candidates outside the occurrences splits
-into parts (`splitParts`), those with candidates checked as fields. -/
-partial def refineHoles (cands : Array Expr) : TermElabM (Array Expr) := do
+it has a structure in all of them, each at its premise (`fieldOcc`). When it has none, the fewest
+candidates are dropped so that the others have one, the first ones first (in an open run of a
+`mixed_mutual` block the parameters for the outer types come last): one, the first that will do,
+then two, …; if none can be dropped so, all of them are. A nested argument with candidates outside
+the occurrences splits into parts (`splitParts`), those with candidates checked as fields. With
+the reason each dropped candidate may not vary, for the message when none may. -/
+partial def refineHoles (cands : Array Expr) (why : Array (Expr × MessageData) := #[]) :
+    TermElabM (Array Expr × Array (Expr × MessageData)) := do
   let hasOcc (ms : Array Expr) (ty : Expr) : TermElabM Bool := do
     try
       if ctx.mentions ty then
@@ -385,11 +422,23 @@ partial def refineHoles (cands : Array Expr) : TermElabM (Array Expr) := do
       else
         ctx.withCheckPremises ms fun oHs lx => do discard <| fieldOcc ms oHs lx ty
       pure true
-    catch _ => pure false
-  let mut bad : Array Expr := #[]
+    catch e => if ← isInternalError e then throw e else pure false
+  -- The candidates to drop for the field `ty` with the candidates `ms`: none if it has a structure
+  -- in all, else the fewest, the first ones first (beyond a few candidates, only the first ones).
+  let dropFor (ms : Array Expr) (ty : Expr) : TermElabM (Array Expr) := do
+    if ← hasOcc ms ty then return #[]
+    for k in [1:ms.size] do
+      let drops := if ms.size ≤ 5 then sublistsOf ms.toList k else [ms.toList.take k]
+      for d in drops do
+        let drop := d.toArray
+        if ← hasOcc (ms.filter (!drop.contains ·)) ty then return drop
+    return ms
+  let mut bad : Array (Expr × MessageData) := #[]
   for c in ctx.ctors do
+    let field (a : ArgInfo) : MessageData := m!"the field `{a.name}` of `{c.name}`"
     -- In an index of the result, a parameter is fixed by the constructor.
-    bad := bad ++ cands.filter fun h => c.uidx.any (·.containsFVar h.fvarId!)
+    bad := bad ++ (cands.filter fun h => c.uidx.any (·.containsFVar h.fvarId!)).map
+      (·, m!"the result index of `{c.name}`")
     for a in c.args, i in [0:c.args.size] do
       if a.kind.isData then
         let ms := cands.filter (a.type.containsFVar ·.fvarId!)
@@ -398,14 +447,11 @@ partial def refineHoles (cands : Array Expr) : TermElabM (Array Expr) := do
             (·.type.containsFVar a.fvar.fvarId!) ||
           c.uidx.any (·.containsFVar a.fvar.fvarId!)
         if later then
-          bad := bad ++ ms
-        else if !(← hasOcc ms a.type) then
-          let drop? ← if ms.size ≥ 2 then
-              ms.findM? fun h => hasOcc (ms.filter (· != h)) a.type
-            else pure none
-          bad := match drop? with
-            | some h => bad.push h
-            | none => bad ++ ms
+          bad := bad ++ ms.map (·, m!"{field a}, which a later argument or the result index \
+            depends on")
+        else
+          bad := bad ++ (← dropFor ms a.type).map (·, m!"{field a}, without an occurrence \
+            structure in it")
       else
         -- Outside the occurrences of the type, and in their indices: only in a nested argument
         -- that splits through products and sums into parts with the candidates and parts with
@@ -414,37 +460,40 @@ partial def refineHoles (cands : Array Expr) : TermElabM (Array Expr) := do
         let ms := ctx.outside cands a.type
         if ms.isEmpty then continue
         let parts? ← if a.kind.isNest then ctx.splitParts cands a.type else pure none
+        let both := m!"{field a}, with the type, without an occurrence structure in both"
         match parts? with
-        | none => bad := bad ++ ms
+        | none => bad := bad ++ ms.map (·, both)
         | some parts =>
           for part in parts do
             let ms := if ctx.mentions part then ctx.outside cands part
               else cands.filter (part.containsFVar ·.fvarId!)
             if ms.isEmpty then continue
-            if !(← hasOcc ms part) then
-              let drop? ← if ms.size ≥ 2 then
-                  ms.findM? fun h => hasOcc (ms.filter (· != h)) part
-                else pure none
-              bad := match drop? with
-                | some h => bad.push h
-                | none => bad ++ ms
-  if bad.isEmpty then return cands
-  refineHoles (cands.filter (!bad.contains ·))
+            bad := bad ++ (← dropFor ms part).map (·, both)
+  if bad.isEmpty then return (cands, why)
+  let why := why ++ bad.filter fun (h, _) => !why.any (·.1 == h)
+  refineHoles (cands.filter fun h => !bad.any (·.1 == h)) why
 
-/-- The parameters that may vary. -/
-def polyHoles : TermElabM (Array Expr) := do
+/-- The parameters that may vary, with the reason each other parameter that is a type may not, in
+order, and whether one may not because of a field (`refineHoles`). -/
+def polyHoles : TermElabM (Array Expr × Array (Expr × MessageData) × Bool) := do
   let mut cands := #[]
+  let mut why := #[]
   for p in ctx.params do
     let isType := match ← instantiateMVars (← inferType p) with
       | .sort (.succ _) => true
       | _ => false
+    if !isType then continue
     let used ← ctx.params.anyM fun q => do
       return q != p && (← instantiateMVars (← inferType q)).containsFVar p.fvarId!
     -- An index's type may not mention it: the index is fixed per instance.
     let inIdx ← ctx.types.anyM fun t => t.idx.anyM fun i => do
       return (← instantiateMVars (← inferType i)).containsFVar p.fvarId!
-    if isType && !used && !inIdx then cands := cands.push p
-  ctx.refineHoles cands
+    if used then why := why.push (p, m!"the type of another parameter")
+    else if inIdx then why := why.push (p, m!"the type of an index")
+    else cands := cands.push p
+  let (holes, dropped) ← ctx.refineHoles cands
+  let all := why ++ dropped
+  return (holes, ctx.params.filterMap (fun p => all.find? (·.1 == p)), !dropped.isEmpty)
 
 /-! ### The context of the instances -/
 
@@ -532,6 +581,9 @@ structure Poly where
   Rs : Array Expr
   insts : Array Expr
   insts' : Array Expr
+  /-- The premises `PolyMap Hᵢ H'ᵢ` of `instPolyMap`, so that it is a map between instantiations
+  of one functor only when the premises are. -/
+  maps : Array Expr := #[]
   fields : Array (Array HoleField)
   /-- The arguments with a structure in two variables of each constructor of the presentation,
   which there are of kind `.data`. -/
@@ -625,9 +677,7 @@ def genPolyIx (P : Poly) : TermElabM Poly := do
   let lvls ← ctx.types.foldlM (init := #[]) fun acc t => do
     return acc ++ (← t.idx.mapM fun i => do getLevel (← inferType i))
   let r := resultLevel lvls
-  let pre := P.consts.filter (!ctx.declParams.contains ·)
-  let ty ← withBinderInfo (P.consts.filter (!pre.contains ·)) .default do
-    mkForallFVars P.consts (mkSort r.succ)
+  let ty ← mkForallFVars P.consts (mkSort r.succ)
   let ctorName (m : Nat) : Name :=
     name ++ Name.mkSimple (ctx.shortName m)
   let us ← withLocalDeclD `Ix ty fun Iv => do
@@ -715,32 +765,81 @@ partial def splitTpl (holes : Array Expr) (a : ArgInfo) (name : Name) (ty : Expr
     withLocalDeclD name ty fun x =>
       k (.part { a with fvar := x, name, bi := .default, type := ty, kind })
 
+/-- The number of constructors of the presentation for a nested argument of type `ty` split
+through its products and sums (`splitTpl`): the ways through its sums. -/
+partial def splitCount (holes : Array Expr) (ty : Expr) : TermElabM Nat := do
+  let e ← whnfOcc ty
+  if (← ctx.needsSplit holes ty) && (e.isAppOfArity ``Prod 2 || e.isAppOfArity ``Sum 2) then
+    let l ← splitCount holes e.appFn!.appArg!
+    let r ← splitCount holes e.appArg!
+    return if e.isAppOfArity ``Prod 2 then l * r else l + r
+  return 1
+
+/-- The most constructors of the presentation for one constructor of the type. Beyond, the
+arguments through sums are not split: they have a structure in two variables (`mixOcc`), with
+indices or in a block in two variables over the index (`imixOcc`), or without a parameter
+outside the occurrences their indexed structure. -/
+def maxSplit : Nat := 8
+
+/-- `n`, or `n` with the first suffix `_1`, `_2`, … for which `ok` holds. -/
+partial def freshSuffix (n : String) (ok : String → Bool) (k : Nat := 0) : String :=
+  let n' := if k == 0 then n else n ++ "_" ++ toString k
+  if ok n' then n' else freshSuffix n ok (k + 1)
+
 /-- Run `k` on the constructors of the presentation (`VCtor`): a nested argument that needs it
 split through products and sums (`needsSplit`), its parts new local variables, a constructor per
-way through the sums. Arguments that do not split are kept: in a block, a nested argument at
-several types that is not a product or a sum fails later, at its positions. -/
+way through the sums, unless that makes more than `maxSplit` constructors, when the arguments
+through sums are kept. Arguments that do not split are kept: in a block, a nested argument at
+several types that is not a product or a sum fails later, at its positions. The names of the
+constructors of the presentation and of the parts are internal: those taken, by a constructor or
+an argument, get a suffix (`freshSuffix`). -/
 partial def withVCtors (holes : Array Expr) (k : Array VCtor → TermElabM α) : TermElabM α := do
   let rec go (m : Nat) (acc : Array VCtor) : TermElabM α := do
     if h : m < ctx.ctors.size then
       let c := ctx.ctors[m]
+      let splits ← c.args.mapM fun a => do
+        let e ← whnfOcc a.type
+        return a.kind.isNest && (← ctx.needsSplit holes a.type) &&
+          (e.isAppOfArity ``Prod 2 || e.isAppOfArity ``Sum 2)
+      -- Through sums, at most `maxSplit` constructors of the presentation.
+      let counts ← (c.args.zip splits).mapM fun (a, sp) =>
+        if sp then ctx.splitCount holes a.type else pure 1
+      let keepSums := counts.foldl (· * ·) 1 > maxSplit
       let rec args (i : Nat) (tpls : Array Tpl) : TermElabM α := do
         if h : i < c.args.size then
           let a := c.args[i]
-          let e ← whnfOcc a.type
-          if a.kind.isNest && (← ctx.needsSplit holes a.type) &&
-              (e.isAppOfArity ``Prod 2 || e.isAppOfArity ``Sum 2) then
+          if splits[i]! && !(keepSums && counts[i]! > 1) then
             ctx.splitTpl holes a a.name a.type fun t => args (i + 1) (tpls.push t)
           else args (i + 1) (tpls.push (.part a))
         else
           let paths := tpls.foldl (init := #[((#[] : Array Bool), (#[] : Array ArgInfo))])
             fun ps t => ps.flatMap fun (c₁, a₁) => t.paths.map fun (c₂, a₂) => (c₁ ++ c₂, a₁ ++ a₂)
-          let vs := paths.map fun (choices, as) =>
+          -- The names of the parts, unlike those of the arguments.
+          let paths := paths.map fun (choices, as) => Id.run do
+            let mut out : Array ArgInfo := #[]
+            for a in as do
+              if c.args.any (·.fvar == a.fvar) then out := out.push a
+              else
+                let taken (n : String) : Bool :=
+                  c.args.any (·.name.toString == n) || out.any (·.name.toString == n)
+                let n := freshSuffix a.name.toString (!taken ·)
+                out := out.push { a with name := Name.mkSimple n }
+            return (choices, out)
+          -- The names of the constructors through sums, unlike those of the type and the others.
+          let mut vs : Array VCtor := #[]
+          for (choices, as) in paths do
             let sfx := if choices.isEmpty then "" else
               "_" ++ "_".intercalate (choices.map (if · then "inl" else "inr")).toList
-            { real := m, tpls, choices
-              ctor := { c with
-                name := Name.mkSimple (c.name.toString ++ sfx)
-                fname := Name.mkSimple (c.fname.toString ++ sfx), args := as } : VCtor }
+            let ok (s : String) : Bool := sfx.isEmpty || (
+              !ctx.ctors.any (fun c' => c'.name.toString == c.name.toString ++ s ||
+                c'.fname.toString == c.fname.toString ++ s) &&
+              !(acc ++ vs).any fun v => v.ctor.name.toString == c.name.toString ++ s ||
+                v.ctor.fname.toString == c.fname.toString ++ s)
+            let sfx := freshSuffix sfx ok
+            let ctor := { c with
+              name := Name.mkSimple (c.name.toString ++ sfx)
+              fname := Name.mkSimple (c.fname.toString ++ sfx), args := as }
+            vs := vs.push { real := m, tpls, choices, ctor }
           go (m + 1) (acc ++ vs)
       args 0 #[]
     else k acc
@@ -781,16 +880,16 @@ def polyB (P : Poly) : MetaM Expr := return mkAppN (← polyConst (ctx.polyName 
 def polyPos (s : String) (c : Ctor) (a : ArgInfo) : Name :=
   ctx.polyName s ++ Name.mkSimple (c.fname.toString ++ "_" ++ a.name.toString)
 
-/-- Declare the inductive `name` with the parameters `psB` (explicit, but for the section
-variables) and the constructors `mkCtors I` over a local variable `I` for it: a type `S`
-(`idx := false`) or a family over `S`; with indices, `S` is a family over the index `P.I`, and so
-are the families over it. Its universe is inferred from the constructors. -/
+/-- Declare the inductive `name` with the parameters `psB` (the premises explicit, the parameters
+of the type with the binder infos the user wrote) and the constructors `mkCtors I` over a local
+variable `I` for it: a type `S` (`idx := false`) or a family over `S`; with indices, `S` is a
+family over the index `P.I`, and so are the families over it. Its universe is inferred from the
+constructors. -/
 def polyInductive (P : Poly) (name : Name) (idx : Bool)
     (mkCtors : Expr → TermElabM (Array (Name × Expr))) : TermElabM Unit := do
   let psB := P.psB
   let declare (lvl : Level) : TermElabM Expr := do
-    let pre := P.consts.filter (!ctx.declParams.contains ·)
-    withBinderInfo (psB.filter (!pre.contains ·)) .default do
+    withBinderInfo (psB.filter (!P.consts.contains ·)) .default do
     let withI (k : Array Expr → TermElabM Expr) : TermElabM Expr :=
       if ctx.idxed then withLocalDeclD `i P.I fun i => k #[i] else k #[]
     withI fun is => do
@@ -944,8 +1043,7 @@ def genPolySig (P : Poly) : TermElabM Unit := do
       return mkAppN (← polyConst (ctx.polyName "idx")) (P.psB ++ #[i, s, b])
   let value := mkApp4 (.const ``Codata.Signature.mk [← typeLevel P.I, rS, rB]) P.I S B idxFn
   let type ← inferType value
-  let pre := P.consts.filter (!ctx.declParams.contains ·)
-  let (type, value) ← withBinderInfo (P.psB.filter (!pre.contains ·)) .default do
+  let (type, value) ← withBinderInfo (P.psB.filter (!P.consts.contains ·)) .default do
     return (← mkForallFVars P.psB type, ← mkLambdaFVars P.psB value)
   addDef (ctx.polyName "sig") (← ctx.levelParamsOf P.fresh #[type, value]) type value ctx.ref
     (reducible := true)
@@ -1106,7 +1204,7 @@ def polyLayer (P : Poly) (m : Nat) (X Y : Expr) (ys : Array Expr) : TermElabM Ex
       if ctx.isBlock then
         let ok ← sg.mvarId.withContext do isDefEq (← sg.mvarId.getType) (← inferType v)
         unless ok do
-          throwError "the positions of the nested argument `{a.name}` of `{c.name}` are at a \
+          throwLimit m!"the positions of the nested argument `{a.name}` of `{c.name}` are at a \
             type of the block only after cases on them, as through a product or a sum inside a \
             named type constructor, which is not supported for the types of a block"
       return v
@@ -1489,6 +1587,66 @@ partial def agreeRewrite (P : Poly) (g : MVarId) : MetaM MVarId := g.withContext
   let r ← g.rewrite tgt (← mkAppM ``Codata.Occ₂.AgreeY.map_ofC #[← instantiateMVars h])
   agreeRewrite P (← g.replaceTargetEq r.eNew r.eqProof)
 
+/-- A proof of `∀ {Y Y'} g y, IOcc.map oA oA' g y = Occ.map oY oY' (g i) y` in the goal `g`, under
+the binder of a point first for a combinator under a binder: the map of an indexed structure
+whose positions are all at the index `i` is the map at `i` of the plain structure of the same form
+(the hypothesis of `IOcc₂.AgreeY.ofOcc₂`). By definition without a sum; across one only after
+cases on the value, so through the lemma of each combinator (`IOcc.map_flat_sum`, …), whose
+arguments are the components of the two structures. -/
+partial def proveMapFlat (g : MVarId) : MetaM Unit := do
+  let ty ← instantiateMVars (← g.getType)
+  let (n, isEq) ← forallTelescopeReducing ty fun xs b => return (xs.size, b.isEq)
+  unless isEq do throwError "internal error: not a map at one index{indentExpr ty}"
+  -- Under the binder of a point: at that point.
+  if n > 4 then
+    let (_, g) ← g.intro1
+    return ← proveMapFlat g
+  let (oA, oA', oY, oY', i) ← forallTelescopeReducing ty fun _ b => do
+    let some (_, lhs, rhs) := b.eq? | unreachable!
+    let l ← explicitArgs lhs
+    let r ← explicitArgs rhs
+    return (l[0]!.headBeta, l[1]!.headBeta, r[0]!.headBeta, r[1]!.headBeta, r[2]!.appArg!)
+  if (oA.find? (·.isConstOf ``Codata.IOcc.sum)).isNone then
+    return ← withUnfolding do
+      let (_, g) ← g.intros
+      g.refl
+  let (exA, exA', exY, exY') := (← explicitArgs oA, ← explicitArgs oA', ← explicitArgs oY,
+    ← explicitArgs oY')
+  let (thm, args) ← match oA.getAppFn.constName? with
+    | some ``Codata.IOcc.prod => pure (``Codata.IOcc.map_flat_prod,
+        #[exY[0]!, exY'[0]!, exY[1]!, exY'[1]!, exA[0]!, exA'[0]!, exA[1]!, exA'[1]!])
+    | some ``Codata.IOcc.sum => pure (``Codata.IOcc.map_flat_sum,
+        #[exY[0]!, exY'[0]!, exY[1]!, exY'[1]!, exA[0]!, exA'[0]!, exA[1]!, exA'[1]!])
+    | some ``Codata.IOcc.pi =>
+      pure (``Codata.IOcc.map_flat_pi, #[exY[1]!, exY'[1]!, exA[1]!, exA'[1]!])
+    | some ``Codata.IOcc.piP =>
+      pure (``Codata.IOcc.map_flat_piP, #[exY[1]!, exY'[1]!, exA[1]!, exA'[1]!])
+    | some ``Codata.IOcc.sigma =>
+      pure (``Codata.IOcc.map_flat_sigma, #[exY[1]!, exY'[1]!, exA[1]!, exA'[1]!])
+    | some ``Codata.IOcc.compC => pure (``Codata.IOcc.map_flat_compC,
+        #[exA[0]!, exA'[0]!, exY[1]!, exY'[1]!, exA[1]!, exA'[1]!])
+    | _ => throwError "internal error: no map at one index through{indentExpr oA}"
+  -- The lemma up to its family `Y`: its explicit arguments the index, the structures, then the
+  -- hypotheses of the components, proved the same way.
+  let f ← mkConstWithFreshMVarLevels thm
+  let fTy ← inferType f
+  let k ← forallTelescope fTy fun ys _ => do
+    let some k ← ys.findIdxM? fun y => return (← y.fvarId!.getUserName) == `Y
+      | throwError "internal error: no family in `{thm}`"
+    return k
+  let (xs, bis, _) ← forallMetaBoundedTelescope fTy k
+  let explicit := (xs.zip bis).filterMap fun (x, bi) => if bi.isExplicit then some x else none
+  withUnfolding do
+    for x in explicit, a in #[i] ++ args do
+      unless ← isDefEq x a do
+        throwError "internal error: ill-typed argument of `{thm}`{indentExpr a}"
+    let pf ← instantiateMVars (mkAppN f xs)
+    unless ← isDefEq (← inferType pf) ty do
+      throwError "internal error: `{thm}` does not prove{indentExpr ty}"
+    for h in explicit.extract (1 + args.size) explicit.size do
+      proveMapFlat h.mvarId!
+    g.assign (← instantiateMVars pf)
+
 /-- A proof of `IOcc₂.AgreeY o o' X ι oY oY'` in the goal `g`, by the lemma of each combinator of
 `o`; a part in `Y` alone is an occurrence or a plain leaf at an index. -/
 partial def proveIAgreeY (g : MVarId) : MetaM Unit := do
@@ -1496,14 +1654,12 @@ partial def proveIAgreeY (g : MVarId) : MetaM Unit := do
   let some o := ex[0]? | throwError "internal error: not an agreement{indentExpr (← g.getType)}"
   if o.isAppOf ``Codata.IOcc₂.ofOcc₂ then
     -- The plain structures agree, and the indexed structure in `Y` alone is the plain one at the
-    -- index of the positions, by unfolding.
+    -- index of the positions (`proveMapFlat`).
     for g in ← g.apply (← mkConstWithFreshMVarLevels ``Codata.IOcc₂.AgreeY.ofOcc₂) do
       if ← g.isAssigned then continue
       if (← whnfR (← instantiateMVars (← g.getType))).isAppOf ``Codata.Occ₂.AgreeY then
         proveAgreeY g
-      else
-        let (_, g) ← g.introN 4
-        withUnfolding g.refl
+      else proveMapFlat g
     return
   let (n, binder) ← match o.getAppFn.constName? with
     | some ``Codata.IOcc₂.ofY =>
@@ -1768,8 +1924,8 @@ def genPolyLaws (P : Poly) : TermElabM Unit := do
           return
         -- With an argument with a structure in two variables: first through the products and
         -- sums of a split argument, then the map of that argument by `AgreeY.map_ofC`.
-        let simpOr (g : MVarId) (lemmas : Array Name) : MetaM (Option MVarId) := do
-          try simpOnlyStep g lemmas catch _ => pure (some g)
+        let simpOr (g : MVarId) (lemmas : Array Name) : MetaM (Option MVarId) :=
+          simpOnlyStep g lemmas (failIfUnchanged := false)
         let some g ← if P.vc[m]!.split then simpOr g sums else pure (some g) | return
         let g ← agreeRewrite P g
         if let some g ← simpOr g (#[``Codata.Lay.map, ``Codata.Occ.map_ofC] ++ split) then
@@ -1993,7 +2149,8 @@ def genPolyEta (P : Poly) (T : Name) : TermElabM Unit := do
   let lastTy ← inferType last
   let idH ← lam `X lastTy fun X => pure X
   let etaHs ← others.mapM fun a => lam `X lastTy fun _ => pure a
-  let etaSR ← (others.mapM fun a => do return #[a, ← lam `x a fun _ => pure (Lean.mkConst ``Empty)])
+  let etaSR ← others.mapM fun a => do
+    return #[a, ← lam `x a fun _ => pure (Lean.mkConst ``Empty)]
   let etaSR := etaSR.flatten ++
     #[Lean.mkConst ``Unit, ← lam `x (Lean.mkConst ``Unit) fun _ => pure (Lean.mkConst ``Unit)]
   let etaHs := etaHs.push idH
@@ -2014,27 +2171,32 @@ def genPolyEta (P : Poly) (T : Name) : TermElabM Unit := do
     mkAppN ty.getAppFn (ty.getAppArgs.modify 0 Expr.eta |>.modify 1 Expr.eta)
   ctx.addPolyInstance P (T ++ `Poly ++ `instPolyIsoEta) (P.consts ++ others)
     (etaType (← whnfR (← inferType isoE))) isoE
-  -- Across universes only when the universe of the last parameter is its own.
-  let tied ← match lastLvl with
-    | .param u => do
+  -- Across universes only when the universe of the last parameter is its own: a level in one
+  -- universe parameter (`u`, `u + 1`, `max u 1`) that no other parameter's type mentions.
+  let own? ← match (collectLevelParams {} (mkSort lastLvl)).params.toList with
+    | [u] => do
       let shared ← others.anyM fun a => do
         return (collectLevelParams {} (← inferType a)).params.contains u
-      pure (!P.primes.any (·.1 == u) || shared)
-    | _ => pure true
+      pure (if !P.primes.any (·.1 == u) || shared then none else some u)
+    | _ => pure none
   -- The primed universes of `instPolyMap`: that of the last parameter, if it is its own, the
   -- others unprimed (the other holes are fixed).
-  let lastLvl' := match lastLvl with
-    | .param _ => if tied then lastLvl else P.lvl 4
-    | _ => lastLvl
+  let lastLvl' := match own? with
+    | some u => lastLvl.instantiateParams [u] [P.lvl 4]
+    | none => lastLvl
   let σu := P.primes.filterMap fun (v, v') => match v' with
-    | .param n => some (n, if !tied && lastLvl == .param v then lastLvl' else .param v)
+    | .param n => some (n, if own? == some v then P.lvl 4 else .param v)
     | _ => none
   let idH' ← lam `X (mkSort lastLvl'.succ) fun X => pure X
   let etaHs' := (← others.mapM fun a => lam `X (mkSort lastLvl'.succ) fun _ => pure a).push idH'
   let insts' ← synth etaHs'
+  -- The premises' maps: of the identity and of constants.
+  let maps ← (Array.range etaHs.size).mapM fun i => do
+    synthInstance (← mkAppOptM ``Codata.PolyMap (#[etaHs[i]!, etaHs'[i]!, etaSR[2 * i]!,
+      etaSR[2 * i + 1]!, insts[i]!, insts'[i]!].map some))
   let σm := σ ++ [(P.fresh[1]!, lastLvl')] ++ σu
   let mapE := mkAppN (← polyConst mapN σm)
-    (P.consts ++ etaHs ++ etaHs' ++ etaSR ++ insts ++ insts')
+    (P.consts ++ etaHs ++ etaHs' ++ etaSR ++ insts ++ insts' ++ maps)
   let mapTy ← whnfR (← inferType mapE)
   ctx.addPolyInstance P (T ++ `Poly ++ `instPolyMapEta) (P.consts ++ others)
     (etaType mapTy) mapE
@@ -2082,7 +2244,7 @@ def genIPolyInstances (P : Poly) : TermElabM Unit := do
         mkAppOptM n #[none, none, none, none, none, none, M, none, none, M', xs[2]!, i, xs[3]!]
       let mp ← fillArg mp fun ty => lamOf ty (along ``Codata.IPolyFix.map)
       let mp ← withUnfolding <| fillArg mp fun ty => lamOf ty (along ``Codata.IPolyFix.equiv_map)
-      let xs := P.consts ++ P.Hs ++ P.Hs' ++ P.SR ++ P.insts ++ P.insts' ++ t.idx
+      let xs := P.consts ++ P.Hs ++ P.Hs' ++ P.SR ++ P.insts ++ P.insts' ++ P.maps ++ t.idx
       ctx.addPolyInstance P mapN xs (← inferType mp) (← instantiateMVars mp)
     if t.idx.isEmpty then ctx.genPolyEta P t.name
 
@@ -2122,7 +2284,7 @@ def genPolyInstances (P : Poly) : TermElabM Unit := do
     let m ← withUnfolding <| fillArg m fun ty => lamOf ty fun xs => do
       let (M, M') ← fix xs[0]! xs[1]!
       mkAppM ``Codata.PolyFix.equiv_map #[M, M', xs[2]!, xs[3]!]
-    let xs := P.consts ++ P.Hs ++ P.Hs' ++ P.SR ++ P.insts ++ P.insts'
+    let xs := P.consts ++ P.Hs ++ P.Hs' ++ P.SR ++ P.insts ++ P.insts' ++ P.maps
     ctx.addPolyInstance P mapN xs (← inferType m) (← instantiateMVars m)
   ctx.genPolyEta P ctx.name
 
@@ -2164,10 +2326,14 @@ occurrences constant (`xStruct`), and through its structure in the occurrences, 
 argument: two disjuncts, whose positions are the structure's by definition. Across a sum these
 structures read as instances agree with it only after cases on the value, and the two disjuncts
 are its members in each variable, `Occ₂.MemX` and `∃ t, Occ₂.MemY o t y ∧ …`, which `simp`
-computes through the combinators. With indices, at one index after cases, the rules are the same,
+computes through the combinators. Without a hole (in a block, at one type after cases on the
+positions), there are no members in the holes: the one disjunct of the occurrences, the other
+refuted in the proof by `simp`. With indices, at one index after cases, the rules are the same,
 at the type of the members (`mixPlain`); at several indices of a family, the map is `IOcc₂.map`
 with the map of the family's leaf at each index, and a member in the occurrences is a pair with
-its index (`IOcc₂.MemY`). -/
+its index (`IOcc₂.MemY`). A nested argument of a family at one index only after cases on its
+positions has its members by `IPolyIso.Mem`, as at several indices: the cases on the positions of
+the layer do not see the cases that bring them to one index (the recursor's `bridgeIH`). -/
 
 /-- `e`, built at the premises `H`, their instances and `X`, at the primed premises `H'`, their
 instances and `Y`, and the primed universes: the second instantiation of `PolyMap`. -/
@@ -2305,10 +2471,15 @@ def mkCtorAt (n : Name) (ty : Expr) (args : Array Expr) : MetaM Expr := withUnfo
   if r.hasMVar then throwError "internal error: undetermined arguments of `{n}`{indentExpr r}"
   return r
 
+/-- `n`, or `n` with `₀` appended until it is not one of `taken`. -/
+partial def avoidName (taken : Array Name) (n : Name) : Name :=
+  if taken.contains n then avoidName taken (n.appendAfter "₀") else n
+
 /-- The first of `names` that is not the name of an argument of `c`, for a binder of a lemma
-about `c`. -/
+about `c`; when all are, the first with `₀` appended (`avoidName`). -/
 def freeName (c : Ctor) (names : List Name) : Name :=
-  (names.find? fun n => !c.args.any (·.name == n)).getD names.head!
+  let taken := c.args.map (·.name)
+  (names.find? fun n => !taken.contains n).getD (avoidName taken names.head!)
 
 /-- The type and index arguments at an index `i` of the presentation that is a constructor
 application: the family at `projs i`, or in a block the type of the constructor of
@@ -2375,7 +2546,8 @@ def polyNestMap (P : Poly) (X Y f : Expr) (a : ArgInfo) (n : Nest) (σ : Expr �
   let nm ← ctx.nestMem a n σ
   let nm := { nm with fn := P.subX P.Hs X nm.fn, inst := P.subX P.Hs X nm.inst }
   if nm.idx?.isNone then
-    throwError "the positions of the nested argument `{a.name}` are at several types of the block"
+    throwLimit m!"the positions of the nested argument `{a.name}` are at several types of the \
+      block"
   let elem := P.subX P.Hs X nm.elem
   let (m, idx) ← ctx.polyRecType elem
   let oF ← mkAppOptM ``Codata.Occ.ofIso #[← isoFun nm.inst, none, none, nm.inst]
@@ -2447,8 +2619,8 @@ def genPolyMapRule (P : Poly) (mi : Nat) : TermElabM Unit := do
   let v := P.vc[mi]!
   let c := v.ctor
   let cr := ctx.ctors[v.real]!
-  withLocalDecl `X .implicit (mkSort P.lx.succ) fun X => do
-  withLocalDecl `Y .implicit (mkSort P.lx'.succ) fun Y => do
+  withLocalDecl (freeName c [`X]) .implicit (mkSort P.lx.succ) fun X => do
+  withLocalDecl (freeName c [`Y]) .implicit (mkSort P.lx'.succ) fun Y => do
   withLocalDeclD (freeName c [`f, `g, `h]) (← mkArrow X Y) fun f => do
   ctx.withPolyVArgs P X v fun locals reals ys σ => do
   let σ₀ (e : Expr) := e.replaceFVars c.fvars ys
@@ -2466,7 +2638,7 @@ def genPolyMapRule (P : Poly) (mi : Nat) : TermElabM Unit := do
         return ← mkAppM ``Codata.Occ₂.map #[o, prime o, f, g, y]
       -- At several indices of a family: the map of the family's leaf at each index.
       if ctx.isBlock then
-        throwError "the positions of the nested argument `{a.name}` are at several types of the \
+        throwLimit m!"the positions of the nested argument `{a.name}` are at several types of the \
           block"
       let o := ctx.mixOccAt fd L σ
       let YF ← ctx.polyTFam P P.Hs X
@@ -2518,10 +2690,13 @@ def genPolyMapRule (P : Poly) (mi : Nat) : TermElabM Unit := do
 
 /-- The disjunct of a nested argument `y` with structure `n` in `Tₘ.Poly.mem_c`:
 `∃ t, Mem G t y ∧ Mem (fun X => Tₘ (H X) idx) x t`, or on the packed index
-`∃ p t, IPolyIso.Mem G p t y ∧ …` when its positions are at several indices. -/
-def polyNestMem (P : Poly) (X x : Expr) (a : ArgInfo) (n : Nest) (σ : Expr → Expr) (y : Expr) :
-    TermElabM Expr := do
-  let nm ← ctx.nestMem a n σ
+`∃ p t, IPolyIso.Mem G p t y ∧ …` when its positions are at several indices, also when they are
+at one index only after cases on them, which the cases on the positions of a layer do not see;
+with `bridge`, for an argument presented by its plain structure at one index (`MixField.flat?`),
+by `PolyIso.Mem` at that index then too. -/
+def polyNestMem (P : Poly) (X x : Expr) (c : Ctor) (a : ArgInfo) (n : Nest) (σ : Expr → Expr)
+    (y : Expr) (bridge := false) : TermElabM Expr := do
+  let nm ← ctx.nestMem a n σ bridge (anySum := bridge)
   let sub := P.subX P.Hs X
   let nm : NestMem := { nm with fn := sub nm.fn, inst := sub nm.inst, elem := sub nm.elem }
   let memT (t : Expr) : TermElabM Expr := do
@@ -2529,12 +2704,13 @@ def polyNestMem (P : Poly) (X x : Expr) (a : ArgInfo) (n : Nest) (σ : Expr → 
     let inst ← ctx.polyIsoOf P m idx
     withUnfolding <| mkAppOptM ``Codata.PolyIso.Mem #[← isoFun inst, none, none, inst, X, x, t]
   if nm.idx?.isSome then
-    return ← withLocalDeclD `t nm.elem fun t => do
+    return ← withLocalDeclD (freeName c [`t]) nm.elem fun t => do
       mkExistsOver #[t] (mkAnd (← ctx.memProp nm y t #[]) (← memT t))
   if ctx.isBlock then
-    throwError "the positions of the nested argument `{a.name}` are at several types of the block"
-  withLocalDeclD `p ctx.J fun p => do
-  withLocalDeclD `t (mkApp nm.elem p).headBeta fun t => do
+    throwLimit m!"the positions of the nested argument `{a.name}` are at several types of the \
+      block"
+  withLocalDeclD (freeName c [`p]) ctx.J fun p => do
+  withLocalDeclD (freeName c [`t]) (mkApp nm.elem p).headBeta fun t => do
     let im ← withUnfolding <| mkAppOptM ``Codata.IPolyIso.Mem
       #[none, nm.fn, none, none, none, nm.inst, nm.elem, p, t, y]
     mkExistsOver #[p, t] (mkAnd im (← memT t))
@@ -2571,13 +2747,22 @@ partial def xStruct (o Y₀ : Expr) (lx : Level) : MetaM Expr := do
   | some ``Codata.Occ₂.sigma => under ``Codata.Occ.sigma
   | _ => throwError "internal error: unexpected structure in two variables{indentExpr o}"
 
+/-- Close the goal `g` by `simp` with the default `simp` set: the refutation of a membership
+without positions. -/
+def simpClose (g : MVarId) : TermElabM Unit := do
+  let sctx ← Simp.mkContext (simpTheorems := #[← getSimpTheorems])
+    (congrTheorems := ← getSimpCongrTheorems)
+  let (r?, _) ← simpGoal g sctx #[← Simp.getSimprocs]
+  if let some (_, g) := r? then
+    throwError "internal error: `simp` did not close{indentD (MessageData.ofGoal g)}"
+
 /-- `Tₘ.Poly.mem_c`. -/
 def genPolyMemRule (P : Poly) (mi : Nat) : TermElabM Unit := do
   let vc := P.vc[mi]!
   let c := vc.ctor
   let cr := ctx.ctors[vc.real]!
   let L ← ctx.tLvl
-  withLocalDecl `X .implicit (mkSort P.lx.succ) fun X => do
+  withLocalDecl (freeName c [`X]) .implicit (mkSort P.lx.succ) fun X => do
   withLocalDeclD (freeName c [`x, `y, `z]) X fun x => do
   ctx.withPolyVArgs P X vc fun locals reals ys σ => do
   let σ₀ (e : Expr) := e.replaceFVars c.fvars ys
@@ -2585,6 +2770,20 @@ def genPolyMemRule (P : Poly) (mi : Nat) : TermElabM Unit := do
     withUnfolding <| mkAppOptM ``Codata.PolyIso.Mem #[← isoFun inst, none, none, inst, X, x, y]
   let TX := mkAppN (← ctx.constWith ctx.name []) (ctx.polyParams P P.Hs X)
   let mixOf (k : Nat) : Option MixField := (P.mixAt mi).find? (·.k == k)
+  -- An argument with a structure in two variables but no parameter (in a block, at a type of the
+  -- block after cases on its positions) has no members in `X`.
+  let vacuous (fd : MixField) : Bool := (ctx.outside P.holes fd.arg.type).isEmpty
+  -- Its disjunct for these, left out of the statement and refuted in the proof (`simp`).
+  let vacuousX (k : Nat) : TermElabM (Option (Expr × Expr)) := do
+    let some fd := mixOf k | return none
+    if !vacuous fd then return none
+    let some (o, m, idx) ← ctx.mixPlain P fd L σ | return none
+    let y := ys[k]!
+    let dX ← if hasSum₂ o then
+        withUnfolding <| mkAppOptM ``Codata.Occ₂.MemX #[none, none, none, none, X,
+          ← ctx.polyTyAt P X m idx, o, x, y]
+      else memOf (← isoOf (← xStruct o (← ctx.polyTyAt P X m idx) P.lx) .plain) y
+    return some (dX, ← proveHere (mkNot dX) simpClose)
   -- The disjuncts, with their arguments; an argument with a structure in two variables has two,
   -- its members in `X` (`false`) and the members of its occurrences (`true`).
   let ds ← (c.args.zip ys).zipIdx.flatMapM fun ((a, y), k) => do
@@ -2597,23 +2796,25 @@ def genPolyMemRule (P : Poly) (mi : Nat) : TermElabM Unit := do
         -- Across a sum the structures in each variable alone, read as instances, agree with the
         -- structure in two variables only after cases on the value: membership by the latter.
         if hasSum₂ o then
-          let memY ← withLocalDeclD `t TT fun t => do
+          let memY ← withLocalDeclD (freeName c [`t]) TT fun t => do
             let mY ← withUnfolding <| mkAppOptM ``Codata.Occ₂.MemY
               #[none, none, none, none, X, TT, o, t, y]
             mkExistsOver #[t] (mkAnd mY (← memOf (← ctx.polyIsoOf P m idx) t))
+          if vacuous fd then return #[((k, true), memY)]
           return #[((k, false), ← withUnfolding <| mkAppOptM ``Codata.Occ₂.MemX
               #[none, none, none, none, X, TT, o, x, y]),
             ((k, true), memY)]
         let oX ← xStruct o TT P.lx
-        return #[((k, false), ← memOf (← isoOf oX .plain) y),
-          ((k, true), ← ctx.polyNestMem P X x fd.arg fd.nest σ₀ y)]
+        let dY ← ctx.polyNestMem P X x c fd.arg fd.nest σ₀ y (bridge := true)
+        if vacuous fd then return #[((k, true), dY)]
+        return #[((k, false), ← memOf (← isoOf oX .plain) y), ((k, true), dY)]
       -- At several indices of a family: by the indexed structure, a member in `Y` with its index.
       if ctx.isBlock then
-        throwError "the positions of the nested argument `{a.name}` are at several types of the \
+        throwLimit m!"the positions of the nested argument `{a.name}` are at several types of the \
           block"
       let o := ctx.mixOccAt fd L σ
       let YF ← ctx.polyTFam P P.Hs X
-      let memY ← withLocalDeclD `t (← mkAppM ``Sigma #[YF]) fun t => do
+      let memY ← withLocalDeclD (freeName c [`t]) (← mkAppM ``Sigma #[YF]) fun t => do
         let mY ← withUnfolding <| mkAppOptM ``Codata.IOcc₂.MemY
           #[none, none, none, none, none, none, X, YF, o, t, y]
         mkExistsOver #[t]
@@ -2629,7 +2830,7 @@ def genPolyMemRule (P : Poly) (mi : Nat) : TermElabM Unit := do
     | .fn n => withReducible <| forallBoundedTelescope (← inferType y) n fun zs body => do
       let (m, idx) ← ctx.polyRecType body
       return #[((k, false), ← mkExistsOver zs (← memOf (← ctx.polyIsoOf P m idx) (mkAppN y zs)))]
-    | .nest n => return #[((k, false), ← ctx.polyNestMem P X x a n σ₀ y)]
+    | .nest n => return #[((k, false), ← ctx.polyNestMem P X x c a n σ₀ y)]
   let n := ds.size
   let D := if n == 0 then Lean.mkConst ``False
     else ds.pop.foldr (init := ds.back!.2) fun (_, d) acc => mkOr d acc
@@ -2658,6 +2859,8 @@ def genPolyMemRule (P : Poly) (mi : Nat) : TermElabM Unit := do
     if ctx.idxed then mkAppOptM ``Codata.IOcc.toC #[none, none, none, none, none, o, hole, y]
     else mkAppOptM ``Codata.Occ.toC #[none, none, none, o, hole, y]
   let YFi ← if ctx.idxed then ctx.polyTFam P P.Hs X else pure TX
+  let vacs ← (P.mixAt mi).filterMapM fun fd => do
+    return (← vacuousX fd.k).map fun (d, h) => (fd.k, d, h)
   let mp ← proveHere (← mkArrow AB D) fun g => do
     let (h, g) ← g.intro1
     let #[gl, gr] ← g.cases h | throwError "internal error: cases on a disjunction"
@@ -2671,8 +2874,12 @@ def genPolyMemRule (P : Poly) (mi : Nat) : TermElabM Unit := do
           sg.ctorName == some (ctx.polyPos "P" c c.args[k]!)
         | throwError "internal error: unexpected position {sg.ctorName}"
       let D' ← instantiateMVars (← g.getType)
-      let j := dIdx (fk, false)
-      g.assign (orIntro D' n j (← exIntro (orAt D' n j) sg.fields.back! (mkFVar hq)))
+      if let some (_, dX, notX) := vacs.find? (·.1 == fk) then
+        let (dX, notX) := (sg.subst.apply dX, sg.subst.apply notX)
+        g.assign (← mkAbsurd D' (← exIntro dX sg.fields.back! (mkFVar hq)) notX)
+      else
+        let j := dIdx (fk, false)
+        g.assign (orIntro D' n j (← exIntro (orAt D' n j) sg.fields.back! (mkFVar hq)))
     -- A content of a child.
     let #[sg] ← gr.mvarId.cases gr.fields[0]!.fvarId! | throwError "internal error: cases on `∃`"
     let (_, g) ← sg.mvarId.revert #[sg.fields[1]!.fvarId!]
@@ -2719,7 +2926,8 @@ def genPolyMemRule (P : Poly) (mi : Nat) : TermElabM Unit := do
               | throwError "internal error: not a membership{indentExpr memTy}"
             let mem ← exIntro memTy q (← mkEqRefl r)
             exIntro ty t₀ (mkApp4 (mkConst ``And.intro) memTy body.appArg! mem hb)
-          if mix?.isSome || (← ctx.nestMem c.args[ki]! nst σ₀).idx?.isSome then member dj
+          let nm ← ctx.nestMem c.args[ki]! nst σ₀ (bridge := false)
+          if mix?.isSome || nm.idx?.isSome then member dj
           else
             -- First the index of the position.
             let some pidx := nst.pidx? | throwError "internal error: no index of a position"
@@ -2769,7 +2977,7 @@ def genPolyMemRule (P : Poly) (mi : Nat) : TermElabM Unit := do
           h₁ := sg.fields[1]!.fvarId!
         byB g₁ zs (mkFVar h₁)
       | .nest nst =>
-        let several := (mixOf ki).isNone && (← ctx.nestMem a nst σ₀).idx?.isNone
+        let several := (mixOf ki).isNone && (← ctx.nestMem a nst σ₀ (bridge := false)).idx?.isNone
         let mut g₁ := g
         let mut h₁ := h
         for _ in [0:if several then 2 else 1] do
@@ -2811,8 +3019,11 @@ def genPolySimp (P : Poly) : TermElabM Unit := do
   tryCatchRuntimeEx
     (for mi in [0:P.vc.size] do
       -- Each with its own heartbeat budget, as the parts of the instances.
-      withCurrHeartbeats <| ctx.genPolyMapRule P mi
-      withCurrHeartbeats <| ctx.genPolyMemRule P mi)
+      let c := P.vc[mi]!.ctor
+      let rule (s : String) : MessageData :=
+        m!"`{ctx.tyName c.owner ++ `Poly ++ Name.mkSimple (s ++ c.name.toString)}`"
+      withCurrHeartbeats <| stepPhase (rule "map_") <| ctx.genPolyMapRule P mi
+      withCurrHeartbeats <| stepPhase (rule "mem_") <| ctx.genPolyMemRule P mi)
     fun e => do
       s.restore (restoreInfo := true)
       let ns ← getCurrNamespace
@@ -2838,7 +3049,11 @@ def genPoly (holes : Array Expr) : TermElabM Unit := do
   let P0 : Poly := {
     holes, consts, Hs := #[], Hs' := #[], Ss := #[], Rs := #[], insts := #[], insts' := #[]
     fields := #[], fresh, primes }
-  let sub (s : String) (i : Nat) : Name :=
+  -- The names of the premises, unlike those of the other parameters and of the arguments,
+  -- binders of the same lemmas.
+  let taken := (← consts.mapM fun p => p.fvarId!.getUserName) ++
+    ctx.ctors.flatMap (·.args.map (·.name))
+  let sub (s : String) (i : Nat) : Name := avoidName taken <|
     if nh == 1 then Name.mkSimple s else Name.mkSimple (s ++ Nat.toSubscriptString (i + 1))
   -- The constructors of the presentation, with their split arguments.
   ctx.withVCtors holes fun vc => do
@@ -2854,9 +3069,15 @@ def genPoly (holes : Array Expr) : TermElabM Unit := do
       ← mkAppM ``Codata.PolyIso #[Hs[i]!, Ss[i]!, Rs[i]!])) fun insts => do
   withLocalsN nh (fun i => return (sub "inst'" i, .instImplicit,
       ← mkAppM ``Codata.PolyIso #[Hs'[i]!, Ss[i]!, Rs[i]!])) fun insts' => do
+  withLocalsN nh (fun i => return (sub "map" i, .instImplicit,
+      ← mkAppOptM ``Codata.PolyMap (#[Hs[i]!, Hs'[i]!, Ss[i]!, Rs[i]!, insts[i]!, insts'[i]!].map
+        some)))
+    fun maps => do
   -- The fields at parameter positions, with their structures in the premises.
   let oHs ← Hs.mapM fun H => mkAppOptM ``Codata.Occ.ofIso #[some H, none, none, none]
-  let fields ← vc.mapM fun v => v.ctor.args.zipIdx.filterMapM fun (a, k) => do
+  -- With `PolyMap Hᵢ Hᵢ` for the leaves at the premises (`withSelfMaps`).
+  let fields ← withSelfMaps Hs Ss Rs insts <| vc.mapM fun v =>
+    v.ctor.args.zipIdx.filterMapM fun (a, k) => do
     unless a.kind.isData do return none
     unless holes.any (a.type.containsFVar ·.fvarId!) do return none
     let o ← instantiateMVars (← fieldOcc holes oHs (lv 0) a.type)
@@ -2865,15 +3086,17 @@ def genPoly (holes : Array Expr) : TermElabM Unit := do
       throwError "internal error: unexpected occurrence structure{indentExpr oty}"
     return some ({
       k, occ := o, sh := oty.getAppArgs[0]!, pos := oty.getAppArgs[1]! } : HoleField)
-  let P := { P0 with Hs, Hs', Ss, Rs, insts, insts', fields, vc }
+  let P := { P0 with Hs, Hs', Ss, Rs, insts, insts', maps, fields, vc }
   -- With indices, the index of the presentation: in a block a new one, without the holes.
-  let P ← if ctx.isBlock then withCurrHeartbeats <| ctx.genPolyIx P
+  let P ← if ctx.isBlock then
+      withCurrHeartbeats <| stepPhase m!"`{ctx.polyName "Ix"}`" <| ctx.genPolyIx P
     else pure { P with I := ctx.J }
   -- The nested arguments with the holes outside the occurrences, with their structures in two
   -- variables, and with indices over the index of the presentation; in a block also those whose
   -- positions are at a type of the block only after cases on them. Of kind `.data` in the
   -- presentation.
-  let mixed ← vc.mapM fun v => v.ctor.args.zipIdx.filterMapM fun (a, k) => do
+  let mixed ← withSelfMaps Hs Ss Rs insts <| vc.mapM fun v =>
+    v.ctor.args.zipIdx.filterMapM fun (a, k) => do
     let .nest n := a.kind | return none
     let outside := !(ctx.outside holes a.type).isEmpty
     if !ctx.idxed then
@@ -2887,11 +3110,11 @@ def genPoly (holes : Array Expr) : TermElabM Unit := do
       return some ({ k, occ := o, sh, px, py, arg := a, nest := n } : MixField)
     unless outside || (ctx.isBlock && (← ctx.severalIdx a.type)) do return none
     -- At one index after cases: the plain structure there; otherwise the indexed one.
-    let flat? ← match ← oneIdx₂ n.occ with
-      | some (some i₀) => do
-        let o₂ ← instantiateMVars (← mixOcc holes oHs (lv 0) ctx.lvl (← flatOcc ctx.lvl n.occ))
+    let flat? ← match ← oneIdx n.occ, ← flatOcc? ctx.lvl n.occ with
+      | some (some i₀), some oF => do
+        let o₂ ← instantiateMVars (← mixOcc holes oHs (lv 0) ctx.lvl oF)
         pure (some (o₂, P.toPolyIdx i₀))
-      | _ => pure none
+      | _, _ => pure none
     let o ← match flat? with
       | some (o₂, i₀) => mkAppM ``Codata.IOcc₂.ofOcc₂ #[o₂, i₀]
       | none => instantiateMVars (← imixOcc holes oHs (lv 0) ctx.lvl P.I P.toPolyIdx n.occ)
@@ -2909,15 +3132,18 @@ def genPoly (holes : Array Expr) : TermElabM Unit := do
     { v with ctor := { v.ctor with args } }
   let P := { P with mixed, vc }
   -- Each part with its own heartbeat budget, as the steps of the pipeline.
-  withCurrHeartbeats <| ctx.genPolyShapes P
+  let n (s : String) : MessageData := m!"`{ctx.polyName s}`"
+  withCurrHeartbeats <| stepPhase m!"the presentation {n "S"}, {n "P"}, {n "B"}" <|
+    ctx.genPolyShapes P
   if ctx.idxed then
-    withCurrHeartbeats do
+    withCurrHeartbeats <| stepPhase m!"{n "idx"}, {n "sig"}" do
       ctx.genPolyIdx P
       ctx.genPolySig P
-  withCurrHeartbeats <| ctx.genPolyLayer P
-  withCurrHeartbeats <| ctx.genPolyLaws P
-  withCurrHeartbeats <| ctx.genPolyFix P
-  withCurrHeartbeats <| ctx.genPolyInstances P
+  withCurrHeartbeats <| stepPhase m!"the layer {n "toL"}, {n "ofL"}" <| ctx.genPolyLayer P
+  withCurrHeartbeats <| stepPhase m!"the laws {n "ofL_toL"}, {n "toL_ofL"}, {n "ofL_map"}" <|
+    ctx.genPolyLaws P
+  withCurrHeartbeats <| stepPhase m!"the fixpoint {n "fix"}" <| ctx.genPolyFix P
+  withCurrHeartbeats <| stepPhase m!"the instances" <| ctx.genPolyInstances P
   ctx.genPolySimp P
 
 /-- Step 5: the instances of the types of a declaration that has holes. Failure is a warning,
@@ -2933,7 +3159,7 @@ def deriveInstances : TermElabM Unit := do
   let s ← saveState
   tryCatchRuntimeEx
     (withCurrHeartbeats do
-      let holes ← ctx.polyHoles
+      let (holes, why, byField) ← ctx.polyHoles
       if let some mx := strict? then
         for x in mx.xs, req in mx.required, o in mx.outerNames do
           if req && !holes.contains x then
@@ -2945,8 +3171,17 @@ def deriveInstances : TermElabM Unit := do
             throwError "its parameter `{xn}`, standing for {short o}, cannot vary: it occurs in \
               a field without an occurrence structure in it, or together with the type itself in a \
               field without a structure in both, as in two arguments of a type constructor"
-      if holes.isEmpty then return
-      ctx.genPoly holes)
+      if holes.isEmpty then
+        -- Said when a parameter that is a type may not vary because of a field, outside a mixed
+        -- block (whose outer types are not nested through, and the open ones have their errors).
+        if byField && ctx.mix?.isNone then
+          let reasons := why.map fun (p, r) => m!"`{p}` occurs in {r}"
+          logInfo m!"{MessageData.joinSep shorts.toList ", "} \
+            get{if ctx.isBlock then "" else "s"} no `Codata.PolyIso` instance, and cannot be \
+            nested through: no parameter may vary \
+            ({MessageData.joinSep reasons.toList "; "})"
+        return
+      stepPhase m!"the analysis of the fields" (worded := true) <| ctx.genPoly holes)
     fun e => do
       if let some mx := strict? then
         let outers := (mx.outerNames.zip mx.required).filterMap fun (n, b) =>

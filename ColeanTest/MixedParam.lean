@@ -69,13 +69,13 @@ end
 /-- info: @Stream.cons : {γ : Type u_1} → γ → Box → Stream → Stream -/
 #guard_msgs in #check @Stream.cons
 /--
-info: @Box.rec : {γ : Type u_1} →
-  {motive : Box → Sort u_2} → ((c : Stream) → ((t : Box) → t ∈ c → motive t) → motive (Box.mk c)) → (t : Box) → motive t
+info: @Box.rec : {γ : Type u_2} →
+  {motive : Box → Sort u_1} → ((c : Stream) → ((t : Box) → t ∈ c → motive t) → motive (Box.mk c)) → (t : Box) → motive t
 -/
 #guard_msgs in #check @Box.rec
 
--- Implicit binders in the constructors, and an implicit parameter, explicit in the types as
--- with `data`.
+-- Implicit binders in the constructors, and an implicit parameter, implicit in the types too, as
+-- with `inductive`.
 mixed_mutual
 codata Lab {ι : Type} (f : ι → Nat)
   | node {i : ι} (n : Fin (f i)) (cs : LabList f)
@@ -85,7 +85,7 @@ data LabList {ι : Type} (f : ι → Nat)
 end
 
 /--
-info: @Lab.node : {ι : Type} → {f : ι → ℕ} → {i : ι} → Fin (f i) → LabList ι f → Lab ι f
+info: @Lab.node : {ι : Type} → {f : ι → ℕ} → {i : ι} → Fin (f i) → LabList f → Lab f
 -/
 #guard_msgs in #check @Lab.node
 

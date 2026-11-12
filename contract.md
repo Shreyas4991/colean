@@ -23,7 +23,7 @@ recursive fields. The command produces:
 2. Destructor `dtor : T → F T`.
 3. Corecursor `corec : (S → F S) → S → T`.
 4. `dtor_corec : ∀ c x, dtor (corec c x) = F.map (corec c) (c x)`.
-5. `bisim : (∀ x y, R x y → F.Rel R (dtor x) (dtor y)) → ∀ x y, R x y → x = y`.
+5. `bisim : (∀ x y, R x y → F.Rel R (dtor x) (dtor y)) → ∀ {x y}, R x y → x = y`.
 
 This is the minimal interface, and it is tight: `F.Rel` is not a parameter of it, so `bisim` is
 Park's coinduction principle for `F` and nothing looser, and `(T, dtor)` is a final coalgebra of
@@ -59,7 +59,7 @@ The command produces:
 3. Corecursor `corec : (∀ i, S i → F S i) → ∀ {i}, S i → T i`, for any family `S : I → Type v`,
    in any universe `v`.
 4. `dtor_corec : ∀ c {i} (x : S i), dtor (corec c x) = F.map (fun _ x => corec c x) (c i x)`.
-5. `bisim : (∀ i x y, R i x y → F.Rel R (dtor x) (dtor y)) → ∀ {i} x y, R i x y → x = y`,
+5. `bisim : (∀ i x y, R i x y → F.Rel R (dtor x) (dtor y)) → ∀ {i x y}, R i x y → x = y`,
    for any `R : ∀ i, T i → T i → Prop`.
 
 This is the plain contract in the category of families over `I`: `(T, dtor)` is a final
@@ -139,16 +139,19 @@ are `IPolyIso` and `IPolyMap`, with `G X ≃ Σ sh, (q : Pos sh) → X (pidx sh 
 A declared type gets these instances when it can, in a separate step after its declaration
 (`Gen/Derive.lean`): for `fun X => T (H₁ X) … (Hₙ X)` over the parameters that may vary, with the
 `Hᵢ` themselves instances, so that one instance covers every use, constants and the identity
-being instances too. A parameter may vary when its fields have an occurrence structure in it,
-also with other parameters (`p : α × β`) or with the type itself, through products and sums
-(`p : α × T α`, `f : T α ⊕ α`), and under a named type constructor or a function too, where the
-field has a structure in both, the parameter and the type (`p : List (α × T α)`,
-`k : Nat → α × T α`, `p : List (α ⊕ T α)`; `Occ₂`, and for a family or a block `IOcc₂`, whose
-positions in the type carry its index: `p : List (α × T n)`). In a block, a field with the block's
-types inside a named type constructor has such a structure too when its positions are at one type
-after cases on them (`p : List (A α × Nat)`). If that step fails, it logs a warning and leaves no
-trace: the type is
-declared as usual and can still be given instances by hand. The step works from the contract:
+being instances too; the `PolyMap` instance from `PolyMap` instances of the `Hᵢ`, so that it is
+the map between two instantiations of one functor only, as for the built-in forms. A parameter
+may vary when its fields have an occurrence structure in it, also with other parameters
+(`p : α × β`) or with the type itself, through products and sums (`p : α × T α`,
+`f : T α ⊕ α`), and under a named type constructor or a function too, where the field has a
+structure in both, the parameter and the type (`p : List (α × T α)`, `k : Nat → α × T α`,
+`p : List (α ⊕ T α)`; `Occ₂`, and for a family or a block `IOcc₂`, whose positions in the type
+carry its index: `p : List (α × T n)`). In a block, a field with the block's types inside a named
+type constructor has such a structure too when its positions are at one type after cases on them
+(`p : List (A α × Nat)`). When the parameters of a field cannot vary together, the fewest are
+constant, the first ones first. If that step fails, it logs a warning with a short reason and
+leaves no trace: the type is declared as usual and can still be given instances by hand; when no
+parameter may vary because of a field, an info says why. The step works from the contract:
 a value is a tree of shapes with the contents of its slots (`Model/Poly.lean`), and the map on
 the parameter is the structural one (`PolyFix.d_map`). A family gets them at every index,
 `fun X => T (H X) idx`, and so do the types of a block, at their index of the block
@@ -263,15 +266,16 @@ Rose.rec : {motive : Rose → Sort u} →
 out (`fun X => E (List X) X`), at the instance that is its occurrence structure: products, sums,
 functions and dependent pairs of functors with instances have instances, so every nested
 argument's functor has one, and `simp` turns membership into the container's own (`mem_list`,
-`mem_option`, `mem_array`) or into components (`mem_prod`, `mem_comp`, …). In a family, when the
-positions of a nested argument are all at one index, its members are of the type at that index
-and the hypothesis is as above (`List (T n)`, `T n × T n`, `T n × Nat`); otherwise it is by
-membership at an index, `∀ j (t : T j), IPolyIso.Mem (fun X => G X) j t c → motive j t`
-(`T n × T (n + 1)`). The instance is the one instance search finds for the functor
-(`fun X => Vec (List X) n` is `Vec`'s instance at `List`, `fun X => E (X × Nat) Nat` is `E`'s at
-the product), so a hypothesis written by hand is the recursor's. The
-recursors per type of a block are the same at the motive of each type, with a hypothesis by
-`IPolyIso.Mem` for each type of the block in the argument.
+`mem_option`, `mem_array`) or into components (`mem_prod`, `mem_sum`, `mem_comp`, …). In a
+family, when the positions of a nested argument are all at one index, its members are of the type
+at that index and the hypothesis is as above (`List (T n)`, `T n × T n`, `T n × Nat`,
+`T n ⊕ T n`); otherwise it is by membership at an index,
+`∀ j (t : T j), IPolyIso.Mem (fun X => G X) j t c → motive j t` (`T n × T (n + 1)`, and a sum
+inside a named type constructor, `List (T n ⊕ T n)`). The instance is the one instance search
+finds for the functor (`fun X => Vec (List X) n` is `Vec`'s instance at `List`,
+`fun X => E (X × Nat) Nat` is `E`'s at the product), so a hypothesis written by hand is the
+recursor's. The recursors per type of a block are the same at the motive of each type, with a
+hypothesis by `IPolyIso.Mem` for each type of the block in the argument.
 
 The computation rules `T.rec_ctorᵢ` give each hypothesis as the recursor itself:
 `Rose.rec node (Rose.node n cs) = node n cs fun t _ => Rose.rec node t`. The recursor is

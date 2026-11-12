@@ -528,11 +528,11 @@ end AgreeY
 
 The members of a value in each variable are the contents of its positions of that kind, defined
 from the presentation as `PolyIso.Mem` is (`MemX`, `MemY`). `simp` computes them through the
-combinators, down to the parts in one variable. The members of a structure `o` in one variable
-are written `MemX (ofX o)`, also for a part in `Y` alone (`memY_ofY`); `simp` computes them
-through the combinators of `o` (`memX_ofX_prod`, …) down to the leaves, where they are those of
-the instance (`memX_ofX_ofIso`). A sum is gone through for any value (`memX_sum`), so that the
-members through a sum inside a list are computed (`List (α ⊕ T α)`). -/
+combinators, down to the parts in one variable, whose members are those of their structure in
+that variable (`Occ.Mem`, `memX_ofX`, `memY_ofY`), which `simp` computes through its combinators
+down to the leaves, where they are those of the instance (`Occ.mem_ofIso`). A sum is gone through
+for any value (`memX_sum`), so that the members through a sum inside a list are computed
+(`List (α ⊕ T α)`). -/
 
 section Mem
 
@@ -585,94 +585,16 @@ variable {X : Type u} {Y : Type w}
     (o : Occ ShX PosX GX) (t : Y) (y : GX X) : ¬ MemY (ofX o) t y :=
   fun ⟨q, _⟩ => q.elim
 
-/-- The members of a part in `Y` alone are those of its structure, read as a part in `X` alone. -/
+/-- The members of a part in `Y` alone are those of its structure (`Occ.Mem`). -/
 @[simp] theorem memY_ofY {ShY : Type s} {PosY : ShY → Type q} {GY : Type w → Type v}
-    (o : Occ ShY PosY GY) (t : Y) (y : GY Y) :
-    MemY (X := X) (ofY o) t y ↔ MemX (Y := PUnit.{u + 1}) (ofX o) t y :=
+    (o : Occ ShY PosY GY) (t : Y) (y : GY Y) : MemY (X := X) (ofY o) t y ↔ Occ.Mem o t y :=
   Iff.rfl
 
-/-! The members of a part in `X` alone, through the combinators of its structure. -/
-
-theorem memX_ofX {ShX : Type s} {PosX : ShX → Type p} {GX : Type u → Type v}
-    (o : Occ ShX PosX GX) (x : X) (y : GX X) :
-    MemX (Y := Y) (ofX o) x y ↔ ∃ q, (o.toC y).2 q = x :=
+/-- The members of a part in `X` alone are those of its structure (`Occ.Mem`), which `simp`
+computes through its combinators down to the leaves (`Occ.mem_ofIso`). -/
+@[simp] theorem memX_ofX {ShX : Type s} {PosX : ShX → Type p} {GX : Type u → Type v}
+    (o : Occ ShX PosX GX) (x : X) (y : GX X) : MemX (Y := Y) (ofX o) x y ↔ Occ.Mem o x y :=
   Iff.rfl
-
-/-- At a leaf, the members are those of the instance. -/
-@[simp] theorem memX_ofX_ofIso (F : Type u → Type v) {ShF : Type s} {PosF : ShF → Type p}
-    [PolyIso F ShF PosF] (x : X) (y : F X) :
-    MemX (Y := Y) (ofX (Occ.ofIso F)) x y ↔ PolyIso.Mem F x y :=
-  Iff.rfl
-
-@[simp] theorem memX_ofX_hole (x y : X) : MemX (Y := Y) (ofX Occ.hole) x y ↔ x = y :=
-  ⟨fun ⟨_, e⟩ => e.symm, fun e => ⟨(), e.symm⟩⟩
-
-@[simp] theorem not_memX_ofX_const (A : Type v) (x : X) (a : A) :
-    ¬ MemX (Y := Y) (ofX (Occ.const A)) x a :=
-  fun ⟨q, _⟩ => q.elim
-
-section OfXForms
-
-variable {Sh₁ : Type s} {Pos₁ : Sh₁ → Type p} {Sh₂ : Type s'} {Pos₂ : Sh₂ → Type p'}
-  {G₁ : Type u → Type v} {G₂ : Type u → Type v'} (o₁ : Occ Sh₁ Pos₁ G₁) (o₂ : Occ Sh₂ Pos₂ G₂)
-
-@[simp] theorem memX_ofX_prod (x : X) (y : G₁ X × G₂ X) :
-    MemX (Y := Y) (ofX (Occ.prod o₁ o₂)) x y ↔
-      MemX (Y := Y) (ofX o₁) x y.1 ∨ MemX (Y := Y) (ofX o₂) x y.2 :=
-  ⟨fun ⟨q, e⟩ => match q, e with
-    | .inl q, e => .inl ⟨q, e⟩
-    | .inr q, e => .inr ⟨q, e⟩,
-    fun h => h.elim (fun ⟨q, e⟩ => ⟨.inl q, e⟩) (fun ⟨q, e⟩ => ⟨.inr q, e⟩)⟩
-
-@[simp] theorem memX_ofX_sum_inl (x : X) (y : G₁ X) :
-    MemX (Y := Y) (ofX (Occ.sum o₁ o₂)) x (.inl y) ↔ MemX (Y := Y) (ofX o₁) x y :=
-  ⟨fun ⟨q, e⟩ => ⟨q.down, e⟩, fun ⟨q, e⟩ => ⟨⟨q⟩, e⟩⟩
-
-@[simp] theorem memX_ofX_sum_inr (x : X) (y : G₂ X) :
-    MemX (Y := Y) (ofX (Occ.sum o₁ o₂)) x (.inr y) ↔ MemX (Y := Y) (ofX o₂) x y :=
-  ⟨fun ⟨q, e⟩ => ⟨q.down, e⟩, fun ⟨q, e⟩ => ⟨⟨q⟩, e⟩⟩
-
-/-- Through a sum at any value: on the side the value is on. -/
-@[simp] theorem memX_ofX_sum (x : X) (y : G₁ X ⊕ G₂ X) :
-    MemX (Y := Y) (ofX (Occ.sum o₁ o₂)) x y ↔
-      (∃ a, y = .inl a ∧ MemX (Y := Y) (ofX o₁) x a) ∨
-        ∃ b, y = .inr b ∧ MemX (Y := Y) (ofX o₂) x b := by
-  cases y with
-  | inl a => simp only [memX_ofX_sum_inl, Sum.inl.injEq, exists_eq_left', reduceCtorEq,
-      false_and, exists_false, or_false]
-  | inr b => simp only [memX_ofX_sum_inr, Sum.inr.injEq, exists_eq_left', reduceCtorEq,
-      false_and, exists_false, false_or]
-
-end OfXForms
-
-section OfXDependent
-
-variable {A : Type a} {ShA : A → Type s} {PosA : ∀ x, ShA x → Type p} {GA : A → Type u → Type v}
-  (o : ∀ x, Occ (ShA x) (PosA x) (GA x))
-
-@[simp] theorem memX_ofX_pi (x : X) (k : ∀ a, GA a X) :
-    MemX (Y := Y) (ofX (Occ.pi A o)) x k ↔ ∃ a, MemX (Y := Y) (ofX (o a)) x (k a) :=
-  ⟨fun ⟨q, e⟩ => ⟨q.1, q.2, e⟩, fun ⟨a, q, e⟩ => ⟨⟨a, q⟩, e⟩⟩
-
-@[simp] theorem memX_ofX_sigma (x : X) (z : Σ a, GA a X) :
-    MemX (Y := Y) (ofX (Occ.sigma A o)) x z ↔ MemX (Y := Y) (ofX (o z.1)) x z.2 :=
-  Iff.rfl
-
-end OfXDependent
-
-@[simp] theorem memX_ofX_piP {P : Prop} {ShP : P → Type s} {PosP : ∀ h, ShP h → Type p}
-    {GP : P → Type u → Type v} (o : ∀ h, Occ (ShP h) (PosP h) (GP h)) (x : X)
-    (k : ∀ h, GP h X) :
-    MemX (Y := Y) (ofX (Occ.piP P o)) x k ↔ ∃ h, MemX (Y := Y) (ofX (o h)) x (k h) :=
-  ⟨fun ⟨q, e⟩ => ⟨q.1, q.2, e⟩, fun ⟨h, q, e⟩ => ⟨⟨h, q⟩, e⟩⟩
-
-/-- Through a composite: a member of a member of the outer structure. -/
-@[simp] theorem memX_ofX_comp {Sh : Type s} {Pos : Sh → Type p} {Sh' : Type s'}
-    {Pos' : Sh' → Type p'} {G : Type u' → Type v} {H : Type u → Type u'} (oG : Occ Sh Pos G)
-    (oH : Occ Sh' Pos' H) (x : X) (y : G (H X)) :
-    MemX (Y := Y) (ofX (Occ.comp oG oH)) x y ↔
-      ∃ z, MemX (Y := Y) (ofX oG) z y ∧ MemX (Y := Y) (ofX oH) x z :=
-  ⟨fun ⟨r, e⟩ => ⟨_, ⟨r.1, rfl⟩, r.2, e⟩, fun ⟨_, ⟨q, e⟩, r, e'⟩ => by subst e; exact ⟨⟨q, r⟩, e'⟩⟩
 
 /-! The members through the combinators in two variables. -/
 
@@ -781,12 +703,12 @@ variable {Sh : Type s} {Pos : Sh → Type p} {Sh' : Type s'} {PX' : Sh' → Type
 
 /-- Through a composite: a member of a member of the outer structure. -/
 @[simp] theorem memX_comp (x : X) (y : G (H X Y)) :
-    MemX (comp oG oH) x y ↔ ∃ z, MemX (Y := PUnit.{w' + 1}) (ofX oG) z y ∧ MemX oH x z :=
+    MemX (comp oG oH) x y ↔ ∃ z, Occ.Mem oG z y ∧ MemX oH x z :=
   ⟨fun ⟨r, e⟩ => ⟨_, ⟨r.1, rfl⟩, r.2, e⟩, fun ⟨_, ⟨q, e⟩, r, e'⟩ => by subst e; exact ⟨⟨q, r⟩, e'⟩⟩
 
 /-- Through a composite: a member of a member of the outer structure. -/
 @[simp] theorem memY_comp (t : Y) (y : G (H X Y)) :
-    MemY (comp oG oH) t y ↔ ∃ z, MemX (Y := PUnit.{w' + 1}) (ofX oG) z y ∧ MemY oH t z :=
+    MemY (comp oG oH) t y ↔ ∃ z, Occ.Mem oG z y ∧ MemY oH t z :=
   ⟨fun ⟨r, e⟩ => ⟨_, ⟨r.1, rfl⟩, r.2, e⟩, fun ⟨_, ⟨q, e⟩, r, e'⟩ => by subst e; exact ⟨⟨q, r⟩, e'⟩⟩
 
 end Comp
@@ -796,78 +718,14 @@ end MemCompute
 /-! ### A member with a property
 
 What `simp` makes of `∃ t, MemY o t y ∧ P t`, the members in `Y` of a nested argument with a
-property, and of `∃ t, MemX (ofX o) t y ∧ P t`, before it computes the membership (`simp ↓`):
-the combinators are gone through first, so that the member is eliminated at each leaf also where
-several occurrences make a disjunction (`List (α ⊕ T α × T α)`), which the membership computed
-first would leave under an existential. -/
+property, before it computes the membership (`simp ↓`), as for `Occ.Mem` (`Occ.exists_mem_prod`,
+…): the combinators are gone through first, so that the member is eliminated at each leaf also
+where several occurrences make a disjunction (`List (α ⊕ T α × T α)`), which the membership
+computed first would leave under an existential. -/
 
 section ExistsMem
 
-variable {X : Type u} {Y : Type w}
-
-@[simp ↓] theorem exists_memX_ofX_hole (P : X → Prop) (y : X) :
-    (∃ t, MemX (Y := Y) (ofX Occ.hole) t y ∧ P t) ↔ P y := by
-  simp only [memX_ofX_hole, exists_eq_left]
-
-@[simp ↓] theorem exists_memX_ofX_const (P : X → Prop) (A : Type v) (a : A) :
-    (∃ t, MemX (Y := Y) (ofX (Occ.const A)) t a ∧ P t) ↔ False :=
-  ⟨fun ⟨_, h, _⟩ => not_memX_ofX_const A _ a h, False.elim⟩
-
-section OfXForms
-
-variable (P : X → Prop) {Sh₁ : Type s} {Pos₁ : Sh₁ → Type p} {Sh₂ : Type s'}
-  {Pos₂ : Sh₂ → Type p'} {G₁ : Type u → Type v} {G₂ : Type u → Type v'} (o₁ : Occ Sh₁ Pos₁ G₁)
-  (o₂ : Occ Sh₂ Pos₂ G₂)
-
-@[simp ↓] theorem exists_memX_ofX_prod (y : G₁ X × G₂ X) :
-    (∃ t, MemX (Y := Y) (ofX (Occ.prod o₁ o₂)) t y ∧ P t) ↔
-      (∃ t, MemX (Y := Y) (ofX o₁) t y.1 ∧ P t) ∨ ∃ t, MemX (Y := Y) (ofX o₂) t y.2 ∧ P t := by
-  simp only [memX_ofX_prod, or_and_right, exists_or]
-
-@[simp ↓] theorem exists_memX_ofX_sum (y : G₁ X ⊕ G₂ X) :
-    (∃ t, MemX (Y := Y) (ofX (Occ.sum o₁ o₂)) t y ∧ P t) ↔
-      (∃ a, y = .inl a ∧ ∃ t, MemX (Y := Y) (ofX o₁) t a ∧ P t) ∨
-        ∃ b, y = .inr b ∧ ∃ t, MemX (Y := Y) (ofX o₂) t b ∧ P t := by
-  cases y with
-  | inl a => simp only [memX_ofX_sum_inl, Sum.inl.injEq, exists_eq_left', reduceCtorEq,
-      false_and, exists_false, or_false]
-  | inr b => simp only [memX_ofX_sum_inr, Sum.inr.injEq, exists_eq_left', reduceCtorEq,
-      false_and, exists_false, false_or]
-
-end OfXForms
-
-@[simp ↓] theorem exists_memX_ofX_pi (P : X → Prop) {A : Type a} {ShA : A → Type s}
-    {PosA : ∀ x, ShA x → Type p} {GA : A → Type u → Type v} (o : ∀ x, Occ (ShA x) (PosA x) (GA x))
-    (k : ∀ a, GA a X) :
-    (∃ t, MemX (Y := Y) (ofX (Occ.pi A o)) t k ∧ P t) ↔
-      ∃ a, ∃ t, MemX (Y := Y) (ofX (o a)) t (k a) ∧ P t := by
-  simp only [memX_ofX_pi]
-  exact ⟨fun ⟨t, ⟨a, h⟩, h'⟩ => ⟨a, t, h, h'⟩, fun ⟨a, t, h, h'⟩ => ⟨t, ⟨a, h⟩, h'⟩⟩
-
-@[simp ↓] theorem exists_memX_ofX_sigma (P : X → Prop) {A : Type a} {ShA : A → Type s}
-    {PosA : ∀ x, ShA x → Type p} {GA : A → Type u → Type v} (o : ∀ x, Occ (ShA x) (PosA x) (GA x))
-    (z : Σ a, GA a X) :
-    (∃ t, MemX (Y := Y) (ofX (Occ.sigma A o)) t z ∧ P t) ↔
-      ∃ t, MemX (Y := Y) (ofX (o z.1)) t z.2 ∧ P t :=
-  Iff.rfl
-
-@[simp ↓] theorem exists_memX_ofX_piP (P : X → Prop) {Q : Prop} {ShP : Q → Type s}
-    {PosP : ∀ h, ShP h → Type p} {GP : Q → Type u → Type v} (o : ∀ h, Occ (ShP h) (PosP h) (GP h))
-    (k : ∀ h, GP h X) :
-    (∃ t, MemX (Y := Y) (ofX (Occ.piP Q o)) t k ∧ P t) ↔
-      ∃ h, ∃ t, MemX (Y := Y) (ofX (o h)) t (k h) ∧ P t := by
-  simp only [memX_ofX_piP]
-  exact ⟨fun ⟨t, ⟨h, m⟩, h'⟩ => ⟨h, t, m, h'⟩, fun ⟨h, t, m, h'⟩ => ⟨t, ⟨h, m⟩, h'⟩⟩
-
-@[simp ↓] theorem exists_memX_ofX_comp (P : X → Prop) {Sh : Type s} {Pos : Sh → Type p}
-    {Sh' : Type s'} {Pos' : Sh' → Type p'} {G : Type u' → Type v} {H : Type u → Type u'}
-    (oG : Occ Sh Pos G) (oH : Occ Sh' Pos' H) (y : G (H X)) :
-    (∃ t, MemX (Y := Y) (ofX (Occ.comp oG oH)) t y ∧ P t) ↔
-      ∃ z, MemX (Y := Y) (ofX oG) z y ∧ ∃ t, MemX (Y := Y) (ofX oH) t z ∧ P t := by
-  simp only [memX_ofX_comp]
-  exact ⟨fun ⟨t, ⟨z, hz, m⟩, h⟩ => ⟨z, hz, t, m, h⟩, fun ⟨z, hz, t, m, h⟩ => ⟨t, ⟨z, hz, m⟩, h⟩⟩
-
-variable (P : Y → Prop)
+variable {X : Type u} {Y : Type w} (P : Y → Prop)
 
 @[simp ↓] theorem exists_memY_const (A : Type v) (a : A) :
     (∃ t, MemY (const A) (X := X) t a ∧ P t) ↔ False :=
@@ -880,7 +738,7 @@ variable (P : Y → Prop)
 @[simp ↓] theorem exists_memY_ofY {ShY : Type s} {PosY : ShY → Type q} {GY : Type w → Type v}
     (o : Occ ShY PosY GY) (y : GY Y) :
     (∃ t, MemY (X := X) (ofY o) t y ∧ P t) ↔
-      ∃ t, MemX (Y := PUnit.{u + 1}) (ofX o) t y ∧ P t :=
+      ∃ t, Occ.Mem o t y ∧ P t :=
   Iff.rfl
 
 section Forms
@@ -935,7 +793,7 @@ end Dependent
     {H : Type u → Type w → Type w'} (oG : Occ Sh Pos G) (oH : Occ₂ Sh' PX' PY' H)
     (y : G (H X Y)) :
     (∃ t, MemY (comp oG oH) t y ∧ P t) ↔
-      ∃ z, MemX (Y := PUnit.{w' + 1}) (ofX oG) z y ∧ ∃ t, MemY oH t z ∧ P t := by
+      ∃ z, Occ.Mem oG z y ∧ ∃ t, MemY oH t z ∧ P t := by
   simp only [memY_comp]
   exact ⟨fun ⟨t, ⟨z, hz, m⟩, h⟩ => ⟨z, hz, t, m, h⟩, fun ⟨z, hz, t, m, h⟩ => ⟨t, ⟨z, hz, m⟩, h⟩⟩
 

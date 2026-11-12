@@ -56,9 +56,13 @@ def genF : TermElabM Unit := do
   let rep (idx : Array Expr) := mkAppN X idx
   let lvls ← ctx.ctors.foldlM (init := #[]) fun acc c => ctx.withArgsAt c rep w fun ys _ => do
     return acc ++ (← ys.mapM fun y => do getLevel (← inferType y))
+  -- The contract takes `F` at the universe of the type, at least that of the index: without a
+  -- recursive argument, `F` is put there (`A : Type → Type 1 | mk (n : Nat) : A Nat`).
   let r := resultLevel lvls
-  let Fty ← withBinderInfo ctx.declParams .default do
-    mkForallFVars (ctx.params.push X) (← ctx.withJs fun js => mkForallFVars js (mkSort r.succ))
+  let r := if ctx.fixedLvl?.isSome || w.occurs r || r.geq ctx.Jlvl then r
+    else (mkLevelMax' r ctx.Jlvl).normalize
+  let Fty ← mkForallFVars (ctx.params.push X)
+    (← ctx.withJs fun js => mkForallFVars js (mkSort r.succ))
   -- The constructors, with a local variable for `F` until its universes are known.
   withLocalDeclD `F Fty fun Fv => do
   let ctorTys ← ctx.ctors.mapM fun c => ctx.withArgsAt c rep w fun ys σ => do

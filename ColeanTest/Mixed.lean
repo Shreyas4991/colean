@@ -44,14 +44,14 @@ info: @Tree.bisim : ∀ {α : Type u_1} (R : Tree α → Tree α → Prop),
 -/
 #guard_msgs in #check @Tree.bisim
 /--
-info: @Tree.casesOn : {α : Type u_1} →
-  {motive : Tree α → Sort u_2} →
+info: @Tree.casesOn : {α : Type u_2} →
+  {motive : Tree α → Sort u_1} →
     (t : Tree α) → ((a : α) → (children : Forest α) → motive (Tree.node a children)) → motive t
 -/
 #guard_msgs in #check @Tree.casesOn
 /--
-info: @Forest.rec : {α : Type u_1} →
-  {motive : Forest α → Sort u_2} →
+info: @Forest.rec : {α : Type u_2} →
+  {motive : Forest α → Sort u_1} →
     motive Forest.nil →
       ((t : Tree α) → (f : Forest α) → motive f → motive (Forest.cons t f)) → (t : Forest α) → motive t
 -/
@@ -61,8 +61,8 @@ info: @Forest.fold : {α : Type u_1} → {S : Type u_2} → (Forest.F α S → S
 -/
 #guard_msgs in #check @Forest.fold
 /--
-info: @Forest.casesOn : {α : Type u_1} →
-  {motive : Forest α → Sort u_2} →
+info: @Forest.casesOn : {α : Type u_2} →
+  {motive : Forest α → Sort u_1} →
     (t : Forest α) → motive Forest.nil → ((t : Tree α) → (f : Forest α) → motive (Forest.cons t f)) → motive t
 -/
 #guard_msgs in #check @Forest.casesOn

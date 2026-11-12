@@ -260,6 +260,19 @@ data E (α β : Type u)
 #guard_msgs in
 #synth PolyIso (fun X : Type u => E (List X) (Option X)) _ _
 
+/-! The `PolyMap` instance takes those of the premises, as the instances of the built-in forms
+do: it maps between two instantiations of one functor, not between `E (List X) Nat` and
+`E (Array X) Nat`, whose presentations are the same. -/
+
+/--
+error: failed to synthesize
+  PolyMap (fun X => E (List X) ℕ) fun X => E (Array X) ℕ
+
+Hint: Additional diagnostic information may be available using the `set_option diagnostics true` command.
+-/
+#guard_msgs in
+#synth PolyMap (fun X : Type => E (List X) Nat) (fun X : Type => E (Array X) Nat)
+
 -- `E T T`.
 data ETT
   | leaf
@@ -374,6 +387,16 @@ data FnBoth (α β : Type)
 #guard_msgs in
 #synth PolyIso (FnBoth Nat) _ _
 
+/-! The fewest are kept constant, the first ones first: in `α → β → γ` the domains `α` and `β`
+are, and `FnFn` varies in `γ`. -/
+
+data FnFn (α β γ : Type)
+  | mk (x : α → β → γ)
+
+/-- info: FnFn.Poly.instPolyIsoEta -/
+#guard_msgs in
+#synth PolyIso (FnFn Nat Nat) _ _
+
 /-! Degenerate cases are fine too: a parameter that is never used, and no constructors at all. -/
 
 data Phantom (α : Type u)
@@ -435,6 +458,20 @@ data OneIndex : Nat → Type
   | zero : OneIndex 0
   | mk {n : Nat} (p : E (List (OneIndex n)) (Option (OneIndex n))) : OneIndex (n + 2)
 
+-- At one index after cases through a sum, as through a product: the recursor's hypothesis is by
+-- membership at that index (section 8).
+data SumIndex : Nat → Type
+  | zero : SumIndex 0
+  | mk {n : Nat} (p : SumIndex n ⊕ SumIndex n) : SumIndex (n + 1)
+
+example (P : ∀ n, SumIndex n → Prop) (h0 : P 0 .zero)
+    (hm : ∀ n (p : SumIndex n ⊕ SumIndex n), (∀ t, PolyIso.Mem (fun X => X ⊕ X) t p → P n t) →
+      P (n + 1) (.mk p))
+    {n : Nat} (t : SumIndex n) : P n t := by
+  induction t with
+  | zero => exact h0
+  | mk p ih => exact hm _ p ih
+
 /-! A functor on families has `IPolyIso` and `IPolyMap` instances, where each position says at
 which index its child lives. It takes a family `fun c => …`, and is what lets a single leaf hold
 occurrences at several indices. -/
@@ -480,6 +517,35 @@ codata AltPlain
 
 codata AnonFamily
   | mk (children : Both (fun _ => AnonFamily))
+
+/-! With a `simp` lemma for the members of `Both`, `simp` computes the hypotheses of the recursors
+through it, reindexed or at a constant family (`IPolyIso.mem_reidx`, `PolyIso.mem_ofI`,
+`mem_compI`). -/
+
+@[simp] theorem Both.mem {X : Bool → Type u} (j : Bool) (x : X j) (c : Both X) :
+    IPolyIso.Mem Both j x c ↔
+      (⟨true, c.yes⟩ : Σ b, X b) = ⟨j, x⟩ ∨ (⟨false, c.no⟩ : Σ b, X b) = ⟨j, x⟩ := by
+  constructor
+  · rintro ⟨b, e⟩
+    cases b
+    · exact .inr e
+    · exact .inl e
+  · rintro (e | e)
+    · exact ⟨true, e⟩
+    · exact ⟨false, e⟩
+
+data FlipD : Bool → Type
+  | leaf {b : Bool} : FlipD b
+  | mk {b : Bool} (children : Both (fun c => FlipD (!c))) : FlipD b
+
+theorem FlipD.ind (P : ∀ b, FlipD b → Prop) (h0 : ∀ b, P b .leaf)
+    (hm : ∀ b (c : Both fun c => FlipD (!c)), P false c.yes → P true c.no → P b (.mk c))
+    {b : Bool} (t : FlipD b) : P b t := by
+  induction t with
+  | leaf => exact h0 _
+  | mk c ih =>
+    simp at ih
+    exact hm _ c ih.1 ih.2
 
 /-! Several indices, through a plain leaf and through built-in forms, in both kinds. These failed
 in the generated proofs until the commands moved to `Expr`. -/
@@ -744,13 +810,14 @@ theorem URose.size_pos {α : Type u} (t : URose α) : 0 < t.size := by
 functor of the argument's type: `∀ t, PolyIso.Mem (fun X => List X) t cs → motive t` here,
 `PolyIso.Mem (fun X => X × Option X) t children` for `UTree` below, and by `IPolyIso.Mem` at an
 index when the positions of a family's argument are at several indices (at one index, also
-through a product, `T n × T n`, it is by `PolyIso.Mem` at that index). The `simp` lemmas of
-`PolyIso.lean` turn membership into the container's own (`mem_list`, `mem_option`) or into
-components (`mem_prod`, `mem_comp`, …), so a function by the recursor can use `List.attach`. -/
+through a product or a sum, `T n × T n`, `T n ⊕ T n`, it is by `PolyIso.Mem` at that index). The
+`simp` lemmas of `PolyIso.lean` turn membership into the container's own (`mem_list`,
+`mem_option`) or into components (`mem_prod`, `mem_sum`, `mem_comp`, …), so a function by the
+recursor can use `List.attach`. -/
 
 /--
-info: @URose.rec : {α : Type u_1} →
-  {motive : URose α → Sort u_2} →
+info: @URose.rec : {α : Type u_2} →
+  {motive : URose α → Sort u_1} →
     ((a : α) →
         (cs : List (URose α)) →
           ((t : URose α) → PolyIso.Mem (fun X => List X) t cs → motive t) → motive (URose.node a cs)) →
@@ -789,9 +856,8 @@ def UTree.const {α : Type u} (a : α) : UTree α :=
   simp [UTree.F.map_node, Occ.map_prod, Occ.map_hole, Occ.map_option]
 
 /-! Through a generated leaf the definitions are as easy, with the leaf's own `fold`, or its
-constructors in a `corec`. The lemmas stop earlier: `Occ.map_ofIso` turns the generated map into
-`PolyMap.map` of the leaf, and there are no lemmas for that map on constructors yet (plan,
-section 4). So the theorem below stops at the generated map on `L.cons`. -/
+constructors in a `corec`, and so are the lemmas: the rules of the leaf's instances compute the
+generated map on its constructors (`L.Poly.map_cons`), as `Occ.map_list` does for a list. -/
 
 /-- The number of nodes of an `LRose`: `L.fold` sums the folded children. -/
 def LRose.size (t : LRose) : Nat :=
@@ -802,10 +868,9 @@ def LRose.size (t : LRose) : Nat :=
 def LInf.spine : LInf :=
   LInf.corec (S := Unit) (fun _ => .node (L.cons () .nil)) ()
 
-theorem LInf.dtor_spine :
-    LInf.spine.dtor =
-      .node (Occ.map (Occ.ofIso L) (Occ.ofIso L) (fun _ => LInf.spine) (L.cons () .nil)) := by
+theorem LInf.dtor_spine : LInf.spine.dtor = .node (L.cons LInf.spine .nil) := by
   rw [LInf.spine, LInf.dtor_corec, LInf.F.map_node]
+  simp
 
 /-! The hypothesis of a nested argument is stated with the instance that instance search finds
 for its functor, so a hypothesis written by hand is the recursor's: through `Vec (List T) 2` it is
@@ -938,6 +1003,17 @@ data LFam (α : Type u) : Nat → Type u
 example (f : Nat → Nat) (a : Nat) :
     (Occ.ofIso fun X => LFam X 1).map (Occ.ofIso fun X => LFam X 1) f (.mk [(a, .nil)]) =
       .mk [(f a, .nil)] := by
+  simp
+
+-- Across a sum too: the map of the family's structure is the plain one at that index through the
+-- sum (`IOcc.map_flat_sum`).
+data LFamSum (α : Type u) : Nat → Type u
+  | nil {n : Nat} : LFamSum α n
+  | mk {n : Nat} (p : List (α ⊕ LFamSum α n)) : LFamSum α (n + 1)
+
+example (x a : Nat) (t : LFamSum Nat 0) :
+    PolyIso.Mem (fun X => LFamSum X 1) x (.mk [.inl a, .inr t]) ↔
+      x = a ∨ PolyIso.Mem (fun X => LFamSum X 0) x t := by
   simp
 
 /-! ## Part II: what does not work yet

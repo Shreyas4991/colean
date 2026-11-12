@@ -43,6 +43,7 @@ import ColeanTest.NestSimp
 import ColeanTest.NestGaps
 import ColeanTest.NestGaps2
 import ColeanTest.NestGaps3
+import ColeanTest.NestFix
 import ColeanTest.Param
 import ColeanTest.Mixed
 import ColeanTest.MixedOrder
@@ -51,3 +52,4 @@ import ColeanTest.MixedBlock
 import ColeanTest.MixedIdx
 import ColeanTest.MixedParam
 import ColeanTest.MixedRejected
+import ColeanTest.FrontEnd

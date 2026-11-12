@@ -149,9 +149,11 @@ private def addRanges (name : Name) (ref : Syntax) : TermElabM Unit := do
   if ref.getPos?.isSome && !hasDupComponent name then addDeclarationRangesFromSyntax name ref
 
 /-- The declaration ranges of a declaration the user named, a type or a constructor, whatever
-its name. -/
-def addRangesUser (name : Name) (ref : Syntax) : TermElabM Unit := do
-  if ref.getPos?.isSome then addDeclarationRangesFromSyntax name ref
+its name: those of its syntax `ref`, with the name as written `selection` as the selection range,
+as `inductive` gives them. -/
+def addRangesUser (name : Name) (ref : Syntax) (selection : Syntax := .missing) :
+    TermElabM Unit := do
+  if ref.getPos?.isSome then addDeclarationRangesFromSyntax name ref selection
 
 /-- The subterms of `e` satisfying `p`, outermost first (not looking inside them). -/
 partial def appsWhere (p : Expr → Bool) (e : Expr) : Array Expr :=
@@ -322,14 +324,17 @@ def runTac (g : MVarId) (tac : TSyntax `tactic) : TermElabM Unit := do
 
 /-- The simp set of `simp only [lemmas]`: theorems are rewrite rules, definitions are unfolded.
 -/
-def simpOnlyCtx (lemmas : Array Name) : MetaM Simp.Context := do
+def simpOnlyCtx (lemmas : Array Name) (failIfUnchanged := true) : MetaM Simp.Context := do
   let thms ← (lemmas ++ Tactic.simpOnlyBuiltins).foldlM (init := ({} : SimpTheorems)) fun s n => do
     if (← getConstInfo n).isTheorem then s.addConst n else s.addDeclToUnfold n
-  Simp.mkContext (simpTheorems := #[thms]) (congrTheorems := ← getSimpCongrTheorems)
+  Simp.mkContext (config := { failIfUnchanged }) (simpTheorems := #[thms])
+    (congrTheorems := ← getSimpCongrTheorems)
 
-/-- `simp only [lemmas]` on the goal `g`: the remaining goal, if any. -/
-def simpOnlyStep (g : MVarId) (lemmas : Array Name) : MetaM (Option MVarId) := do
-  let (r?, _) ← simpGoal g (← simpOnlyCtx lemmas) #[← Simp.getSimprocs]
+/-- `simp only [lemmas]` on the goal `g`: the remaining goal, if any. Without `failIfUnchanged`, a
+goal on which the lemmas make no progress is returned as it is. -/
+def simpOnlyStep (g : MVarId) (lemmas : Array Name) (failIfUnchanged := true) :
+    MetaM (Option MVarId) := do
+  let (r?, _) ← simpGoal g (← simpOnlyCtx lemmas failIfUnchanged) #[← Simp.getSimprocs]
   return r?.map (·.2)
 
 /-- Close the goal `g` as `simp only [lemmas]` does (with its built-in lemmas and the default

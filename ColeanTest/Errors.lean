@@ -211,7 +211,7 @@ end
 def Pb_Qb := Nat
 
 /--
-error: `ErrorsTest.Pb_Qb` has already been declared, and this block declares it: the block is named after its types, joined by `_`, and its index is `Ix` in that namespace; rename or reorder the types, or declare the block in another namespace
+error: `ErrorsTest.Pb_Qb` has already been declared, and this block declares it: the block is named after its types, joined by `_`, in their common namespace, and its index is `Ix` in the block's namespace; rename or reorder the types, or declare the block in another namespace
 -/
 #guard_msgs in
 mutual
@@ -233,7 +233,7 @@ end
 def Pe_Qe.Ix := Nat
 
 /--
-error: `ErrorsTest.Pe_Qe.Ix` has already been declared, and this block declares it: the block is named after its types, joined by `_`, and its index is `Ix` in that namespace; rename or reorder the types, or declare the block in another namespace
+error: `ErrorsTest.Pe_Qe.Ix` has already been declared, and this block declares it: the block is named after its types, joined by `_`, in their common namespace, and its index is `Ix` in the block's namespace; rename or reorder the types, or declare the block in another namespace
 -/
 #guard_msgs in
 mutual
@@ -294,7 +294,7 @@ end
 def Rs_Fs := Nat
 
 /--
-error: `ErrorsTest.Rs_Fs` has already been declared, and this block declares it: a run of several types is named after its types, joined by `_`, with its index `Ix` and, inside the first run, its open form `Open` in that namespace; rename or reorder the types, or declare the block in another namespace
+error: `ErrorsTest.Rs_Fs` has already been declared, and this block declares it: a run of several types is named after its types, joined by `_`, in their common namespace, with its index `Ix` and, inside the first run, its open form `Open` in the run's namespace; rename or reorder the types, or declare the block in another namespace
 -/
 #guard_msgs in
 mixed_mutual

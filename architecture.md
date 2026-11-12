@@ -19,13 +19,13 @@ file of theory and one generator file.
 Theory, in dependency order:
 
 - `Raw.lean`: the general type `Raw I L := List I → Option L` (the model's carrier).
-- `PolyIso.lean`: the user interface for nesting: `PolyIso` and `PolyMap` (and `IPolyIso`, `IPolyMap` for functors on families) say that a functor is isomorphic to a polynomial functor, and `PolyIso.Mem` (`IPolyIso.Mem`, at an index) says what the members of a value are. Instances for constants, the identity, `List`, `Option`, `Array`, and for products, sums, functions, dependent pairs and composites of functors with instances, with `simp` lemmas for membership through all of them. Depends on Mathlib only.
+- `PolyIso.lean`: the user interface for nesting: `PolyIso` and `PolyMap` (and `IPolyIso`, `IPolyMap` for functors on families) say that a functor is isomorphic to a polynomial functor, and `PolyIso.Mem` (`IPolyIso.Mem`, at an index) says what the members of a value are. Instances for constants, the identity, `List`, `Option`, `Array`, and for products, sums, functions, dependent pairs and composites of functors with instances, functors on families among them, with `simp` lemmas for membership through all of them (through a sum at any value, `mem_sum`). Depends on Mathlib only.
 - `Framework.lean`: `Codata.Rel`, `Codata.Contract`, `Data.All`, `Data.Contract` and every theorem that follows from a contract alone. Depends on Mathlib only.
 - `Model/Cotype.lean`: signatures, the container functor `Obj`, the encoding, the greatest fixpoint `IsWf`, `Cotype`, its contract pieces and the transport theorems to a functor `F ≃ Obj`.
 - `Model/Intype.lean`: the least fixpoint `IsFin`, `Intype`, the dependent recursor by well-founded recursion, fold, and the transports.
 - `Model/Poly.lean`: a least or greatest fixpoint of a layer polynomial in a parameter is polynomial in that parameter: trees of shapes, `Path`, `PolyFix`, `coFix`, `inFix`; for a family, at every index (`ILay`, `IPath`, `IPolyFix`, `icoFix`, `iinFix`), on the total space of the plain case. The map through a right inverse of the destructor (`map_eq_of_d`) and membership in one step (`exists_val_iff`), for the `simp` lemmas of step 5.
-- `Model/Occ.lean`: occurrence structures `Occ`/`IOcc`, internal to the command: their combinators, laws and computation lemmas (`simp`, for `IOcc` as for `Occ`); the leaves are `Occ.ofIso F`, from the `PolyIso` instances, and the instances of the built-in forms are the combinators by definition (`Occ.ofIso_prod`, …, `simp` lemmas but for the identity's).
-- `Model/Occ2.lean`: occurrence structures in two variables `Occ₂`, `G X Y ≃ Lay PX PY X Y` with the layer of `Model/Poly.lean`, for a field with a parameter and the recursion in one argument: combinators, laws, the computation of the map, `AgreeY`, the agreement of its map in `Y` with that of the structure in `Y` alone, and membership in each variable (`MemX`, `MemY`, `simp` through the combinators).
+- `Model/Occ.lean`: occurrence structures `Occ`/`IOcc`, internal to the command: their combinators, laws and computation lemmas (`simp`, for `IOcc` as for `Occ`), the members of a value (`Occ.Mem`, `simp` through the combinators), and the map of an indexed structure at one index as the plain one's (`IOcc.map_flat_sum`, …); the leaves are `Occ.ofIso F`, from the `PolyIso` instances, and the instances of the built-in forms are the combinators by definition (`Occ.ofIso_prod`, …, `simp` lemmas but for the identity's).
+- `Model/Occ2.lean`: occurrence structures in two variables `Occ₂`, `G X Y ≃ Lay PX PY X Y` with the layer of `Model/Poly.lean`, for a field with a parameter and the recursion in one argument: combinators, laws, the computation of the map, `AgreeY`, the agreement of its map in `Y` with that of the structure in `Y` alone, and membership in each variable (`MemX`, `MemY`, `simp` through the combinators down to the parts in one variable, whose members are `Occ.Mem`).
 - `Model/IOcc2.lean`: the same over a family, `IOcc₂`, the recursive variable a family over an index, each position in it at its index (the layer of `ILay`), for families and blocks: combinators, among them a plain structure at one index (`ofOcc₂`), laws, the map, `AgreeY` with the indexed structure in `Y` alone read along a map of the indices, and membership, a member in `Y` with its index.
 
 Generators, on `Expr`, in dependency order. `Syntax.lean` holds the command syntax.
@@ -54,7 +54,8 @@ one of these variables to the parameters (and indices), and products, sums, func
 pairs and leaves are recognised by their head. So spellings that mean the same type are one
 (`A × B` and `Prod A B`, an abbreviation, `id A`, `Σ`, `<|`, an arrow-form constructor), and no
 generated name can capture a user's. Before the types are declared, the names are checked (no
-type twice in a block; no type, block or index of a block declared already: `checkNames`), and so
+type twice in a block; no type, block or index of a block declared already; no two types with one
+constructor of the block's index: `checkNames`), and so
 is a universe written in a declared sort, against the model's, which is the types' (`checkSorts`,
 first in the pipeline; in a mixed block, of the closed types, before the outermost run).
 
@@ -99,10 +100,15 @@ the occurrences and, as its instance, the occurrence structure of the argument r
 instance (`isoOf`): a leaf is `Occ.ofIso` of its instance, and the instances of the built-in
 forms are the combinators by definition. In a family the hypothesis is by `IPolyIso.Mem` at an
 index unless every position is at one index (the index of a position at variables mentions
-neither the shape nor the position, or does after cases on it through products, `T n × T n`);
-then the instance is a `PolyIso` at that index (`flat`), and in the second case the hypothesis at
-the positions is brought to that index by these cases (`bridgeIH`, a `Sum.casesOn` term), and the
-rule `T.rec_cᵢ` by the same cases (`bridgeEq`).
+neither the shape nor the position, or does after cases on it through products, functions and
+dependent pairs, `T n × T n`, or on the value through sums reached through products and dependent
+pairs, `T n ⊕ T n`: `oneIdx`, which step 5 shares); then the instance is a `PolyIso` at that index
+(`flat`), and in the second case the hypothesis at the positions is brought to that index by these
+cases (`bridgeIH`, a `Sum.casesOn` term, with the cases on the value in a context of their own so
+that the term is the same wherever it is built), and the rule `T.rec_cᵢ` by the same cases
+(`bridgeEq`). A sum under a named type constructor or a function (`List (T n ⊕ T n)`) is not
+reached by cases on the value: the hypothesis is by `IPolyIso.Mem`, which `simp` computes through
+the sum at any value (`IPolyIso.mem_sum`).
 
 The structure of a nested argument, and so the instance of its hypothesis, is the one instance
 search finds for the argument's functor: a leaf is a partial application when the occurrences are
@@ -188,22 +194,31 @@ The functor of a run at its state keeps the open types of the runs inside at tha
 Defining a type and presenting it as a polynomial functor are separate steps. Step 5,
 `deriveInstances` (`Gen/Derive.lean`), runs after the pipeline has finished, in the same run: it
 reads the declaration's context and the type's public declarations, and nothing in the pipeline
-depends on it. On failure it restores the state and logs a warning, so it can't affect the type.
+depends on it. On failure it restores the state and logs a warning, so it can't affect the type;
+the warning gives a short reason, a limit of the step as it is and an error of the generator by
+what it failed to generate (`stepPhase`), the error itself under
+`set_option codata.deriveDetails true`. When no parameter may vary because of a field, an info
+says so and why.
 
 It generates one instance per type, `PolyIso (fun X => T (H₁ X) … (Hₙ X))` with premises on the
-`Hᵢ`, over the parameters that may vary, and the eta-reduced form `T A₁ … Aₙ₋₁`. Only the layer
+`Hᵢ`, over the parameters that may vary, and the eta-reduced form `T A₁ … Aₙ₋₁`, with the
+`PolyMap` instance from `PolyMap Hᵢ H'ᵢ` premises, as the instances of the built-in forms (the
+eta form across universes when the universe of the last parameter is its own). Only the layer
 `T.Poly.toL`/`ofL` and its laws are per declaration; the fixpoint is `Model/Poly.lean`, one proof
 for `data` and `codata`, from the contract. The structure of a field in the parameters is that of
 `Gen/Occ.lean`, with each premise's structure at its parameter; a field may mention several, and
-when it has no structure in all of them the first ones are kept constant until the others have
-one (`refineHoles`).
+when it has no structure in all of them the fewest are kept constant, the first ones first, so
+that the others have one (`refineHoles`).
 
 The layer is presented constructor by constructor of the presentation (`VCtor`): those of `T`,
 with a nested argument split through its products and sums when it mentions a parameter that
 varies outside the occurrences (`p : α × T α`, `f : T α ⊕ α`), or with indices has its positions at
 an index only after cases on them (`T n × T (n + 1)`, `A × B` in a block). Its parts are fields at
 parameter positions, recursive arguments or data, as arguments of their own; through a sum the
-constructor is one constructor of the presentation per side. `toL` takes the parts by projections
+constructor is one constructor of the presentation per side, at most `maxSplit` per constructor of
+`T` (beyond, the arguments through sums are not split and have a structure in two variables, or
+their indexed structure); the internal names of these constructors and parts take a suffix when
+taken. `toL` takes the parts by projections
 and `Sum.casesOn` (`polyDispatch`), `ofL` puts them together (`applyVCtor`), and the laws do cases
 on the split arguments (`polyDestructure`). The `simp` lemmas below are per constructor of the
 presentation, stated with the parts (`p.1`, `p.2`, `T.c (Sum.inl a)`).
@@ -223,12 +238,13 @@ With indices the structure is over the index of the presentation (`IOcc₂`, `Mo
 carry them by construction; in a block, a nested argument whose positions are at a type of the
 block only after cases on them inside a named type constructor (`p : List (RA α × Nat)`) is
 presented so too, with no part in the parameters. When the positions are at one index after cases
-(`oneIdx₂`), the structure is the plain one at that index (`IOcc₂.ofOcc₂`), whose map and members
-are those of the plain one by definition, and the rules are stated as without indices, at the
-type of the members. In `ofL_map` the map of `T.F`, by the family's indexed structure over its
-own index, is its map by `IOcc₂.AgreeY`, along `ι`, the identity or `Blk.Poly.ixIn`; for a plain
-structure at one index, from the plain agreement and the indexed structure at that index, by
-unfolding (`IOcc₂.AgreeY.ofOcc₂`).
+(`oneIdx`, the analysis of the recursor's hypotheses too), the structure is the plain one at that
+index (`IOcc₂.ofOcc₂`), whose map and members are those of the plain one by definition, and the
+rules are stated as without indices, at the type of the members. In `ofL_map` the map of `T.F`,
+by the family's indexed structure over its own index, is its map by `IOcc₂.AgreeY`, along `ι`,
+the identity or `Blk.Poly.ixIn`; for a plain structure at one index, from the plain agreement and
+the map of the indexed structure at that index, the plain one's by definition and across a sum by
+cases on the value (`IOcc₂.AgreeY.ofOcc₂`, `IOcc.map_flat_sum`, …).
 
 A family gets the instances at every index, `PolyIso (fun X => T (H X) idx)` with `idx` arguments
 of the instance; its presentation is a family over the packed index, with the index of each

@@ -13,11 +13,13 @@ nested with its occurrence structure), and the names of the generated declaratio
 variables of the local context, and every `Expr` of the context is over them. A generator builds
 types and values with these variables directly (`mkAppN F (params ++ …)`) and closes a
 declaration once, with `mkForallFVars`/`mkLambdaFVars`, choosing binder infos per declaration
-(`withBinderInfo`): parameters are explicit in the generated types and implicit in lemmas. The
-arguments of different constructors coexist in the local context; they are never elaborated
-against, so their names do not capture anything. The section variables the declaration uses are
-the first parameters (`nVars` of them), as with `inductive`; they keep their own binder infos in
-the generated types, where the declared parameters (`declParams`) are explicit.
+(`withBinderInfo`): the parameters have the binder infos the user wrote in the generated types,
+the types `T`, `Tₘ` and the auxiliary ones (`T.F`, `T.Shape`, `T.B`, `T.sig`, `Blk.Ix`, …), as in
+`inductive` and its auxiliary constructions, and are implicit in the other definitions and in the
+lemmas. The arguments of different constructors coexist in the local context; they are never
+elaborated against, so their names do not capture anything. The section variables the
+declaration uses are the first parameters (`nVars` of them), as with `inductive`, with their own
+binder infos.
 
 *Occurrences.* During the analysis the types being defined are local variables
 `T : ∀ params idx, Type uT` (as in Lean's `inductive`), at a placeholder universe `uT` that is a
@@ -43,8 +45,11 @@ exist, the statements are written with the closed types of the runs inside (`clo
 `x ∈ c` (`MemRule`).
 
 *Universes.* A generated declaration has the user's universes that occur in it, in the order
-declared, then universes of its own named `u_1`, `u_2`, … (`freshLevels`), as Lean names them;
-`constWith` uses a generated constant at given universes for its own ones.
+declared, then universes of its own named `u_1`, `u_2`, … (`freshLevels`), as Lean names them; an
+eliminator, `T.rec` or `T.casesOn`, has its motive's universe first, as in Lean
+(`elimLevelParamsOf`). The user's universes include those the headers leave to the command
+(`Type _`, an auto-bound `Sort _`), which become universe parameters `u_1`, … as with `inductive`.
+`constWith` uses a generated constant at given universes for its own ones, whatever their order.
 -/
 
 open Lean Meta Elab Term
@@ -91,8 +96,10 @@ structure ArgInfo where
   name : Name
   bi : BinderInfo
   /-- Its elaborated type: over the parameters and the earlier arguments, with the types being
-  defined as local variables. -/
+  defined as local variables; without a default value or tactic (`optParam`, `autoParam`). -/
   type : Expr
+  /-- Its type as written, with a default value or tactic: the type in the constructor `T.c`. -/
+  userType : Expr
   kind : ArgKind
   /-- The syntax it comes from, for errors. -/
   ref : Syntax
@@ -138,6 +145,9 @@ structure TypeInfo where
   ref : Syntax
   /-- Its name as written, for the info tree. -/
   nameRef : Syntax
+  /-- Its name in its block, the constructor of the block's index (`blockShorts`); its name
+  otherwise. -/
+  short : String
   deriving Inhabited
 
 /-- The types being defined, as the analysis and the generators see their occurrences. -/
@@ -381,7 +391,8 @@ structure Ctx extends Block where
   name : Name
   /-- The declaration, for errors and declaration ranges. -/
   ref : Syntax
-  /-- The user's universes, in the order declared. -/
+  /-- The user's universes, in the order declared, then those the headers left to the command,
+  now universe parameters `u_1`, … (`headerLevelParams`). -/
   userLevels : List Name
   /-- How many of the parameters, at the front, are section variables. -/
   nVars : Nat := 0
@@ -412,10 +423,6 @@ def isOpen : Bool := ctx.mix?.any (·.r > 0)
 
 /-- `e` written with the closed types of a mixed block (`foldClosed`). -/
 def foldTy (e : Expr) : Expr := foldClosed ctx.closed e
-
-/-- The parameters declared with the type: those that are explicit in the generated types. The
-section variables before them keep their own binder infos there, as with `inductive`. -/
-def declParams : Array Expr := ctx.params.extract ctx.nVars ctx.params.size
 
 /-- Is this a mutual block, one family over `Blk.Ix`? -/
 def isBlock : Bool := !ctx.ixCtors.isEmpty
@@ -475,15 +482,17 @@ their types replaced by `rep m idx` at universe `lvl`: the constructor's argumen
 `T.F` at a family `X` (`withArgsAt`, `rep idx := X idx` at the family-level index), say. `k`
 receives the new variables and the substitution of the old by the new, for the expressions of
 the analysis (index arguments, occurrence structures). The new variables are named `rename x`,
-and their types are passed through `post`.
+and their types are passed through `post`. With `annotated`, the types are as written, with their
+default values and tactics (`ArgInfo.userType`), for the constructor `T.c` only.
 -/
 def withArgsAtU (c : Ctor) (rep : Nat → Array Expr → Expr) (lvl : Level)
     (k : Array Expr → (Expr → Expr) → TermElabM α) (rename : Name → Name := id)
-    (post : Expr → Expr := id) : TermElabM α := do
+    (post : Expr → Expr := id) (annotated := false) : TermElabM α := do
   let rec go (i : Nat) (ys : Array Expr) : TermElabM α := do
     if h : i < c.args.size then
       let a := c.args[i]
-      let ty := post (ctx.replaceOccU (a.type.replaceFVars (c.fvars.extract 0 i) ys) rep lvl)
+      let aty := if annotated then a.userType else a.type
+      let ty := post (ctx.replaceOccU (aty.replaceFVars (c.fvars.extract 0 i) ys) rep lvl)
       withLocalDecl (rename a.name) a.bi ty fun y => go (i + 1) (ys.push y)
     else k ys fun e => e.replaceFVars c.fvars ys
   go 0 #[]
@@ -580,9 +589,9 @@ def fold_unique : Name := ctx.gen "fold_unique"
 declarations of their own (`Tₘ params idx := Blk params (.Tₘ idx)`); otherwise the type is the
 family. -/
 def tyName (m : Nat) : Name := ctx.types[m]!.name
-/-- The last component of the name the user wrote for the `m`-th type (`Forest`, also for
-`Forest.Open`). -/
-def shortName (m : Nat) : String := ctx.types[m]!.nameRef.getId.lastComponentAsString
+/-- The name of the `m`-th type in its block, the constructor of the block's index (`Forest`, also
+for `Forest.Open`; `Qa_X` for `Qa.X` next to `Qb.X`). -/
+def shortName (m : Nat) : String := ctx.types[m]!.short
 def tCtor (c : Ctor) : Name := ctx.tyName c.owner ++ c.name
 def tName' (c : Ctor) (pre post : String) : Name :=
   ctx.tyName c.owner ++ Name.mkSimple (pre ++ c.name.toString ++ post)
@@ -603,6 +612,13 @@ def freshLevels (n : Nat) : List Name := freshLevelNames n ctx.userLevels
 /-- The universe parameters of a declaration made of `es`, with the added universes `fresh`. -/
 def levelParamsOf (fresh : List Name) (es : Array Expr) : MetaM (List Name) :=
   Gen.levelParamsOf ctx.userLevels fresh es
+
+/-- The universe parameters of an eliminator made of `es`, whose motive is in the added universe
+`fresh`: that one first, then the user's, as Lean orders those of `T.rec` and `T.casesOn`
+(`List.rec.{u_1, u}`). -/
+def elimLevelParamsOf (fresh : List Name) (es : Array Expr) : MetaM (List Name) := do
+  let us ← ctx.levelParamsOf fresh es
+  return fresh.filter us.contains ++ us.filter (!fresh.contains ·)
 
 /-- The universes at which to use the generated constant `n`: the user's as they are, the
 universes it added (`u_1`, …) given by `fresh`, in order. -/

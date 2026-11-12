@@ -29,8 +29,9 @@ codata Vec (α : Type u) : Nat → Type u
   | cons {n : Nat} (a : α) (v : Vec α n) : Vec α (n + 1)
 ```
 
-The command generates, with the parameters as arguments of every declaration (explicit for the
-types `T`, `T.F`, `T.Shape`, `T.B`, `T.sig`, implicit elsewhere):
+The command generates, with the parameters as arguments of every declaration (with the binder
+annotations the user wrote for the types `T`, `T.F`, `T.Shape`, `T.B`, `T.sig`, as `inductive`
+does, implicit elsewhere):
 
 * `T.F (params) (X : Type _)`: the constructor list with `T params` replaced by `X`, as an
   inductive type; `T.F.map` and `T.F.Rel`, its action on functions and its lifting to relations,
@@ -46,8 +47,9 @@ types `T`, `T.F`, `T.Shape`, `T.B`, `T.sig`, implicit elsewhere):
 * derived from the contract (`Codata.Contract`): `T.ctor`, `T.dtor_ctor`, `T.ctor_dtor`,
   `T.ctor_injective`, `T.corec_eq`, `T.corec_unique`; the individual constructors `T.ctorᵢ` with
   the simp lemmas `T.dtor_ctorᵢ` and `T.ctor_ctorᵢ` (`T.ctor (T.F.ctorᵢ …) = T.ctorᵢ …`),
-  injectivity `T.ctorᵢ_inj` (for constructors with explicit arguments) and disjointness
-  `T.ctorᵢ_ne_ctorⱼ`, all simp lemmas;
+  injectivity `T.ctorᵢ_inj` (as `injEq`: proofs left out, `HEq` where the two sides' types differ,
+  none when nothing is left) and disjointness `T.ctorᵢ_ne_ctorⱼ` where it is found (below), all
+  simp lemmas;
 * a case analysis principle `T.casesOn`, registered as the `cases` eliminator for `T`, with
   its computation rules `T.casesOn_ctorᵢ` as simp lemmas.
 
@@ -61,9 +63,10 @@ the indices of its recursive argument), `T : ∀ i₁ i₂, Type _`, `T.dtor {i�
 user gave them. Where a result index mentions the constructor's arguments, injectivity shares
 them between its two sides, as `injEq` does for `inductive`
 (`Vec.cons_inj : Vec.cons a v = Vec.cons a' v' ↔ a = a' ∧ v = v'` at one `n`), and the
-arguments it shares may be implicit. Disjointness is stated where the result indices of the two
-constructors unify, at the arguments where they meet, and not when they cannot meet (`Vec.nil`
-and `Vec.cons`).
+arguments it shares may be implicit. Disjointness is stated where reducible unification finds
+where the result indices of the two constructors meet, at the arguments where they meet; there is
+none when they cannot meet (`Vec.nil` and `Vec.cons`), nor when unification does not find where
+they do (`T 0` and `T (n * 2)`).
 
 The generic theory (`Framework.lean`, `Model/Cotype.lean`) has one index type. Several indices are packed into one,
 `T.Ix (params) := (i₁ : I₁) ×' I₂` (a `PSigma`, so indices may be propositions), and no index is

@@ -130,7 +130,7 @@ def Bad.Poly.fix : Nat := 0
 
 /--
 warning: `Bad` cannot be nested through: no `Codata.PolyIso` instance was generated. The type itself is not affected.
-(kernel) constant has already been declared 'DeriveTest.Bad.Poly.fix'
+generating the fixpoint `DeriveTest.Bad.Poly.fix` failed, an error of the generator (`set_option codata.deriveDetails true` shows it)
 -/
 #guard_msgs in
 data Bad (α : Type)

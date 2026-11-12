@@ -53,7 +53,15 @@ NOT DONE, in the front end:
 * doc comments on `codata` declarations.
 
 Instance and strict-implicit binders in constructors, and `∀ x, T (f x)` as a spelling of a
-telescope, came with the elaboration of the declaration on `Expr` (2026-11).
+telescope, came with the elaboration of the declaration on `Expr` (2026-11), and so did
+auto-bound implicit parameters. Since 2026-11-11 (`ColeanTest/FrontEnd.lean`), as with
+`inductive`: the universes the headers leave to the command (`Type _`, `Sort _`, an auto-bound
+`α`, section variables with `Type _`; Mathlib's `Type*` worked already) become universe parameters
+`u_1`, …, which the constructors may fix first; the parameters keep the binder annotations the
+user wrote, in the types and the auxiliary types, and must agree on them in a block; a default
+value or tactic (`optParam`, `autoParam`) is on the constructor only; the constructors have the
+declaration ranges of their own syntax; types with dotted names may form a block; a single index
+that is a proposition is reported at the index (`todo.md`).
 
 NOT DONE, and not planned:
 
@@ -85,8 +93,8 @@ DONE:
 
 NOT DONE:
 
-* injectivity for constructors with dependent binders (`sup (a : α) (f : β a → W α β)`): the
-  `HEq` form, together with the implicit-binder case in section 5.
+* nothing; injectivity for constructors with dependent or implicit binders is in the `HEq` form
+  of `injEq` (`W.sup_inj`, 2026-11-11).
 
 ## 3. Mutual types — DONE
 
@@ -204,6 +212,30 @@ DONE (2026-11-11, `ColeanTest/NestGaps3.lean`):
   rules are stated as without indices;
 * `forall_or_eq_imp` (Lean's) is a `simp` lemma, so `∀ t, t ∈ p.1 ∨ t = p.2 → P t` splits.
 
+DONE (2026-11-11, `ColeanTest/NestFix.lean`), after a review of nesting:
+
+* a parameter next to the type across a sum at one index, in families and blocks
+  (`List (α ⊕ T n)`, `Nat → α ⊕ T n`): the map of the family's indexed structure is the plain
+  one's at that index through the sum too (`IOcc.map_flat_*`, `proveMapFlat`);
+* the generated `PolyMap` instances take `PolyMap` instances of the premises, as those of the
+  built-in forms: no map between `E (List X) Nat` and `E (Array X) Nat`, no nesting through a leaf
+  at a premise without `PolyMap`;
+* one analysis of "at one index after cases" for the recursor and step 5 (`oneIdx`), through sums
+  and dependent pairs too: the recursor's hypothesis through `T n ⊕ T n` is by `PolyIso.Mem`, the
+  cases on the value brought in by `bridgeIH`; `PolyIso.mem_sum`, `IPolyIso.mem_sum` at any value;
+* `simp` lemmas for membership through functors on families (`PolyIso.mem_ofI`, `mem_compI`,
+  `IPolyIso.mem_reidx`, `mem_compI`), `Occ.map_array`, the members of a structure in one variable
+  `Occ.Mem` (instead of `Occ₂.MemX (Y := PUnit) (Occ₂.ofX o)`);
+* the parameters of a field that cannot vary together: the fewest constant, the first ones first
+  (`α → β → γ` varies in `γ`);
+* at most `maxSplit` constructors of the presentation per constructor through sums; the internal
+  names of the split constructors and parts unlike the user's;
+* step 5's messages: a short reason, the error under `set_option codata.deriveDetails true`, an
+  info when no parameter may vary because of a field;
+* the eta `PolyMap` across universes for a parameter in `Type (u + 1)`;
+* rules without the vacuous disjunct of a field without a parameter, binders unlike the
+  arguments.
+
 NOT DONE:
 
 * generating instances on demand, for user-defined structures and inductives (`todo.md`);
@@ -274,9 +306,8 @@ NOT DONE:
 ## 6. Surface — NOT DONE
 
 * Full `inductive` syntax: `where`, doc comments on the declaration and on constructors,
-  `universe`-free `Type*`, auto-bound implicit parameters, `deriving` where meaningful
-  (`Inhabited`, `Nonempty`).
-* Injectivity lemmas for constructors with implicit binders, in `injEq` form with `HEq`.
+  `deriving` where meaningful (`Inhabited`, `Nonempty`). Auto-bound implicit parameters and
+  universes, `Type*`, and injectivity in the `HEq` form of `injEq` are done (section 1).
 * `F.Rel` introduction lemmas as simp lemmas, and a `bisim` variant "up to equality" (children
   related or equal), derived once in `Codata.lean` from `bisim` and `rel_map`.
 * Corecursive function definitions by pattern matching (`codef f : … := … f …` compiled to

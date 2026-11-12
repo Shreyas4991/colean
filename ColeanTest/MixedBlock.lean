@@ -32,9 +32,9 @@ end
 /-- info: @Forest.cons : {α : Type u_1} → Rose α → Forest α → Forest α -/
 #guard_msgs in #check @Forest.cons
 /--
-info: @Rose.rec : {α : Type u_1} →
-  {motive_1 : Rose α → Sort u_2} →
-    {motive_2 : Forest α → Sort u_2} →
+info: @Rose.rec : {α : Type u_2} →
+  {motive_1 : Rose α → Sort u_1} →
+    {motive_2 : Forest α → Sort u_1} →
       ((t : T α) → (f : Forest α) → motive_2 f → motive_1 (Rose.node t f)) →
         motive_2 Forest.nil →
           ((r : Rose α) → (f : Forest α) → motive_1 r → motive_2 f → motive_2 (Forest.cons r f)) →
@@ -93,8 +93,8 @@ codata O (α : Type u)
 end
 
 /--
-info: @D.rec : {α : Type u_1} →
-  {motive : D α → Sort u_2} →
+info: @D.rec : {α : Type u_2} →
+  {motive : D α → Sort u_1} →
     ((a : α) → motive (D.leaf a)) →
       ((s : S α) → ((t : D α) → t ∈ s → motive t) → motive (D.node s)) → (t : D α) → motive t
 -/

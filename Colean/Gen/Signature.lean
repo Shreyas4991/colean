@@ -179,8 +179,7 @@ def shapeLevel : TermElabM Level := do
 
 /-- `T.Shape`, in the universe `r` (`shapeLevel`). -/
 def genShape (r : Level) : TermElabM Unit := do
-  let ty ← withBinderInfo ctx.declParams .default do
-    mkForallFVars (ctx.params ++ ctx.idx) (mkSort r.succ)
+  let ty ← mkForallFVars (ctx.params ++ ctx.idx) (mkSort r.succ)
   withLocalDeclD `Shape ty fun Sv => do
   let ctorTys ← ctx.ctors.mapM fun c => ctx.withShapeBinders c .default fun shs =>
     withBinderInfo ctx.params .implicit do
@@ -216,8 +215,7 @@ def bLevel : TermElabM Level := do
 def genB (r : Level) : TermElabM Unit := do
   let data (c : Ctor) := c.dataArgs.map (·.fvar)
   let ty ← withLocalDeclD `s (← ctx.shapeAt ctx.idx) fun s =>
-    withBinderInfo ctx.declParams .default do
-      mkForallFVars (ctx.params ++ ctx.idx |>.push s) (mkSort r.succ)
+    mkForallFVars (ctx.params ++ ctx.idx |>.push s) (mkSort r.succ)
   withLocalDeclD `B ty fun Bv => do
   let mut ctors := #[]
   for c in ctx.ctors do
@@ -299,13 +297,11 @@ partial def casesPacked (p : Expr) (n : Nat) (motive : Expr → TermElabM Expr)
 
 /-- `T.Ix` and `T.ShapeP`, for several indices. -/
 def genIx (rShape : Level) : TermElabM Unit := do
-  let ty ← withBinderInfo ctx.declParams .default do
-    mkForallFVars ctx.params (mkSort ctx.Jlvl.succ)
+  let ty ← mkForallFVars ctx.params (mkSort ctx.Jlvl.succ)
   let value ← mkLambdaFVars ctx.params ctx.J
   addDef ctx.Ix (← ctx.levelParamsOf [] #[ty, value]) ty value ctx.ref (reducible := true)
   withLocalDeclD `p (← ctx.ixp) fun p => do
-    let ty ← withBinderInfo ctx.declParams .default do
-      mkForallFVars (ctx.params.push p) (mkSort rShape.succ)
+    let ty ← mkForallFVars (ctx.params.push p) (mkSort rShape.succ)
     let value ← casesPacked p ctx.k (fun _ => pure (mkSort rShape.succ)) fun is => ctx.shapeAt is
     let value ← mkLambdaFVars (ctx.params.push p) value
     addDef ctx.ShapeP (← ctx.levelParamsOf [] #[ty, value]) ty value ctx.ref
@@ -341,8 +337,8 @@ def genSig (rShape rB : Level) : TermElabM Unit := do
       mkLambdaFVars #[p, s, b] v
   let value := mkApp4 (.const ``Codata.Signature.mk [ctx.Jlvl, rShape, rB]) ixp shapeFn bFn idxFn
   let ty := Lean.mkConst ``Codata.Signature [ctx.Jlvl, rShape, rB]
-  let (type, value) ← withBinderInfo ctx.declParams .default do
-    return (← mkForallFVars ctx.params ty, ← mkLambdaFVars ctx.params value)
+  let type ← mkForallFVars ctx.params ty
+  let value ← mkLambdaFVars ctx.params value
   addDef ctx.sig (← ctx.levelParamsOf [] #[type, value]) type value ctx.ref (reducible := true)
 
 /-- The model's universe at the universes `rShape` of the shapes and `rB` of the positions: the
@@ -356,7 +352,9 @@ def modelLevel : TermElabM Level := do
   return ctx.modelLevelAt (← ctx.shapeLevel) (← ctx.bLevel)
 
 /-- Step 2, the signature. The model's universe, `tLvl` once `T.sig` is declared, must be the
-one the constructors fixed, if they did: checked before anything is declared. -/
+one the constructors fixed, if they did: checked before the signature is declared. What is
+declared before it (`T.F`, `T.F.map`, and for `codata` `T.F.Rel`) is rolled back with the rest
+when the command fails (`allOrNothing`). -/
 def genSignature : TermElabM Unit := do
   let rShape ← ctx.shapeLevel
   let rB ← ctx.bLevel

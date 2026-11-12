@@ -52,8 +52,9 @@ recursor's hypotheses are stated with. Constants, the identity, `List`, `Option`
 are the other instances here.
 
 A type declared by `codata` or `data` gets these instances when it can (`Gen/Derive.lean`):
-in the arguments that may vary, for the functors `fun X => T (H X)` with `H` itself an instance,
-and for a family or a type of a block at every index, `fun X => T (H X) idx`. With them come
+in the arguments that may vary, for the functors `fun X => T (H X)` with `H` itself an instance
+(`PolyMap` from that of `H`, as for the forms here), and for a family or a type of a block at
+every index, `fun X => T (H X) idx`. With them come
 `simp` lemmas on its constructors, for the map on the leaf `Occ.ofIso` of the instance
 (`T.Poly.map_c`) and for membership (`T.Poly.mem_c`), so that `simp` computes through them.
 -/
@@ -522,6 +523,17 @@ instance [h₁ : PolyIso F₁ Sh₁ Pos₁] [h₁' : PolyIso F₁' Sh₁ Pos₁]
     (c : F₂ X) : Mem (no_index (fun X => F₁ X ⊕ F₂ X)) x (.inr c) ↔ Mem F₂ x c :=
   ⟨fun ⟨q, e⟩ => ⟨q.down, e⟩, fun ⟨q, e⟩ => ⟨⟨q⟩, e⟩⟩
 
+/-- Through a sum at any value: on the side the value is on. -/
+@[simp] theorem mem_sum [PolyIso F₁ Sh₁ Pos₁] [PolyIso F₂ Sh₂ Pos₂] {X : Type u} (x : X)
+    (c : F₁ X ⊕ F₂ X) :
+    Mem (no_index (fun X => F₁ X ⊕ F₂ X)) x c ↔
+      (∃ a, c = .inl a ∧ Mem F₁ x a) ∨ ∃ b, c = .inr b ∧ Mem F₂ x b := by
+  cases c with
+  | inl a => simp only [mem_sum_inl, Sum.inl.injEq, exists_eq_left', reduceCtorEq, false_and,
+      exists_false, or_false]
+  | inr b => simp only [mem_sum_inr, Sum.inr.injEq, exists_eq_left', reduceCtorEq, false_and,
+      exists_false, false_or]
+
 end Forms
 
 section Dependent
@@ -852,6 +864,17 @@ instance [h₁ : IPolyIso G₁ Sh₁ Pos₁ pidx₁] [h₁' : IPolyIso G₁' Sh�
     Mem (no_index (fun X => G₁ X ⊕ G₂ X)) j x (.inr c) ↔ Mem G₂ j x c :=
   ⟨fun ⟨q, e⟩ => ⟨q.down, e⟩, fun ⟨q, e⟩ => ⟨⟨q⟩, e⟩⟩
 
+/-- Through a sum at any value: on the side the value is on. -/
+@[simp] theorem mem_sum [IPolyIso G₁ Sh₁ Pos₁ pidx₁] [IPolyIso G₂ Sh₂ Pos₂ pidx₂]
+    {X : J → Type u} (j : J) (x : X j) (c : G₁ X ⊕ G₂ X) :
+    Mem (no_index (fun X => G₁ X ⊕ G₂ X)) j x c ↔
+      (∃ a, c = .inl a ∧ Mem G₁ j x a) ∨ ∃ b, c = .inr b ∧ Mem G₂ j x b := by
+  cases c with
+  | inl a => simp only [mem_sum_inl, Sum.inl.injEq, exists_eq_left', reduceCtorEq, false_and,
+      exists_false, or_false]
+  | inr b => simp only [mem_sum_inr, Sum.inr.injEq, exists_eq_left', reduceCtorEq, false_and,
+      exists_false, false_or]
+
 @[simp] theorem mem_hole {X : J → Type u} (i j : J) (x : X j) (c : X i) :
     Mem (fun X : J → Type u => X i) j x c ↔ (⟨i, c⟩ : Σ j, X j) = ⟨j, x⟩ :=
   ⟨fun ⟨_, e⟩ => e, fun e => ⟨(), e⟩⟩
@@ -1126,6 +1149,37 @@ instance (priority := 1100) instCompI {pidx : (sh : Sh) → Pos sh → K}
   · rintro ⟨_, ⟨q, rfl⟩, r, e⟩
     exact ⟨⟨q, r⟩, e⟩
 
+/-- Through a functor on families at a reindexed family: a member of the functor's value, at its
+index read along the reindexing. -/
+@[simp] theorem mem_reidx {pidx : (sh : Sh) → Pos sh → K} {G : (K → Type u) → Type v}
+    [IPolyIso G Sh Pos pidx] (g : K → J) {X : J → Type u} (j : J) (x : X j)
+    (c : G fun k => X (g k)) :
+    Mem (fun X : J → Type u => G fun k => X (g k)) j x c ↔
+      ∃ k y, Mem G (X := fun k => X (g k)) k y c ∧ (⟨g k, y⟩ : Σ j, X j) = ⟨j, x⟩ := by
+  constructor
+  · rintro ⟨q, e⟩
+    exact ⟨_, _, ⟨q, rfl⟩, e⟩
+  · rintro ⟨k, y, ⟨q, e⟩, e'⟩
+    cases e
+    exact ⟨q, e'⟩
+
+/-- Through a functor on families applied to a family of functors on families: a member of a
+member. For a family of functors with one presentation, so that `simp` finds the presentation of
+the composite from that of the instance. -/
+@[simp] theorem mem_compI {pidx : (sh : Sh) → Pos sh → K} {G : (K → Type u') → Type v}
+    [IPolyIso G Sh Pos pidx] {Sh' : Type s'} {Pos' : Sh' → Type p'}
+    {pidx' : ∀ k (sh : Sh'), Pos' sh → J} {H : K → (J → Type u) → Type u'}
+    [∀ k, IPolyIso (H k) Sh' Pos' (pidx' k)] {X : J → Type u} (j : J) (x : X j)
+    (c : G fun k => H k X) :
+    Mem (fun X => G fun k => H k X) j x c ↔
+      ∃ k y, Mem G (X := fun k => H k X) k y c ∧ Mem (H k) j x y := by
+  constructor
+  · rintro ⟨r, e⟩
+    exact ⟨_, _, ⟨r.1, rfl⟩, r.2, e⟩
+  · rintro ⟨k, y, ⟨q, e⟩, r, e'⟩
+    cases e
+    exact ⟨⟨q, r⟩, e'⟩
+
 end Comp
 
 end IPolyIso
@@ -1164,6 +1218,29 @@ instance (priority := 1100) instCompI {G : (J → Type u') → Type v} [hG : IPo
       refine Occ.comp_ext (Sh' := fun sh q => Sh' (pidx sh q))
         (Pos' := fun sh q s => Pos' (pidx sh q) s) (X := fun _ _ _ _ => X) sh _ t c fun q => ?_
       exact (hH _).equiv.apply_symm_apply _ }
+
+/-- Through a functor on families at a constant family: a member at some index. -/
+@[simp] theorem mem_ofI {G : (J → Type u) → Type v} [IPolyIso G Sh Pos pidx] {X : Type u} (x : X)
+    (c : G fun _ => X) :
+    Mem (fun X : Type u => G fun _ => X) x c ↔
+      ∃ j, IPolyIso.Mem G (X := fun _ => X) j x c :=
+  ⟨fun ⟨q, e⟩ => ⟨_, q, congrArg (Sigma.mk _) e⟩,
+    fun ⟨_, q, e⟩ => ⟨q, eq_of_heq (Sigma.mk.inj e).2⟩⟩
+
+/-- Through a functor on families applied to a family of functors with instances: a member of a
+member. For a family of functors with one presentation, so that `simp` finds the presentation of
+the composite from that of the instance. -/
+@[simp] theorem mem_compI {G : (J → Type u') → Type v} [IPolyIso G Sh Pos pidx]
+    {Sh' : Type s'} {Pos' : Sh' → Type p'} {H : J → Type u → Type u'}
+    [∀ j, PolyIso (H j) Sh' Pos'] {X : Type u} (x : X) (c : G fun j => H j X) :
+    Mem (fun X => G fun j => H j X) x c ↔
+      ∃ j y, IPolyIso.Mem G (X := fun j => H j X) j y c ∧ Mem (H j) x y := by
+  constructor
+  · rintro ⟨r, e⟩
+    exact ⟨_, _, ⟨r.1, rfl⟩, r.2, e⟩
+  · rintro ⟨j, y, ⟨q, e⟩, r, e'⟩
+    cases e
+    exact ⟨⟨q, r⟩, e'⟩
 
 end PolyIso
 
