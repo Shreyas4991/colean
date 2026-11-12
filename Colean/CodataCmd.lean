@@ -1,4 +1,5 @@
 import Colean.Gen.Command
+import Colean.Gen.CCPO
 
 /-!
 # The `codata` command
@@ -98,6 +99,12 @@ The declaration is analysed (`Gen/Front.lean`) and the generated declarations ar
 is the pipeline, shared with the `data` command (`DataCmd.lean`), which differs only in the
 contract and what is derived from it, and with mutual blocks (`MutualCmd.lean`); `T.F.Rel`,
 `rel_map` and `rel_ofC` are generated for `codata` only.
+
+The attribute `with_ccpo` (`Syntax.lean`), off by default, gives a declared type the order of
+approximation, Lean's `Lean.Order.CCPO`, with which `partial_fixpoint` defines corecursive
+functions into it, and the monotonicity lemmas of its constructors (`Gen/CCPO.lean`): applied
+after the declaration, `attribute [with_ccpo] T`, or written before it, `@[with_ccpo] codata T …`,
+which is expanded to the declaration followed by the attribute (`expandCodataAttrs`).
 -/
 
 open Lean Elab Command
@@ -105,5 +112,31 @@ open Lean Elab Command
 namespace Codata
 
 @[command_elab codataCmd] def elabCodata : CommandElab := Gen.elabDecl
+
+/-- `@[attrs] codata T …` is the declaration followed by `attribute [attrs] T`. -/
+@[macro codataAttrCmd] def expandCodataAttrs : Macro := fun stx => do
+  let attrs : Array (TSyntax ``Parser.Term.attrInstance) := stx[0][1].getSepArgs.map (⟨·⟩)
+  let T : Ident := ⟨stx[1][1]⟩
+  return mkNullNode #[stx[1], ← `(command| attribute [$attrs,*] $T:ident)]
+
+/-- The attribute `with_ccpo` (`Syntax.lean`), on a `codata` type: `Gen/CCPO.lean`. A failure is
+an error of the attribute, which then declares nothing. -/
+initialize registerBuiltinAttribute {
+  name := `with_ccpo
+  descr := "the order of approximation on a `codata` type, for `partial_fixpoint`"
+  applicationTime := .afterTypeChecking
+  add := fun decl stx kind => do
+    unless kind == .global do throwError "with_ccpo: the attribute is global only"
+    let bot? := match stx with
+      | `(attr| with_ccpo $c:ident) => some c.getId
+      | _ => none
+    let env ← getEnv
+    try
+      withRef stx <| Term.TermElabM.run' (Gen.CCPO.genCCPO decl bot?) |>.run'
+    catch e =>
+      setEnv env
+      throw e
+  erase := fun _ => throwError "with_ccpo: the attribute cannot be erased"
+}
 
 end Codata

@@ -158,6 +158,55 @@ the parameter is the structural one (`PolyFix.d_map`). A family gets them at eve
 (`IPolyFix.d_map`).
 
 
+# Corecursion by `partial_fixpoint`
+
+```
+codata CoList (α : Type u)
+  | nil
+  | cons (a : α) (t : CoList α)
+
+attribute [with_ccpo] CoList     -- or `@[with_ccpo] codata CoList …`, or `with_ccpo nil`
+
+def map (f : α → β) (s : CoList α) : CoList β :=
+  match s.dtor with
+  | .nil => .nil
+  | .cons a t => .cons (f a) (map f t)
+partial_fixpoint
+```
+
+Off by default. The attribute `with_ccpo`, optionally naming a constructor without arguments (by
+default the first one; an error if there is none), orders a `codata` type by *approximation*, the
+named constructor at the bottom, `⊥ := ctor e` for its layer `e`:
+
+```
+x ⊑ y  :=  greatest relation with  x ⊑ y → x = ⊥ ∨ F.Rel (⊑) (dtor x) (dtor y)
+```
+
+that is: `x` is the bottom, or `x` and `y` have the same constructor and data and related recursive
+arguments. It is a chain-complete partial order: antisymmetric by `bisim`, the supremum of a chain
+is `⊥` if every element is, otherwise the common constructor and data of the others with the
+suprema of the chains of their children, by `corec`. This is Lean's `Lean.Order.CCPO`, which
+`partial_fixpoint` needs on the result type of a definition; the definition is then the least
+fixpoint of its equation, which it gets as `f.eq_1`, with the induction principle
+`f.fixpoint_induct`. A definition that is not productive is the bottom where it does not produce
+(`def bad : CoList Nat := bad` is `nil`, `filter` of nothing is `nil`). The attribute generates:
+
+1. `T.instCCPO : Lean.Order.CCPO (T params)`.
+2. `T.approx_iff : x ⊑ y ↔ x = T.c₀ ∨ T.F.Rel (· ⊑ ·) x.dtor y.dtor`.
+3. `T.approx_coind`: a relation `R` with `R x y → x ⊑ y ∨ T.F.Rel (R ∪ ⊑) x.dtor y.dtor` is
+   contained in `⊑` (coinduction up to the order, for the monotonicity of the user's functions).
+4. `T.bot_eq : Lean.Order.bot = T.c₀` (`simp`).
+5. `T.monotone_c : monotone t → monotone fun x => T.c a (t x)` for each constructor with a
+   recursive argument, tagged `@[partial_fixpoint_monotone]`: an argument under a function is
+   ordered pointwise, a nested one through a leaf (`List T`) by its structure (`Occ.order`, through
+   which `List.map`, `Option.map` and `Array.map` are monotone); other arguments are fixed.
+
+The theory is one proof for all types (`Model/CCPO.lean`), from the contract and the presentation
+of `F` as a container that every generated type has. For a family the bottom is a constructor at
+every index, `| stop {n : Nat} : T n`, and the order is at every index. Not supported: several
+indices, the types of `mutual` and `mixed_mutual` blocks (but the outer `codata` of a mixed block).
+
+
 # Mutual blocks
 
 ```

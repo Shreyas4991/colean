@@ -53,3 +53,4 @@ import ColeanTest.MixedIdx
 import ColeanTest.MixedParam
 import ColeanTest.MixedRejected
 import ColeanTest.FrontEnd
+import ColeanTest.CCPO

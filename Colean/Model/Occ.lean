@@ -127,6 +127,10 @@ theorem rel_intro {R : X → Y → Prop} (sh : Sh) (c : Pos sh → X) (c' : Pos 
     (h : ∀ q, R (c q) (c' q)) : Rel o o' R (o.ofC ⟨sh, c⟩) (o'.ofC ⟨sh, c'⟩) :=
   ⟨sh, c, c', o.toC_ofC _, o'.toC_ofC _, h⟩
 
+/-- A value is related to itself by a reflexive relation. -/
+theorem rel_refl {R : X → X → Prop} (h : ∀ x, R x x) (x : G X) : Rel o o R x x :=
+  ⟨(o.toC x).1, (o.toC x).2, (o.toC x).2, rfl, rfl, fun _ => h _⟩
+
 /-- Related values are the two images of one value, once every related pair is: the elimination
 of `Rel`, used by the generated `rel_ctorᵢ` lemmas with the pairs `{p // R p.1 p.2}` and, for
 nested arguments, with the images given by the inner lemma. -/
@@ -208,6 +212,10 @@ theorem rel_intro {R : ∀ j, X j → Y j → Prop} (sh : Sh) (c : (q : Pos sh) 
     (c' : (q : Pos sh) → Y (pidx sh q)) (h : ∀ q, R _ (c q) (c' q)) :
     Rel o o' R (o.ofC ⟨sh, c⟩) (o'.ofC ⟨sh, c'⟩) :=
   ⟨sh, c, c', o.toC_ofC _, o'.toC_ofC _, h⟩
+
+/-- A value is related to itself by a reflexive relation. -/
+theorem rel_refl {R : ∀ j, X j → X j → Prop} (h : ∀ j x, R j x x) (x : G X) : Rel o o R x x :=
+  ⟨(o.toC x).1, (o.toC x).2, (o.toC x).2, rfl, rfl, fun _ => h _ _⟩
 
 theorem exists_map_of_rel' {R : ∀ j, X j → Y j → Prop} {W : J → Type u''}
     (fst : ∀ j, W j → X j) (snd : ∀ j, W j → Y j)

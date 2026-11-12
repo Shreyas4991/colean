@@ -13,6 +13,7 @@ file of theory and one generator file.
 | 3. Framework | `T.contract` only | `ctor`, `dtor_ctor`, `ctor_dtor`, `ctor_injective`, `corec_eq`, `corec_unique` and the data duals | none: instantiation of generic theorems |
 | 4. Surface | the constructor list and steps 2–3 | `T.cᵢ` with their lemmas, `casesOn`, `rec_cᵢ`, `fold_cᵢ`, the characterisation `T.F.Rel`, the types, aliases and per-type recursors of a block | term assembly |
 | 5. Instances | a declared type, family or block | `PolyIso`/`PolyMap` instances for it (`T.Poly.*`), and the `simp` lemmas `T.Poly.map_cᵢ`, `T.Poly.mem_cᵢ` | the layer's laws by tactic; the fixpoint instantiated; the lemmas by a theorem of `Model/Poly.lean` and definitional unfolding (map), cases on the positions of a layer (membership) |
+| 6. Order (`with_ccpo`, off by default) | a declared `codata` type, single, with at most one index | `T.instCCPO : Lean.Order.CCPO`, `T.approx_iff`, `T.approx_coind`, `T.bot_eq`, the monotonicity lemmas `T.monotone_cᵢ` | none for the order: `Model/CCPO.lean` instantiated; the bottom's positions empty by `cases`; the lemmas by the constructor of `T.F.Rel` |
 
 ## Files
 
@@ -26,6 +27,7 @@ Theory, in dependency order:
 - `Model/Poly.lean`: a least or greatest fixpoint of a layer polynomial in a parameter is polynomial in that parameter: trees of shapes, `Path`, `PolyFix`, `coFix`, `inFix`; for a family, at every index (`ILay`, `IPath`, `IPolyFix`, `icoFix`, `iinFix`), on the total space of the plain case. The map through a right inverse of the destructor (`map_eq_of_d`) and membership in one step (`exists_val_iff`), for the `simp` lemmas of step 5.
 - `Model/Occ.lean`: occurrence structures `Occ`/`IOcc`, internal to the command: their combinators, laws and computation lemmas (`simp`, for `IOcc` as for `Occ`), the members of a value (`Occ.Mem`, `simp` through the combinators), and the map of an indexed structure at one index as the plain one's (`IOcc.map_flat_sum`, …); the leaves are `Occ.ofIso F`, from the `PolyIso` instances, and the instances of the built-in forms are the combinators by definition (`Occ.ofIso_prod`, …, `simp` lemmas but for the identity's).
 - `Model/Occ2.lean`: occurrence structures in two variables `Occ₂`, `G X Y ≃ Lay PX PY X Y` with the layer of `Model/Poly.lean`, for a field with a parameter and the recursion in one argument: combinators, laws, the computation of the map, `AgreeY`, the agreement of its map in `Y` with that of the structure in `Y` alone, and membership in each variable (`MemX`, `MemY`, `simp` through the combinators down to the parts in one variable, whose members are `Occ.Mem`).
+- `Model/CCPO.lean`: the order of approximation on a coinductive type with a bottom layer, from a contract and a presentation of its functor as a container (`Contract.Container`): `Approx`, its unfolding and coinduction, the supremum of a chain by `corec` (`csup`), Lean's `Lean.Order.CCPO` (`Contract.ccpo`), the monotonicity of the constructor; the order on a nested argument through its occurrence structure (`Occ.order`) and the monotonicity of the maps of the library's leaves, for `partial_fixpoint` (step 6).
 - `Model/IOcc2.lean`: the same over a family, `IOcc₂`, the recursive variable a family over an index, each position in it at its index (the layer of `ILay`), for families and blocks: combinators, among them a plain structure at one index (`ofOcc₂`), laws, the map, `AgreeY` with the indexed structure in `Y` alone read along a map of the indices, and membership, a member in `Y` with its index.
 
 Generators, on `Expr`, in dependency order. `Syntax.lean` holds the command syntax.
@@ -41,6 +43,7 @@ Generators, on `Expr`, in dependency order. `Syntax.lean` holds the command synt
 - `Gen/Extras.lean`: step 2b (`T.recPos`, `T.rec`), and the instance of an occurrence structure (`isoOf`).
 - `Gen/Surface.lean`: step 4 (constructors and their lemmas, `casesOn`, `rec_cᵢ`, `fold_cᵢ`; in a block, the types `Tₘ`, the aliases and, for `data`, the recursors `Tₘ.rec` per type).
 - `Gen/Derive.lean`: step 5, separate from the pipeline (see below), in parts under `Gen/Derive/`, each on the ones before: the holes and the structures of the fields (`Holes.lean`), the presentation (`Pres.lean`), the layer `toL`, `ofL` and its laws (`Layer.lean`), the fixpoint and the instances (`Fix.lean`), the `simp` lemmas (`Simp.lean`); `Derive.lean` runs them.
+- `Gen/CCPO.lean`: step 6, run by the attribute `with_ccpo` (`CodataCmd.lean`), separate from the pipeline (below).
 - `Gen/Command.lean`: the pipeline. `CodataCmd.lean`, `DataCmd.lean`: the commands; `MutualCmd.lean`: `mutual` blocks of them, and `mixed_mutual` blocks.
 - `Gen/Mixed.lean`: a `mixed_mutual` block: its runs, the pipeline on each, the closed types of the runs inside, their membership instances, and their interface restated at the closed types.
 
@@ -312,3 +315,43 @@ Both are stated on the constructors for `codata` too (a value is the constructor
 and `corec_eq` writes a corecursive one so). The functors of the left-hand sides are not indexed,
 since the leaves of other rules are often eta-reduced (`Occ.ofIso Forest`). A failure of the
 lemmas is a warning that rolls back only them.
+
+## Orders for `partial_fixpoint`
+
+`attribute [with_ccpo] T` (or `@[with_ccpo] codata T …`, which the command expands to the
+declaration followed by the attribute) gives a `codata` type the order with which Lean's
+`partial_fixpoint` defines corecursive functions into it (`Gen/CCPO.lean`). Like step 5 it runs on
+a declared type, reads only the environment, and declares nothing in the pipeline: off by default,
+nothing a declaration generates changes. A failure is an error of the attribute, which restores the
+state.
+
+The order is *approximation*, with a constructor without arguments as the bottom (`with_ccpo c`,
+or the first such constructor): `x ⊑ y` when `x` is the bottom, or `dtor x` and `dtor y` are
+related by the lifting of the order, the greatest such relation (`Contract.Approx`). It is defined
+from the contract and the bottom layer alone. That it is a partial order and that chains have
+suprema needs the positions of a layer (the lifting by `map` alone need not preserve intersections
+and composites of relations): the theory takes the presentation of `F` as `σ.Obj` that every
+generated type has (`T.toC`, `T.ofC`, `Contract.Container`), and the emptiness of the bottom's
+positions, by `cases` on `T.B`. Antisymmetry is `bisim`; the supremum of a chain is `corec` on sets
+of elements, the bottom layer if there is no other element, otherwise the shape of the others with
+the sets of their children at its positions (`Contract.csup`). The instance is
+`Contract.ccpo T.contract e C hbot idx`, at every index for a family, whose bottom is then a
+constructor at every index (`| stop {n} : T n`). The pieces are elaborated from short terms on the
+generated constants, so that one generator covers the contract over `Unit` of a plain type and a
+family's.
+
+`partial_fixpoint` proves a definition monotone with the lemmas tagged
+`@[partial_fixpoint_monotone]`, by the head of the body, and splits `match`es (on `t.dtor`). A
+constructor gets `T.monotone_c`: its recursive arguments, plain, under a function (Lean's order on
+functions) or nested through a leaf, `List T` (the order through the leaf's structure,
+`Occ.order`, which is `T.F.Rel`'s), are monotone functions, the others fixed; the proof is the
+constructor of `T.F.Rel`, its premises the hypotheses, or reflexivity (`Occ.rel_refl`,
+`IOcc.rel_refl`) for a fixed nested argument. Through a leaf the maps are monotone
+(`Occ.monotone_list_map`, `monotone_option_map`, `monotone_array_map`). The user's own functions
+(`bind` of interaction trees) are proved monotone by `T.approx_coind`, coinduction up to the order.
+
+Not supported: the types of `mutual` and `mixed_mutual` blocks (the outer `codata` of a mixed block
+is a single type and is supported), several indices, and recursion through a nested argument other
+than by the map of a leaf (`List.cons`, a product, a composite `Option (List T)`, a function into a
+list): these arguments stay fixed (`Sketch/CCPOTour.lean`, Part II).
+

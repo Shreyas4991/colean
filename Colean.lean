@@ -9,6 +9,7 @@ import Colean.Model.Occ
 import Colean.Model.Poly
 import Colean.Model.Occ2
 import Colean.Model.IOcc2
+import Colean.Model.CCPO
 import Colean.Syntax
 import Colean.Gen.Decl
 import Colean.Gen.Occ
@@ -25,6 +26,7 @@ import Colean.Gen.Surface
 import Colean.Gen.Derive
 import Colean.Gen.Command
 import Colean.Gen.Mixed
+import Colean.Gen.CCPO
 import Colean.CodataCmd
 import Colean.DataCmd
 import Colean.MutualCmd
@@ -33,7 +35,8 @@ import Colean.MutualCmd
 # (Co)inductive types as subtypes of one general type
 The framework (`Framework`), the user interface for nesting (`PolyIso`), the model (`Model/`),
 the command syntax (`Syntax`), the command generators by step, on `Expr` (`Gen/`), the `codata`
-and `data` commands (`CodataCmd`, `DataCmd`) and their mutual and mixed blocks (`MutualCmd`).
+and `data` commands (`CodataCmd`, `DataCmd`) and their mutual and mixed blocks (`MutualCmd`), and
+the attribute `with_ccpo` for `partial_fixpoint` (`Model/CCPO`, `Gen/CCPO`, `CodataCmd`).
 The tests are the separate library `ColeanTest`. The decomposition is described in
 `architecture.md`.
 -/
