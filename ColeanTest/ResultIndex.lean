@@ -121,7 +121,7 @@ def R.fan (k : Nat) : R 0 :=
     (fun | _, ⟨rfl⟩ => .mk 0 (List.replicate k ⟨rfl⟩)) ⟨rfl⟩
 
 theorem R.dtor_fan (k : Nat) : (R.fan k).dtor = .mk 0 (List.replicate k (R.fan k)) := by
-  simp [R.fan, R.dtor_corec, map_ofOcc_list]
+  simp [R.fan, R.dtor_corec]
 
 data DR : Nat → Type
   | mk (n : Nat) (ts : List (DR n)) (o : Option (DR (n + 1))) : DR (n * 2)

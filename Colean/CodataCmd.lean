@@ -43,7 +43,7 @@ does, implicit elsewhere):
   `ctorᵢ_f (p : A)` per function argument `f : A → T` and one `ctorᵢ_x (q : Pos x_s)` per nested
   argument (positions of its structure); bundled as `T.sig`;
 * `T.toC`, `T.ofC` with the four laws `T.ofC_toC`, `T.toC_ofC`, `T.ofC_map`, `T.rel_ofC`;
-* the contract: `T`, `T.dtor`, `T.corec`, `T.dtor_corec`, `T.bisim`, transported from the
+* the contract: `T`, `T.dtor`, `T.corec`, `T.dtor_corec` (simp), `T.bisim`, transported from the
   generic `Signature` theorems; `T.corec` accepts a state in any universe;
 * derived from the contract (`Codata.Contract`): `T.ctor`, `T.dtor_ctor`, `T.ctor_dtor`,
   `T.ctor_injective`, `T.corec_eq`, `T.corec_unique`; the individual constructors `T.ctorᵢ` with
@@ -103,8 +103,13 @@ contract and what is derived from it, and with mutual blocks (`MutualCmd.lean`);
 The attribute `with_ccpo` (`Syntax.lean`), off by default, gives a declared type the order of
 approximation, Lean's `Lean.Order.CCPO`, with which `partial_fixpoint` defines corecursive
 functions into it, and the monotonicity lemmas of its constructors (`Gen/CCPO.lean`): applied
-after the declaration, `attribute [with_ccpo] T`, or written before it, `@[with_ccpo] codata T …`,
-which is expanded to the declaration followed by the attribute (`expandCodataAttrs`).
+after the declaration, `attribute [with_ccpo] T`, or among the declaration's modifiers,
+`@[with_ccpo] codata T …`, applied once everything is declared, as `inductive` applies its
+attributes.
+
+The declaration is parsed as Lean's `inductive` (`Syntax.lean`): doc comments, attributes,
+`private`, `protected` and `noncomputable` on the type and on the constructors, universe names
+`T.{u}` and `where`, handled as `inductive` handles them (`DeclStx.elabMods`, `Gen/Front.lean`).
 -/
 
 open Lean Elab Command
@@ -112,12 +117,6 @@ open Lean Elab Command
 namespace Codata
 
 @[command_elab codataCmd] def elabCodata : CommandElab := Gen.elabDecl
-
-/-- `@[attrs] codata T …` is the declaration followed by `attribute [attrs] T`. -/
-@[macro codataAttrCmd] def expandCodataAttrs : Macro := fun stx => do
-  let attrs : Array (TSyntax ``Parser.Term.attrInstance) := stx[0][1].getSepArgs.map (⟨·⟩)
-  let T : Ident := ⟨stx[1][1]⟩
-  return mkNullNode #[stx[1], ← `(command| attribute [$attrs,*] $T:ident)]
 
 /-- The attribute `with_ccpo` (`Syntax.lean`), on a `codata` type: `Gen/CCPO.lean`. A failure is
 an error of the attribute, which then declares nothing. -/

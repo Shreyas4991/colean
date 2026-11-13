@@ -22,7 +22,7 @@ Lean's elaborators do more than these helpers on purpose: definitions are not co
 (everything generated is noncomputable), and there are no matchers (definitions by cases use
 `casesOn`, their computation rules are stated as theorems). The generated declarations get
 declaration ranges but no info trees, which only the names the user wrote get, the types and the
-constructors (`Ctx.addDeclInfo`, `Gen/Surface.lean`).
+constructors (`finishDecls`, `Gen/Command.lean`).
 -/
 
 open Lean Meta Elab Term
@@ -139,7 +139,7 @@ private def checkClosed (name : Name) (es : Array Expr) : MetaM Unit := do
 
 /-- Does a component of `n` occur twice in it? -/
 def hasDupComponent (n : Name) : Bool :=
-  let cs := n.components
+  let cs := (privateToUserName n).components
   cs.any fun c => cs.count c > 1
 
 /-- The declaration ranges of a generated declaration: those of the user's declaration `ref`.
@@ -151,7 +151,8 @@ private def addRanges (name : Name) (ref : Syntax) : TermElabM Unit := do
 
 /-- The declaration ranges of a declaration the user named, a type or a constructor, whatever
 its name: those of its syntax `ref`, with the name as written `selection` as the selection range,
-as `inductive` gives them. -/
+as `inductive` gives them. Called before the declaration is added: Lean keeps the first ranges
+stored for a name, and `addDef` stores others. -/
 def addRangesUser (name : Name) (ref : Syntax) (selection : Syntax := .missing) :
     TermElabM Unit := do
   if ref.getPos?.isSome then addDeclarationRangesFromSyntax name ref selection

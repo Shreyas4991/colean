@@ -18,6 +18,11 @@ command there, and the state is restored: a failed command declares nothing. Eac
 own heartbeat budget. Then, separately, the derived instances (step 5, `Gen/Derive.lean`), whose
 failure is only a warning. Last, the internals are made `protected`
 (`protectGenerated`, `Gen/Decl.lean`), as `inductive` protects its own.
+
+Around the pipeline, as `inductive` does around its declarations: before it, the modifiers
+(`prepareDecls`, `Gen/Front.lean`); after it, the doc comments, `protected` on constructors and
+the info trees of the names the user wrote (`finishDecls`), and last, outside the all-or-nothing
+run, the attributes of the types and constructors (`applyDeclAttrs`).
 -/
 
 open Lean Elab Command
@@ -79,7 +84,6 @@ def pipeline (ctx : Ctx) (afterTypes : Ctx → TermElabM Ctx := pure) : TermElab
     step ctx.genRecLemmas
     step ctx.genTypeRecs
     step ctx.genDataAliases
-  unless ctx.isOpen do ctx.addDeclInfo
   -- A separate step, after the type is complete: it cannot fail the declaration, unless it is
   -- an open run of a mixed block that an outer run nests through.
   ctx.deriveInstances
@@ -98,12 +102,49 @@ def allOrNothing (x : TermElabM α) : TermElabM α := do
     Core.setMessageLog msgs
     throw e
 
+/-- Once everything is declared, as `inductive` does after its declarations
+(`elabInductiveViewsPostprocessing`): the doc comments of the types and the constructors,
+`protected` on the constructors, and the names the user wrote, the types and the constructors, in
+the info tree, as the declarations they name (after the doc comments, which hovers show). -/
+def finishDecls (decls : Array DeclStx) : TermElabM Unit := do
+  for d in decls do
+    if let some doc := d.modifiers.docString? then
+      withRef d.declId <| addDocString d.declName d.binderStx doc
+    for c in d.ctors, cm in d.ctorMods do
+      let n := d.declName ++ c.name.getId
+      if cm.isProtected then modifyEnv (addProtected · n)
+      if let some doc := cm.docString? then
+        withRef c.name <| addDocString n c.binderStx doc
+  withSaveInfoContext do
+    for d in decls do
+      Term.addTermInfo' d.T (← mkConstWithLevelParams d.declName) (isBinder := true)
+    for d in decls do
+      for c in d.ctors do
+        Term.addTermInfo' c.name (← mkConstWithLevelParams (d.declName ++ c.name.getId))
+          (isBinder := true)
+
+/-- The attributes of the types and of the constructors, applied to them once everything is
+declared, as `attribute [attrs] T` after the declaration would: a failure is an error of the
+attribute, and the declarations stay, as with `inductive`. -/
+def applyDeclAttrs (decls : Array DeclStx) : TermElabM Unit := do
+  for d in decls do
+    withRef d.declId <| Term.applyAttributes d.declName d.modifiers.attrs
+    for c in d.ctors, cm in d.ctorMods do
+      withRef c.name <| Term.applyAttributes (d.declName ++ c.name.getId) cm.attrs
+
 /-- Elaborate the declarations `decls`, one or a `mutual` block of the same kind, with the
-generators of `Gen/`. `ref` is the command. A failure declares nothing: the state is restored,
-then the error is rethrown. -/
+generators of `Gen/`. `ref` is the command. First the modifiers (`prepareDecls`), then the
+declarations, at the universe names of the block (`T.{u}`). A failure declares nothing: the state
+is restored, then the error is rethrown. The attributes come last (`applyDeclAttrs`). -/
 def elabDecls (decls : Array DeclStx) (ref : Syntax) : CommandElabM Unit :=
-  runTermElabM fun vars => allOrNothing do
-    discard <| withCtx decls ref vars fun ctx => pipeline ctx
+  runTermElabM fun vars => do
+    let decls ← allOrNothing do
+      let decls ← prepareDecls decls
+      Term.withLevelNames decls[0]!.levelNames do
+        discard <| withCtx decls ref vars fun ctx => pipeline ctx
+      finishDecls decls
+      return decls
+    applyDeclAttrs decls
 
 /-- Elaborate a `codata` or `data` declaration. -/
 def elabDecl (stx : Syntax) : CommandElabM Unit := do

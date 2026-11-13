@@ -6,8 +6,8 @@ import Colean.Gen.Rel
 *Spec.* Input: the context, `T.F` (step 1), the signature and the isomorphism. Output:
 
 * `T := Cotype (T.sig params)` (`Intype` for `data`), curried in the indices;
-* for `codata`: `T.dtor`, `T.corec` (with a state in any universe), `T.dtor_corec`, `T.bisim`
-  (for `T.F.Rel`), and `T.contract : Codata.Contract T F`;
+* for `codata`: `T.dtor`, `T.corec` (with a state in any universe), `T.dtor_corec` (simp),
+  `T.bisim` (for `T.F.Rel`), and `T.contract : Codata.Contract T F`;
 * for `data`: `T.ctor`, `T.fold` (into a family in any universe), `T.fold_ctor`, and
   `T.contract : Data.Contract T F`.
 
@@ -74,8 +74,8 @@ def genType : TermElabM Unit := do
     | 1 => mkLambdaFVars ctx.params fam
     | _ => mkLambdaFVars (ctx.params ++ ctx.idx) (mkApp fam (← ctx.packI))
   let type ← mkForallFVars (ctx.params ++ ctx.idx) (mkSort L.succ)
-  addDef ctx.name (← ctx.levelParamsOf [] #[type, value]) type value ctx.ref
   unless ctx.isBlock do addRangesUser ctx.name ctx.ref ctx.types[0]!.nameRef
+  addDef ctx.name (← ctx.levelParamsOf [] #[type, value]) type value ctx.ref
 
 /-! ### The coinductive contract -/
 
@@ -144,6 +144,7 @@ def genContract : TermElabM Unit := do
     (#[σ, Sp, FSp, FTp, toC, ofCS, ofCT, map, ofC_toC, ofC_map, ← ctx.uncurryN c 1, pI, s].map some)
   let value ← mkLambdaFVars xs value
   addThm ctx.dtor_corec (← ctx.elimLevelParamsOf fresh #[type]) type value ctx.ref
+  addSimp ctx.dtor_corec
   -- `bisim`
   withLocalDeclD `R (← ctx.famRel T T) fun R => do
   let HTy ← withLocalDeclD `x (← ctx.tAt ctx.idx) fun x => do

@@ -227,7 +227,7 @@ it is an error instead, and so is an extra parameter of such a run that cannot v
 needs the instances in it. -/
 def deriveInstances : TermElabM Unit := do
   let ns ← getCurrNamespace
-  let short (n : Name) : MessageData := m!"`{n.replacePrefix ns .anonymous}`"
+  let short (n : Name) : MessageData := m!"`{(privateToUserName n).replacePrefix ns .anonymous}`"
   let shorts := ctx.types.map (short ·.name)
   let strict? := ctx.mix?.filter fun mx => ctx.isOpen && mx.required.any id
   let s ← saveState

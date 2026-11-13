@@ -1,29 +1,20 @@
 # Colean
 
-Coinductive types for Lean 4, and inductive ones with more freedom than `inductive` allows.
+(Co)inductive types for Lean 4.
 
-Lean has no coinductive types. Colean adds a `codata` command that declares them, and a `data`
-command for inductive types that `inductive` rejects, such as types nested through a
-coinductive type. You write a declaration that looks like an `inductive` one, and you get a
-type with its constructors, its eliminators and their lemmas:
+Lean's type theory has no coinductive types. 
+Colean adds the `codata` command that declares them, with `inductive`-like syntax.
 
-- for `codata`: the destructor `dtor`, primitive corecursion `corec`, coinduction `bisim`, and
-  case analysis `casesOn` (also through the `cases` tactic);
-- for `data`: the recursor `rec` (also through the `induction` tactic), `fold`, and `casesOn`;
-- for both: injectivity and disjointness of the constructors, as `simp` lemmas.
-
-It covers parameters, indexed families, `mutual` blocks of one kind, nesting through other
-types (`List`, `Option`, `Array`, products, sums, functions, dependent pairs, your own
-types), and, as best effort, `mixed_mutual` blocks of `data` and `codata` types. An opt-in
-attribute gives a `codata` type an order for Lean's `partial_fixpoint`, so you can write
-corecursive definitions directly.
-
-The types are definitions in Lean's logic, not axioms: everything is checked by the kernel and
-uses only the standard axioms `propext`, `Classical.choice` and `Quot.sound`.
+```lean
+/-- Potentially infinite lists -/
+codata CoList (α : Type)
+  | nil
+  | cons (head : α) (tail : CoList α)
+```
 
 ## Installation
 
-Colean builds with Lean `v4.34.1` and depends on Mathlib. In your `lakefile.toml`:
+Add to your `lakefile.toml`:
 
 ```toml
 [[require]]
@@ -36,70 +27,49 @@ Then `import Colean`.
 
 ## Examples
 
-The examples below assume `import Colean`, `noncomputable section` and `universe u`. Every
-generated declaration is noncomputable, so are the definitions using them. They are checked
-in [`ColeanTest/Readme.lean`](ColeanTest/Readme.lean).
-
-### Streams: corecursion and coinduction
+### Corecursion, coinduction, case analysis
 
 ```lean
-codata Strm (α : Type u)
+codata Strm (α : Type)
   | cons (head : α) (tail : Strm α)
 
-/-- `a, f a, f (f a), …`: the state is the next element. -/
-def Strm.iterate {α : Type u} (f : α → α) (a : α) : Strm α :=
+-- Corecursion: one step from a state. Here the state is the next element.
+noncomputable def Strm.iterate {α : Type} (f : α → α) (a : α) : Strm α :=
   Strm.corec (fun x => .cons x (f x)) a
 
-def Strm.map {α β : Type u} (f : α → β) : Strm α → Strm β :=
-  Strm.corec fun s => match s.dtor with | .cons a t => .cons (f a) t
+noncomputable def Strm.const {α : Type} (a : α) : Strm α :=
+  Strm.corec (fun _ => .cons a ()) ()
 
-@[simp] theorem Strm.dtor_iterate {α : Type u} (f : α → α) (a : α) :
-    (Strm.iterate f a).dtor = .cons a (Strm.iterate f (f a)) := by
-  simp [Strm.iterate, Strm.dtor_corec]
+-- Coinduction: related streams have equal heads and related tails.
+theorem Strm.iterate_id {α : Type} (a : α) : Strm.iterate id a = Strm.const a := by
+  refine Strm.bisim (fun x y => x = .iterate id a ∧ y = .const a) ?_ ⟨rfl, rfl⟩
+  rintro _ _ ⟨rfl, rfl⟩
+  simp only [Strm.iterate, Strm.const, Strm.dtor_corec, Strm.F.map_cons, id]
+  exact .cons _ _ _ ⟨rfl, rfl⟩
 
-@[simp] theorem Strm.map_cons {α β : Type u} (f : α → β) (a : α) (s : Strm α) :
-    (Strm.cons a s).map f = .cons (f a) (s.map f) := by
-  rw [← Strm.ctor_dtor (Strm.map f _), Strm.map, Strm.dtor_corec]
-  simp
+-- Case analysis, by `casesOn` or the `cases` tactic.
+noncomputable def Strm.head {α : Type} (s : Strm α) : α := s.casesOn fun a _ => a
 
-/-- By coinduction: relate the two sides at every `b`, and show one step. -/
-theorem Strm.map_iterate {α : Type u} (f : α → α) (a : α) :
-    (Strm.iterate f a).map f = Strm.iterate f (f a) := by
-  refine Strm.bisim (fun x y => ∃ b, x = (Strm.iterate f b).map f ∧
-    y = Strm.iterate f (f b)) ?_ ⟨a, rfl, rfl⟩
-  rintro _ _ ⟨b, rfl, rfl⟩
-  rw [← Strm.ctor_dtor (Strm.iterate f b)]
-  simp only [Strm.dtor_iterate, Strm.ctor_cons, Strm.map_cons, Strm.dtor_cons]
-  exact .cons _ _ _ ⟨f b, rfl, rfl⟩
+example {α : Type} (a : α) (s : Strm α) : (Strm.cons a s).head = a := by simp [Strm.head]
 ```
 
-The corecursion step returns one layer, a value of the functor `Strm.F α S` over the states, so
-its constructors are those of `Strm.F` (`.cons x (f x)`). The coinduction step shows that
-related streams unfold to the same constructor with related tails, which is the relation
-`Strm.F.Rel` and its constructor `.cons`.
-
-### Indexed families
+### Inductive types and families
 
 ```lean
-data Vec (α : Type u) : Nat → Type u
+-- `data` declares inductive types, here an indexed family.
+data Vec (α : Type) : Nat → Type
   | nil : Vec α 0
   | cons {n : Nat} (a : α) (v : Vec α n) : Vec α (n + 1)
 
-def Vec.toList {α : Type u} {n : Nat} (v : Vec α n) : List α :=
+noncomputable def Vec.toList {α : Type} {n : Nat} (v : Vec α n) : List α :=
   Vec.rec (motive := fun _ _ => List α) [] (fun a _ l => a :: l) v
 
-theorem Vec.length_toList {α : Type u} {n : Nat} (v : Vec α n) : v.toList.length = n := by
+-- Induction, by `rec` or the `induction` tactic.
+theorem Vec.length_toList {α : Type} {n : Nat} (v : Vec α n) : v.toList.length = n := by
   induction v with
   | nil => simp [Vec.toList]
   | cons a v ih => simp_all [Vec.toList]
-
-example {α : Type u} (v : Vec α 0) : v = .nil := by
-  cases v with
-  | nil => rfl
 ```
-
-Indices may be anything, also when they depend on the constructor's arguments
-(`Vec α (n + 1)`), and `codata` families work the same way.
 
 ### Mutual blocks
 
@@ -112,126 +82,69 @@ data Forest
   | cons (t : Tree) (f : Forest)
 end
 
-def Tree.size (t : Tree) : Nat :=
+-- One motive per type, as for Lean's mutual inductives.
+noncomputable def Tree.size (t : Tree) : Nat :=
   Tree.rec (motive_1 := fun _ => Nat) (motive_2 := fun _ => Nat)
     (fun _ _ k => k + 1) 0 (fun _ _ a b => a + b) t
-
-theorem Tree.size_pos (t : Tree) : 0 < t.size := by
-  induction t using Tree.rec (motive_2 := fun _ => True) with
-  | node n cs ih => simp [Tree.size]
-  | nil => trivial
-  | cons t f iht ihf => trivial
 ```
-
-The recursors per type have the shape of Lean's mutual recursors, a motive per type. A
-`mutual` block of `codata` types works the same way, with `corec` and `bisim` over the whole
-block.
 
 ### Nesting
 
 ```lean
-data Rose (α : Type u)
-  | node (a : α) (cs : List (Rose α))
+-- Nesting through `List`, `Option`, products, functions, other `data`/`codata` types, ...
+data Rose (α : Type)
+  | node (a : α) (children : List (Rose α))
 
-def Rose.size {α : Type u} (t : Rose α) : Nat :=
+-- Infinite trees, each node with a finite list of children.
+codata Tree (α : Type)
+  | node (a : α) (children : List (Tree α))
+
+-- `fold` gets the children already folded.
+noncomputable def Rose.size {α : Type} (t : Rose α) : Nat :=
   Rose.fold (S := Nat) (fun | .node _ cs => cs.sum + 1) t
-
-def Rose.labels {α : Type u} (t : Rose α) : List α :=
-  Rose.fold (S := List α) (fun | .node a ls => a :: ls.flatten) t
-
-@[simp] theorem Rose.size_node {α : Type u} (a : α) (cs : List (Rose α)) :
-    (Rose.node a cs).size = (cs.map Rose.size).sum + 1 := by
-  simp [Rose.size, Rose.fold_node]; rfl
-
-@[simp] theorem Rose.labels_node {α : Type u} (a : α) (cs : List (Rose α)) :
-    (Rose.node a cs).labels = a :: (cs.map Rose.labels).flatten := by
-  simp [Rose.labels, Rose.fold_node]; rfl
-
-/-- The induction hypothesis holds at every member of the list of children. -/
-theorem Rose.length_labels {α : Type u} (t : Rose α) : t.labels.length = t.size := by
-  induction t with
-  | node a cs ih =>
-    simp only [Codata.PolyIso.mem_list] at ih
-    simp [List.length_flatten, Function.comp_def, List.map_congr_left ih]
 ```
 
-A type can be nested through `List`, `Option`, `Array`, products, sums, functions, dependent
-pairs, any type declared with `data` or `codata` (also families and types of a block), and your
-own types, given instances that present them as polynomial functors (`Codata.PolyIso`). The
-induction hypothesis of a nested argument is stated for its members, which `simp` turns into
-the container's own membership (`t ∈ cs` for a list).
-
-### Mixed blocks: infinite trees with finite forests
+### Mixed blocks (best effort)
 
 ```lean
+-- `data` and `codata` in one block: the first declaration is outermost.
+-- Here trees are infinite, and every forest is finite.
 mixed_mutual
-codata Tree (α : Type u)
+codata Tree (α : Type)
   | node (a : α) (children : Forest α)
-data Forest (α : Type u)
+data Forest (α : Type)
   | nil
   | cons (t : Tree α) (f : Forest α)
 end
 
-/-- An infinite binary tree: the corecursion builds a finite forest of states. -/
-def Tree.bin {α : Type u} (a : α) : Tree α :=
+noncomputable def Tree.bin {α : Type} (a : α) : Tree α :=
   Tree.corec (S := Unit) (fun _ => .node a (.cons () (.cons () .nil))) ()
-
-theorem Tree.bin_eq {α : Type u} (a : α) :
-    Tree.bin a = .node a (.cons (.bin a) (.cons (.bin a) .nil)) := by
-  conv_lhs => rw [← Tree.ctor_dtor (Tree.bin a), Tree.bin, Tree.dtor_corec]
-  simp [Tree.bin]
-
-def Forest.length {α : Type u} (f : Forest α) : Nat :=
-  Forest.fold (S := Nat) (fun | .nil => 0 | .cons _ n => n + 1) f
 ```
-
-A block mixing `data` and `codata` has several solutions, so the order of the declarations is
-the nesting order: the first one is outermost. Here the trees are infinite and every forest is
-finite; in the other order, the trees are finite and a forest may be infinite. Each type gets
-the interface of its kind.
 
 ### Corecursion by `partial_fixpoint`
 
 ```lean
+-- With `with_ccpo`, corecursive functions can be written directly, by `partial_fixpoint`.
 @[with_ccpo]
-codata CoList (α : Type u)
+codata CoList (α : Type)
   | nil
-  | cons (a : α) (t : CoList α)
+  | cons (head : α) (tail : CoList α)
 
-def CoList.nats (n : Nat) : CoList Nat := .cons n (nats (n + 1))
-partial_fixpoint
-
-def CoList.map {α β : Type u} (f : α → β) (s : CoList α) : CoList β :=
+noncomputable def CoList.map {α β : Type} (f : α → β) (s : CoList α) : CoList β :=
   match s.dtor with
   | .nil => .nil
   | .cons a t => .cons (f a) (map f t)
 partial_fixpoint
 
-/-- Not productive: the least fixpoint is the bottom, `nil`. -/
-def CoList.stuck : CoList Nat := stuck
+noncomputable def CoList.nats (n : Nat) : CoList Nat := .cons n (nats (n + 1))
 partial_fixpoint
 
-example {α β : Type u} (f : α → β) (a : α) (t : CoList α) :
+example {α β : Type} (f : α → β) (a : α) (t : CoList α) :
     (CoList.cons a t).map f = .cons (f a) (t.map f) := by
   rw [CoList.map]; simp
-
-open Lean.Order in
-example : CoList.stuck = .nil := by
-  have h : CoList.stuck ⊑ .nil :=
-    CoList.stuck.fixpoint_induct _ (Codata.admissible_rel _) fun _ h => h
-  exact PartialOrder.rel_antisymm h (CoList.bot_eq ▸ bot_le _)
 ```
 
-`with_ccpo` takes a constructor without arguments as the least element (the first one, or the
-one named: `attribute [with_ccpo nil] CoList`), and orders the type by approximation: `nil`
-is below everything, and two values with the same constructor are related when their
-arguments are. Every chain has a least upper bound, so `partial_fixpoint` accepts
-definitions whose recursive calls are arguments of constructors, also after a `match` on
-`dtor`, and gives their equations and an induction principle. A recursive call through a
-function of your own needs a monotonicity lemma for that function. The idea follows
-[ISTA-PLV/coinductive](https://github.com/ISTA-PLV/coinductive).
-
-More examples, with what works and what does not yet, are in the walkthroughs
+More examples, with what works and what does not yet, are in
 [`Sketch/MutualTour.lean`](Sketch/MutualTour.lean),
 [`Sketch/NestingTour.lean`](Sketch/NestingTour.lean),
 [`Sketch/MixedTour.lean`](Sketch/MixedTour.lean) and
@@ -310,7 +223,8 @@ Colean does not handle every declaration you can write: it supports most of the 
 useful in practice, and it may reject some it could in principle accept. When it cannot build
 a type or prove its contract, the command fails with an error and declares nothing. It never produces a
 type that does not satisfy its contract, because every declaration and every proof is checked
-by Lean's kernel. Bug reports and feature requests are welcome in the
+by Lean's kernel. The types are definitions, not axioms, and use only the standard axioms
+`propext`, `Classical.choice` and `Quot.sound`. Bug reports and feature requests are welcome in the
 [issues](https://github.com/vasnesterov/colean/issues).
 
 The contracts are described in more detail in [`contract.md`](contract.md), and the steps and

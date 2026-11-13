@@ -7,8 +7,8 @@ import Colean.Gen.Command
 declared, the runs inside the outermost one open and then closed, as `MutualCmd.lean` describes.
 
 1. The runs, and their names (`mixRuns`): the outermost run under the names the user wrote, a run
-   inside it under `Tₘ.Open` (and `Blk.Open` for a block, whose index is `Blk.Ix`); none of them
-   declared already (`checkMixNames`).
+   inside it under `Tₘ.Open` (and `Blk.Open` for a block, whose index is `Blk.Ix`), private with
+   the types; none of them declared already (`checkMixNames`).
 2. The section variables of the block, and which declaration mentions which (`mixedVars`, one
    elaboration of the whole block, discarded); from these, the outer runs each run needs
    (`mixReach`), innermost first, and the runs that nest through each.
@@ -26,8 +26,9 @@ declared, the runs inside the outermost one open and then closed, as `MutualCmd.
 7. The internals of the closed types made `protected`, and the open types
    `Tₘ.Open` (`protectGenerated`); those of each run by the pipeline already.
 
-All of it runs in one `TermElabM` run, and a failure anywhere restores the state: a failed block
-declares nothing.
+All of it runs in one `TermElabM` run, after the modifiers (`prepareDecls`) and before the doc
+comments and the attributes (`finishDecls`, `applyDeclAttrs`, `Gen/Command.lean`), and a failure
+anywhere restores the state: a failed block declares nothing.
 -/
 
 open Lean Meta Elab Term Command
@@ -35,12 +36,14 @@ open Lean Meta Elab Term Command
 namespace Codata.Gen
 
 /-- The name `n` of a type in the namespace `ns`, as a string for a generated name: its
-components joined by `_` (`Foo_Tree` for `Foo.Tree`). -/
+components joined by `_` (`Foo_Tree` for `Foo.Tree`), without the private prefix. -/
 def nameIn (ns n : Name) : String :=
-  "_".intercalate ((n.replacePrefix ns .anonymous).components.map (·.toString (escape := false)))
+  "_".intercalate (((privateToUserName n).replacePrefix ns .anonymous).components.map
+    (·.toString (escape := false)))
 
-/-- The runs of a block, `decls` in the namespace `ns`, with their names. -/
-def mixRuns (ns : Name) (decls : Array DeclStx) : Array MixRun := Id.run do
+/-- The runs of a block, `decls`, with their names: those of the types, private or not, and of
+the blocks after them (`blockName`), as private as they are. -/
+def mixRuns (decls : Array DeclStx) : Array MixRun := Id.run do
   let mut groups : Array (Bool × Array Nat) := #[]
   for d in decls, i in [0:decls.size] do
     if let some (co, ds) := groups.back? then
@@ -49,10 +52,9 @@ def mixRuns (ns : Name) (decls : Array DeclStx) : Array MixRun := Id.run do
         continue
     groups := groups.push (d.co, #[i])
   return groups.mapIdx fun j (co, ds) =>
-    let shorts := ds.map (decls[·]!.T.getId)
-    let closedNames := shorts.map (ns ++ ·)
+    let closedNames := ds.map (decls[·]!.declName)
     let isBlock := ds.size ≥ 2
-    let blk := blockName ns shorts
+    let blk := privateLike closedNames[0]! (blockName (ds.map (decls[·]!.userName)))
     let closedFam := if isBlock then blk else closedNames[0]!
     let opened (n : Name) : Name := if j == 0 then n else n ++ `Open
     { co, decls := ds, names := closedNames.map opened, fam := opened closedFam
@@ -309,7 +311,7 @@ def restateRun (decls : Array DeclStx) (run : MixRun) (np : Nat) (xLevels : Arra
     (fams : ClosedFams) (rules : Closed) : TermElabM Closed := do
   let pairs := typePairs decls run
   let ctors := (run.decls.zip run.names).flatMap fun (d, n) =>
-    decls[d]!.ctors.map fun c => n ++ c.raw[1].getId
+    decls[d]!.ctors.map fun c => n ++ c.name.getId
   let mut cands : Array (Name × Name × Name × Syntax) := #[]
   for (n, _) in (← getEnv).constants.map₂.toList do
     let some (o, c, ref) := pairs.find? (·.1.isPrefixOf n) | continue
@@ -340,7 +342,7 @@ def memLemmas (decls : Array DeclStx) (runs : Array MixRun) (closed : Closed) : 
     let some (d, C) := (runs.flatMap fun run => run.decls.zip run.closedNames).find? (·.2 == r.contN)
       | continue
     for ctor in decls[d]!.ctors do
-      let cN := C ++ ctor.raw[1].getId
+      let cN := C ++ ctor.name.getId
       let ci ← getConstInfo cN
       let us := ci.levelParams.map mkLevelParam
       forallBoundedTelescope ci.type r.np fun ps cty => do
@@ -359,7 +361,7 @@ def memLemmas (decls : Array DeclStx) (runs : Array MixRun) (closed : Closed) : 
       let (type, value) ← withBinderInfo ps .implicit do
         return (← mkForallFVars xs (mkIff (mkApp2 mem capp x) (foldClosed closed simped.expr)),
           ← mkLambdaFVars xs pf)
-      let base := C ++ Name.mkSimple ("mem_" ++ ctor.raw[1].getId.toString)
+      let base := C ++ Name.mkSimple ("mem_" ++ ctor.name.getId.toString)
       let n := if (← getEnv).contains base then
           base.appendAfter ("_" ++ nameIn ns r.elemN)
         else base
@@ -367,23 +369,9 @@ def memLemmas (decls : Array DeclStx) (runs : Array MixRun) (closed : Closed) : 
       addThm n lps type value decls[d]!.ref
       addSimp n
 
-/-- The names the user wrote in the runs inside, the types and the constructors, as the closed
-declarations they name, in the info tree. -/
-def addMixedDeclInfo (decls : Array DeclStx) (runs : Array MixRun) : TermElabM Unit :=
-  withSaveInfoContext do
-  for run in runs.extract 1 runs.size do
-    for d in run.decls, c in run.closedNames do
-      addTermInfo' decls[d]!.T (← mkConstWithLevelParams c) (isBinder := true)
-      for ctor in decls[d]!.ctors do
-        let n := ctor.raw[1]
-        addTermInfo' n (← mkConstWithLevelParams (c ++ n.getId)) (isBinder := true)
-
-/-- Elaborate a `mixed_mutual` block `decls` with both kinds, `ref` the command: see the header.
--/
-def elabMixed (decls : Array DeclStx) (ref : Syntax) : CommandElabM Unit :=
-  runTermElabM fun vars => allOrNothing do
-  let ns ← getCurrNamespace
-  let mut runs := mixRuns ns decls
+/-- `elabMixed` once the modifiers are elaborated, `vars` the section variables. -/
+def elabMixedCore (decls : Array DeclStx) (ref : Syntax) (vars : Array Expr) : TermElabM Unit := do
+  let mut runs := mixRuns decls
   checkMixNames decls runs ref[0]
   let k := runs.size
   let (bvars, mentions) ← mixedVars decls ref vars
@@ -421,11 +409,21 @@ def elabMixed (decls : Array DeclStx) (ref : Syntax) : CommandElabM Unit :=
   for j in [1:k] do
     closed ← step (restateRun decls runs[j]! np xLevels[j]! fams closed)
   step (memLemmas decls runs closed)
-  addMixedDeclInfo decls runs
   -- The internals of the closed types, and the open types, `protected`.
   for run in runs.extract 1 runs.size do
     let ctors := (run.decls.zip run.closedNames).flatMap fun (d, n) =>
-      decls[d]!.ctors.map fun c => n ++ c.raw[1].getId
+      decls[d]!.ctors.map fun c => n ++ c.name.getId
     protectGenerated (run.closedNames.push run.closedFam) (run.closedNames ++ ctors)
+
+/-- Elaborate a `mixed_mutual` block `decls` with both kinds, `ref` the command: see the header.
+-/
+def elabMixed (decls : Array DeclStx) (ref : Syntax) : CommandElabM Unit :=
+  runTermElabM fun vars => do
+  let decls ← allOrNothing do
+    let decls ← prepareDecls decls
+    Term.withLevelNames decls[0]!.levelNames (elabMixedCore decls ref vars)
+    finishDecls decls
+    return decls
+  applyDeclAttrs decls
 
 end Codata.Gen

@@ -1,3 +1,6 @@
+1. Bump to modern Lean version
+2. Remove Mathlib dependency
+
 # Deferred
 
 ## The family's universe should not depend on the index universe

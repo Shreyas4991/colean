@@ -28,9 +28,10 @@ tactic proofs from what exists:
 * in a `data` block, the recursors per type `Tₘ.rec`, in the shape of Lean's mutual inductives
   (a motive per type), as `Blk.rec` at the motive made of them, and their rules `Tₘ.rec_cᵢ`,
   which are the block-level rules by unfolding; a hypothesis by `IPolyIso.Mem` is one per type
-  of the argument there;
-* the info tree for the names of the types and the constructors in the declaration
-  (`addDeclInfo`), once everything else is declared.
+  of the argument there.
+
+The names the user wrote get their info trees, and the types and constructors their doc
+comments, once everything is declared (`finishDecls`, `Gen/Command.lean`).
 
 The constructors, their lemmas and `casesOn` are per type, with the types `Tₘ` in their
 statements; in a block, `Tₘ.casesOnAux` is by `cases` on a goal metavariable, which discards the
@@ -125,8 +126,8 @@ def genCtors : TermElabM Unit := do
       let (type, value) ← withBinderInfo ctx.params .implicit do
         return (← mkForallFVars (ctx.params ++ ys) (← ctx.tyAt c.owner (c.uidx.map σ)),
           ← mkLambdaFVars (ctx.params ++ ys) (← ctx.appAt ctx.ctor idx #[fapp]))
-      addDef (ctx.tCtor c) (← ctx.levelParamsOf [] #[type, value]) type value c.ref
       addRangesUser (ctx.tCtor c) c.ref c.nameRef
+      addDef (ctx.tCtor c) (← ctx.levelParamsOf [] #[type, value]) type value c.ref
     ctx.withTArgs c fun ys σ => do
     let idx := c.idx.map σ
     let fapp ← ctx.fCtorApp c L T ys
@@ -291,8 +292,8 @@ def genTypes : TermElabM Unit := do
     let xs := ctx.params ++ t.idx
     let value ← mkLambdaFVars xs (← ctx.tAt (ctx.wrap m t.idx))
     let type ← mkForallFVars xs (mkSort L.succ)
-    addDef t.name (← ctx.levelParamsOf [] #[type, value]) type value t.ref
     addRangesUser t.name t.ref t.nameRef
+    addDef t.name (← ctx.levelParamsOf [] #[type, value]) type value t.ref
 
 /-- In a `codata` block, the block-level `corec` and `bisim` restricted to each type. `dtor` and
 `ctor` are not aliased: dot notation `t.dtor` resolves to the block-level `dtor` through the
@@ -356,16 +357,6 @@ def genDataAliases : TermElabM Unit := do
       return (← mkForallFVars xs (mkAppN S idx), ← mkLambdaFVars xs value)
     addDef (ctx.tyGen m "fold") (← ctx.elimLevelParamsOf fresh #[type, value]) type value t.ref
       (reducible := true)
-
-/-! ### The info tree -/
-
-/-- The names the user wrote, the types and the constructors, as the declarations they name in
-the info tree: for hovering and go-to-definition, as `inductive` does. -/
-def addDeclInfo : TermElabM Unit := withSaveInfoContext do
-  for t in ctx.types do
-    addTermInfo' t.nameRef (← mkConstWithLevelParams t.name) (isBinder := true)
-  for c in ctx.ctors do
-    addTermInfo' c.nameRef (← mkConstWithLevelParams (ctx.tCtor c)) (isBinder := true)
 
 /-! ### `data`: the computation rules of `rec` and `fold` -/
 

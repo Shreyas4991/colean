@@ -30,12 +30,12 @@ Theory, in dependency order:
 - `Model/CCPO.lean`: the order of approximation on a coinductive type with a bottom layer, from a contract and a presentation of its functor as a container (`Contract.Container`): `Approx`, its unfolding and coinduction, the supremum of a chain by `corec` (`csup`), Lean's `Lean.Order.CCPO` (`Contract.ccpo`), the monotonicity of the constructor; the order on a nested argument through its occurrence structure (`Occ.order`) and the monotonicity of the maps of the library's leaves, for `partial_fixpoint` (step 6).
 - `Model/IOcc2.lean`: the same over a family, `IOcc₂`, the recursive variable a family over an index, each position in it at its index (the layer of `ILay`), for families and blocks: combinators, among them a plain structure at one index (`ofOcc₂`), laws, the map, `AgreeY` with the indexed structure in `Y` alone read along a map of the indices, and membership, a member in `Y` with its index.
 
-Generators, on `Expr`, in dependency order. `Syntax.lean` holds the command syntax.
+Generators, on `Expr`, in dependency order. `Syntax.lean` holds the command syntax: a declaration is Lean's `inductive` with its keyword swapped (`declModifiers`, `declId`, `optDeclSig`, `where`, Lean's `ctor`, `deriving`), and a `mixed_mutual` block holds commands up to `end`, as `mutual` does.
 
 - `Gen/Decl.lean`: adding declarations from closed `Expr`s, each checked by the kernel before the next: inductive types with the auxiliary constructions of `inductive` (fixed indices promoted to parameters, as `inductive` does), noncomputable definitions, theorems by term or by a tactic on a goal metavariable, simp lemmas and other attributes; definitions by cases (`mkCasesOnApp`).
 - `Gen/Occ.lean`: the occurrence structure of an elaborated argument type, by recursion on its head after `whnfR` (and `id`); instance search at leaves.
 - `Gen/Ctx.lean`: the context `Ctx`: parameters (section variables first), indices and constructor arguments as free variables of one `TermElabM` run, the types being defined as local variables at a placeholder universe, argument kinds, names; for a block, its index `Blk.Ix`.
-- `Gen/Front.lean`: syntax → `Ctx`, elaborating the declarations as `inductive` does, a single one or the types of a block, or a run of a mixed block with the other runs' types replaced (`Mix`).
+- `Gen/Front.lean`: syntax → `Ctx`, elaborating the declarations as `inductive` does, a single one or the types of a block, or a run of a mixed block with the other runs' types replaced (`Mix`); before that, the modifiers (`DeclStx.elabMods`): the full name of each type, private or not, its universe names, and the modifiers of the type and the constructors.
 - `Gen/Functor.lean`: step 1.
 - `Gen/Signature.lean`, `Gen/Iso.lean`, `Gen/Model.lean`: step 2 (the signature; the isomorphism and its laws; the type and the contract).
 - `Gen/Rel.lean`: `T.F.Rel`, `rel_map`, `rel_ofC` (step 4, generated before the model, see below).
@@ -44,19 +44,24 @@ Generators, on `Expr`, in dependency order. `Syntax.lean` holds the command synt
 - `Gen/Surface.lean`: step 4 (constructors and their lemmas, `casesOn`, `rec_cᵢ`, `fold_cᵢ`; in a block, the types `Tₘ`, the aliases and, for `data`, the recursors `Tₘ.rec` per type).
 - `Gen/Derive.lean`: step 5, separate from the pipeline (see below), in parts under `Gen/Derive/`, each on the ones before: the holes and the structures of the fields (`Holes.lean`), the presentation (`Pres.lean`), the layer `toL`, `ofL` and its laws (`Layer.lean`), the fixpoint and the instances (`Fix.lean`), the `simp` lemmas (`Simp.lean`); `Derive.lean` runs them.
 - `Gen/CCPO.lean`: step 6, run by the attribute `with_ccpo` (`CodataCmd.lean`), separate from the pipeline (below).
-- `Gen/Command.lean`: the pipeline. `CodataCmd.lean`, `DataCmd.lean`: the commands; `MutualCmd.lean`: `mutual` blocks of them, and `mixed_mutual` blocks.
+- `Gen/Command.lean`: the pipeline, and what comes after it as after `inductive`: the doc comments, `protected` constructors and the info trees (`finishDecls`), then the attributes (`applyDeclAttrs`). `CodataCmd.lean`, `DataCmd.lean`: the commands; `MutualCmd.lean`: `mutual` blocks of them, and `mixed_mutual` blocks.
 - `Gen/Mixed.lean`: a `mixed_mutual` block: its runs, the pipeline on each, the closed types of the runs inside, their membership instances, and their interface restated at the closed types.
 
 ## The generators
 
 The commands read the user's syntax only to elaborate it. `Gen/Front.lean` elaborates a
-declaration as Lean's `inductive` does: the parameters and the declared sort, then the types being
+declaration as Lean's `inductive` does: first its modifiers, as `inductiveSyntaxToView` does
+(`Term.expandDeclId` names the type, private for a `private` one, and binds the universe names of
+`T.{u}`; `unsafe`, `partial`, `meta` and `deriving` are rejected); then the parameters and the declared sort, then the types being
 defined as local variables, against which each constructor is elaborated to one telescope. Every
 later decision is taken on the elaborated types, after `whnfR`: an occurrence is an application of
 one of these variables to the parameters (and indices), and products, sums, functions, dependent
 pairs and leaves are recognised by their head. So spellings that mean the same type are one
 (`A × B` and `Prod A B`, an abbreviation, `id A`, `Σ`, `<|`, an arrow-form constructor), and no
-generated name can capture a user's. Before the types are declared, the names are checked (no
+generated name can capture a user's. The generated names extend the types' full names, so a
+private type makes them private; the names built from components (a block `A_B`, its index, the
+open types of a mixed block) are made private with the types (`privateLike`), and the types of a
+block are all private or all public. Before the types are declared, the names are checked (no
 type twice in a block; no type, block or index of a block declared already; no two types with one
 constructor of the block's index: `checkNames`), and so
 is a universe written in a declared sort, against the model's, which is the types' (`checkSorts`,
@@ -64,7 +69,10 @@ first in the pipeline; in a mixed block, of the closed types, before the outermo
 
 The whole pipeline runs inside one `TermElabM` run, in the continuation of `Gen.withCtx`. Each
 step has its own heartbeat budget, as a separate command would, and a failure restores the state
-before the error is reported, so a failed command declares nothing, as with `inductive`. The
+before the error is reported, so a failed command declares nothing, as with `inductive`. The doc
+comments of the types and constructors, and the info trees of their names, come after the pipeline,
+in the same all-or-nothing run; the attributes written on them come last, outside it: a failing
+attribute leaves the declarations, as with `inductive`. The
 parameters, the indices and the constructor arguments are free variables of its local context.
 A generator builds the types and values of its declarations as `Expr`s over these variables and
 closes each declaration once, with `mkForallFVars`/`mkLambdaFVars` and the binder infos of that
@@ -318,8 +326,8 @@ lemmas is a warning that rolls back only them.
 
 ## Orders for `partial_fixpoint`
 
-`attribute [with_ccpo] T` (or `@[with_ccpo] codata T …`, which the command expands to the
-declaration followed by the attribute) gives a `codata` type the order with which Lean's
+`attribute [with_ccpo] T` (or `@[with_ccpo] codata T …`, applied once the declaration is
+complete, as `inductive` applies its attributes) gives a `codata` type the order with which Lean's
 `partial_fixpoint` defines corecursive functions into it (`Gen/CCPO.lean`). Like step 5 it runs on
 a declared type, reads only the environment, and declares nothing in the pipeline: off by default,
 nothing a declaration generates changes. A failure is an error of the attribute, which restores the

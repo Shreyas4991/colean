@@ -750,7 +750,8 @@ def genPolySimp (P : Poly) : TermElabM Unit := do
     fun e => do
       s.restore (restoreInfo := true)
       let ns ← getCurrNamespace
-      let shorts := ctx.types.map fun t => m!"`{t.name.replacePrefix ns .anonymous}`"
+      let shorts := ctx.types.map fun t =>
+        m!"`{(privateToUserName t.name).replacePrefix ns .anonymous}`"
       logWarning m!"no simp lemmas were generated for the instances of \
         {MessageData.joinSep shorts.toList ", "}; the instances are not affected.\n\
         {e.toMessageData}"

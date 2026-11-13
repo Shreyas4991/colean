@@ -9,6 +9,16 @@ import Colean.Syntax
 continuation inside the local context its free variables live in (`withCtx`). Nothing is
 declared here, except the index `Blk.Ix` of a block.
 
+First the modifiers, as `inductiveSyntaxToView` (`Lean.Elab.Inductive`) reads them
+(`DeclStx.elabMods`, `prepareDecls`): `Term.expandDeclId` gives each type its full name, private
+for a `private` type, `protected` for a `protected` one, the name by which the constructors refer
+to it, and the universe names, those of `T.{u}` included; the doc comment of a constructor is
+before its `|` or among its modifiers. The types of a block have the same universe names, and are
+all private or all public. `noncomputable` is accepted (everything is), `unsafe`, `partial`,
+`nonrec`, `meta`, `deriving` and a `private` constructor are rejected. The generated names extend
+the types' full names, so they are private with them; a name built from components, a block's,
+is made private with its types (`privateLike`).
+
 The declarations are elaborated as Lean's `inductive` elaborates them
 (`Lean.Elab.MutualInductive`):
 
@@ -17,7 +27,8 @@ The declarations are elaborated as Lean's `inductive` elaborates them
    binder annotations), and so must the universes where they are written;
 2. the types as local variables `Tₘ : ∀ params idx, Type ?r` (`withAuxDecl`), one universe for
    all, against which each constructor is elaborated to one telescope ending in `Tₘ params idx`:
-   binders left of the colon and arrows right of it are the same thing; unnamed arguments are
+   binders left of the colon and arrows right of it are the same thing, and a binder without a
+   type (`| mk x`) must have it determined by the rest, as in `inductive`; unnamed arguments are
    named `a₁, a₂, …` by position; right of the colon, the arguments of an occurrence at the
    parameters are the parameters, which fills those left implicit. The universe `?r` is then the
    placeholder `uT` (`Gen/Ctx.lean`), unless the constructors fixed it; the universes the headers
@@ -62,60 +73,166 @@ open Lean Meta Elab Term
 
 namespace Codata.Gen
 
-/-- A `codata` or `data` declaration as written. -/
-structure DeclStx where
-  co : Bool
-  T : Ident
-  ps : Array Syntax
-  sort? : Option Syntax
-  ctors : Array (TSyntax ``codataCtor)
+/-- A constructor as written, Lean's `ctor`: its doc comment before the `|`, its modifiers, its
+name, its binders and its result type. -/
+structure CtorStx where
   ref : Syntax
+  doc? : Option Syntax
+  mods : Syntax
+  name : Ident
+  /-- The binders, as a null node (for the doc comment) and one by one. -/
+  binderStx : Syntax
+  binders : Array Syntax
+  type? : Option Syntax
   deriving Inhabited
 
+/-- A `codata` or `data` declaration as written, and what its modifiers give (`elabMods`). -/
+structure DeclStx where
+  co : Bool
+  mods : Syntax
+  declId : Syntax
+  /-- The name as written, in `declId`. -/
+  T : Ident
+  /-- The binders, as a null node (for the doc comment) and one by one. -/
+  binderStx : Syntax
+  ps : Array Syntax
+  sort? : Option Syntax
+  ctors : Array CtorStx
+  derivingStx : Syntax
+  ref : Syntax
+  /-- The modifiers of the type and of each constructor, elaborated. -/
+  modifiers : Modifiers := {}
+  ctorMods : Array Modifiers := #[]
+  /-- The full name, private if the type is (`Term.expandDeclId`); the name by which the
+  constructors refer to the type (`T`, or `Foo.T` for a `protected` type in `Foo`); the universe
+  names in scope, those of `T.{u}` included. -/
+  declName : Name := .anonymous
+  shortName : Name := .anonymous
+  levelNames : List Name := []
+  deriving Inhabited
+
+/-- The full name as users write it, without the private prefix. -/
+def DeclStx.userName (d : DeclStx) : Name := privateToUserName d.declName
+
 /-- Read a `codata` or `data` declaration. -/
-def DeclStx.read? (stx : Syntax) : Option DeclStx :=
-  match stx with
-  | `(codata $T:ident $ps:bracketedBinder* $[: $s]? $cs:codataCtor*) =>
-    some { co := true, T, ps := ps.map (·.raw), sort? := s.map (·.raw), ctors := cs, ref := stx }
-  | `(data $T:ident $ps:bracketedBinder* $[: $s]? $cs:codataCtor*) =>
-    some { co := false, T, ps := ps.map (·.raw), sort? := s.map (·.raw), ctors := cs, ref := stx }
-  | _ => none
+def DeclStx.read? (stx : Syntax) : Option DeclStx := do
+  let co ← if stx.isOfKind ``codataCmd then some true
+    else if stx.isOfKind ``dataCmd then some false else none
+  let (binderStx, sort?) := expandOptDeclSig stx[3]
+  let ctors := stx[5].getArgs.map fun c =>
+    let (bs, type?) := expandOptDeclSig c[4]
+    { ref := c, doc? := c[0].getOptional?, mods := c[2], name := ⟨c[3]⟩, binderStx := bs
+      binders := bs.getArgs, type? : CtorStx }
+  return { co, mods := stx[0], declId := stx[2], T := ⟨stx[2][0]⟩, binderStx
+           ps := binderStx.getArgs, sort?, ctors, derivingStx := stx[6], ref := stx }
+
+/-- The keyword of a command: `codata`, `data`, `mutual` or `mixed_mutual`. -/
+def keywordOf (stx : Syntax) : Syntax :=
+  if stx.isOfKind ``codataCmd || stx.isOfKind ``dataCmd then stx[1] else stx[0]
+
+/-- Reject the modifiers `codata` and `data` do not support, at the modifier: `unsafe`, `partial`,
+`nonrec` and `meta` (`noncomputable` is accepted, everything being noncomputable already). -/
+private def checkMods (kw : String) (stx : Syntax) (m : Modifiers) : TermElabM Unit := do
+  let reject (s : Syntax) (what : String) : TermElabM Unit :=
+    throwErrorAt s "`{what}` is not supported by `{kw}`"
+  if m.isMeta then reject stx[4] "meta"
+  if m.isUnsafe then reject stx[5] "unsafe"
+  if m.isPartial then reject stx[6] "partial"
+  if m.isNonrec then reject stx[6] "nonrec"
+
+/-- Elaborate the modifiers of a declaration as `inductive` does (`inductiveSyntaxToView`, in
+`Lean.Elab.Inductive`): the type's full name by `Term.expandDeclId`, private for a `private` type
+and `protected` for a `protected` one (`applyVisibility`), with the universe names of `T.{u}`;
+the doc comment of a constructor before its `|` or in its modifiers, not both. A constructor of
+a `private` type may not be `private` or `protected`, with Lean's errors, and a `private`
+constructor of a public type is not supported: its declarations would be named after the type,
+public. `unsafe`, `partial`, `nonrec`, `meta` and `deriving` are not supported. -/
+def DeclStx.elabMods (d : DeclStx) : TermElabM DeclStx := do
+  let kw := if d.co then "codata" else "data"
+  let mods ← elabModifiers ⟨d.mods⟩
+  checkMods kw d.mods mods
+  unless d.derivingStx[0].isNone do
+    throwErrorAt d.derivingStx "`deriving` is not supported by `{kw}`"
+  let r ← Term.expandDeclId (← getCurrNamespace) (← Term.getLevelNames) d.declId mods
+  let ctorMods ← d.ctors.mapM fun c => withRef c.ref do
+    let mut cm ← elabModifiers ⟨c.mods⟩
+    if let some doc := c.doc? then
+      if cm.docString?.isSome then logErrorAt doc "Duplicate doc string"
+      cm := { cm with docString? := some ⟨doc⟩ }
+    if cm.isPrivate && mods.isPrivate then
+      throwErrorAt c.mods[2] "Constructor cannot be marked `private` because it is already in a \
+        `private` inductive datatype"
+    if cm.isProtected && mods.isPrivate then
+      throwErrorAt c.mods[3] "Constructor cannot be `protected` because it is in a `private` \
+        inductive datatype"
+    if cm.isPrivate then
+      throwErrorAt c.mods[2] "a `private` constructor of a public type is not supported by \
+        `{kw}`: the declarations about the constructor are named after the type, and would be \
+        public; make the type `private`"
+    checkMods kw c.mods cm
+    return cm
+  return { d with modifiers := mods, ctorMods, declName := r.declName, shortName := r.shortName
+                  levelNames := r.levelNames }
+
+/-- The modifiers of the declarations `decls`, one or a block (`elabMods`). The types of a block
+must have the same universe names, as in `inductive`, and must be all `private` or all public:
+the declarations of the block itself (its name, its index) are one or the other. -/
+def prepareDecls (decls : Array DeclStx) : TermElabM (Array DeclStx) := do
+  let decls ← decls.mapM (·.elabMods)
+  let d₀ := decls[0]!
+  for d in decls do
+    unless d.levelNames == d₀.levelNames do
+      throwErrorAt d.declId "the types of a block must have the same universe names as `{d₀.T}`"
+    unless d.modifiers.isPrivate == d₀.modifiers.isPrivate do
+      throwErrorAt d.declId "the types of a block must be all `private` or all public, and \
+        `{d.T}` is{if d.modifiers.isPrivate then "" else " not"} `private` while `{d₀.T}` \
+        is{if d₀.modifiers.isPrivate then "" else " not"}: the block's own declarations, its name \
+        and its index, are private or not with them"
+  return decls
+
+/-- The name `n`, private like `ref`: the generated names that are not built from a type's name
+by extension (a block's name), as private as the types. -/
+def privateLike (ref n : Name) : Name :=
+  match privatePrefix? ref with
+  | some p => p ++ n
+  | none => n
 
 /-! ### Names -/
 
-/-- The namespace of a block of the types `shorts`, as written in the namespace `ns`: the longest
+/-- The namespace of a block of the types `names` (full names, as users write them): the longest
 common prefix of their namespaces. -/
-private def blockNamespace (ns : Name) (shorts : Array Name) : List Name :=
-  let nss := shorts.map fun s => (ns ++ s).getPrefix.components
+private def blockNamespace (names : Array Name) : List Name :=
+  let nss := names.map fun n => n.getPrefix.components
   nss.foldl (init := nss[0]!) fun acc cs =>
     (acc.zip cs).takeWhile (fun (a, b) => a == b) |>.map (·.1)
 
-/-- The names of the types `shorts` (as written, in the namespace `ns`) in their block: what follows
+/-- The names of the types `names` (full names, as users write them) in their block: what follows
 the block's namespace, its components joined by `_` (`A` for `Foo.A` next to `Foo.B`, `Qa_X` for
 `Qa.X` next to `Qb.X`). The constructors of the block's index are named so, and so are the
 constructor names that the block qualifies (`Qa_X_mk`). -/
-def blockShorts (ns : Name) (shorts : Array Name) : Array String :=
-  let n := (blockNamespace ns shorts).length
-  shorts.map fun s =>
-    "_".intercalate (((ns ++ s).components.drop n).map (·.toString (escape := false)))
+def blockShorts (names : Array Name) : Array String :=
+  let n := (blockNamespace names).length
+  names.map fun s =>
+    "_".intercalate ((s.components.drop n).map (·.toString (escape := false)))
 
-/-- The name of the block of the types `shorts` (as written, in the namespace `ns`): their names in
+/-- The name of the block of the types `names` (full names, as users write them): their names in
 the block (`blockShorts`) joined by `_`, in the block's namespace (`Foo.A_B` for `Foo.A` and
 `Foo.B`). -/
-def blockName (ns : Name) (shorts : Array Name) : Name :=
-  let pre := (blockNamespace ns shorts).foldl (· ++ ·) .anonymous
-  pre ++ Name.mkSimple ("_".intercalate (blockShorts ns shorts).toList)
+def blockName (names : Array Name) : Name :=
+  let pre := (blockNamespace names).foldl (· ++ ·) .anonymous
+  pre ++ Name.mkSimple ("_".intercalate (blockShorts names).toList)
 
 /-- Throw at `ref` if `n`, a name the command declares and the user did not write, is declared
 already; `why` says where the name comes from and how to avoid the clash. -/
 def checkFree (n : Name) (ref : Syntax) (why : MessageData) : TermElabM Unit := do
-  if (← getEnv).contains n then
+  let env ← getEnv
+  if env.contains n || (isPrivateName n && env.contains (privateToUserName n)) then
     throwErrorAt ref "`{n}` has already been declared, and this block declares it: {why}"
 
 /-- Throw if two types of a block, `decls`, have the same name in the block (`blockShorts`): the
 constructors of the block's index would be one. -/
 def checkBlockShorts (decls : Array DeclStx) : TermElabM Unit := do
-  let ss := blockShorts (← getCurrNamespace) (decls.map (·.T.getId))
+  let ss := blockShorts (decls.map (·.userName))
   for d in decls, s in ss, i in [0:decls.size] do
     if let some j := (ss.extract 0 i).findIdx? (· == s) then
       throwErrorAt d.T "`{d.T.getId}` and `{decls[j]!.T.getId}` give the same constructor `{s}` \
@@ -126,11 +243,10 @@ def checkBlockShorts (decls : Array DeclStx) : TermElabM Unit := do
 block, no type declared already, and for a block, not its name `blk` or its index `blk.Ix`
 either, nor two types with one constructor of `blk.Ix`. `ref` is the block's keyword. -/
 def checkNames (decls : Array DeclStx) (blk? : Option Name) (ref : Syntax) : TermElabM Unit := do
-  let ns ← getCurrNamespace
   for d in decls, i in [0:decls.size] do
-    if (decls.extract 0 i).any (·.T.getId == d.T.getId) then
+    if (decls.extract 0 i).any (·.declName == d.declName) then
       throwErrorAt d.T "`{d.T.getId}` is declared twice in this block"
-    withRef d.T <| checkNotAlreadyDeclared (ns ++ d.T.getId)
+    withRef d.T <| checkNotAlreadyDeclared d.declName
   if let some blk := blk? then
     checkBlockShorts decls
     for n in [blk, blk ++ `Ix] do
@@ -147,6 +263,13 @@ private partial def elabBindersRefs (bs : Array Syntax)
       elabBindersRefs bs k (i + 1) (xs ++ ys) (refs ++ ys.map fun _ => bs[i])
   else k xs refs
 
+/-- As in `inductive`, a binder without a type (`x`, from `optDeclSig`) must have its type
+determined by the rest of the header or constructor: `xs` the variables, `refs` their binders. -/
+private def checkBinderTypes (xs : Array Expr) (refs : Array Syntax) : TermElabM Unit := do
+  for x in xs, ref in refs do
+    if (← instantiateMVars (← inferType x)).hasExprMVar then
+      throwErrorAt ref "Failed to infer type of binder `{(← x.fvarId!.getDecl).userName}`"
+
 /-- A header, closed: `∀ params, sort`, and the number of parameters. The names `shorts` of the
 types being defined are not auto-bound. Its universe metavariables (`Type _`, an auto-bound
 `α : Sort _`) stay until the constructors are elaborated, which may fix them, and then become
@@ -154,11 +277,12 @@ universe parameters (`headerLevelParams`), as with `inductive`. -/
 private def elabHeader (shorts : Array Name) (ps : Array Syntax) (sort? : Option Syntax) :
     TermElabM (Expr × Nat) :=
   Term.withAutoBoundImplicitForbiddenPred (shorts.contains ·) <|
-  Term.withAutoBoundImplicit <| Term.elabBinders ps fun params => do
+  Term.withAutoBoundImplicit <| elabBindersRefs ps fun params refs => do
     let sort ← match sort? with
       | some s => Term.elabType s
       | none => pure (mkSort Level.one)
     Term.synthesizeSyntheticMVarsNoPostponing
+    checkBinderTypes params refs
     let params ← Term.addAutoBoundImplicits params none
     unless params.all (·.isFVar) do throwError "could not infer the types of the parameters"
     let sort ← instantiateMVars sort
@@ -242,25 +366,26 @@ private def unifyParamArgs (Tvs params : Array Expr) (e : Expr) : TermElabM Unit
 being defined): its name, its type `∀ args, T params idx` (closed over the arguments only), the
 syntax of each binder argument, and the syntax of the arrow arguments (the result type). -/
 private def elabCtor (Tvs : Array Expr) (Tv : Expr) (params : Array Expr) (nIdx : Nat)
-    (c : TSyntax ``codataCtor) : TermElabM (Name × Expr × Array Syntax × Syntax) := do
-  let `(codataCtor| | $name:ident $bs:bracketedBinder* $[: $resTy?]?) := c
-    | throwUnsupportedSyntax
-  withRef c <| Term.withAutoBoundImplicit <| elabBindersRefs bs fun xs refs => do
+    (c : CtorStx) : TermElabM (Name × Expr × Array Syntax × Syntax) := do
+  let name := c.name
+  let resTy? := c.type?
+  withRef c.ref <| Term.withAutoBoundImplicit <| elabBindersRefs c.binders fun xs refs => do
     let res ← match resTy? with
       | some r => do
         let res ← Term.elabType r
         unifyParamArgs Tvs params res
         pure res
       | none =>
-        if nIdx > 0 then throwErrorAt c "the constructor needs a result type"
+        if nIdx > 0 then throwErrorAt c.ref "the constructor needs a result type"
         pure (mkAppN Tv params)
     Term.synthesizeSyntheticMVarsNoPostponing
+    checkBinderTypes xs refs
     let xs' ← Term.addAutoBoundImplicits xs none
     unless xs'.all (·.isFVar) do throwError "could not infer the types of the arguments"
-    let refs := Array.replicate (xs'.size - xs.size) c.raw ++ refs
+    let refs := Array.replicate (xs'.size - xs.size) c.ref ++ refs
     let ty ← instantiateMVars (← mkForallFVars xs' res)
     if ty.hasExprMVar then throwError "could not infer the types of the arguments{indentExpr ty}"
-    return (name.getId, nameBinders "a" ty, refs, (resTy?.map (·.raw)).getD c)
+    return (name.getId, nameBinders "a" ty, refs, resTy?.getD c.ref)
 
 /-- Open the telescopes `tys`, one after the other, keeping their variables. -/
 private def openTelescopes (tys : Array Expr) (k : Array (Array Expr × Expr) → TermElabM α) :
@@ -424,8 +549,8 @@ def mixedVars (all : Array DeclStx) (ref : Syntax) (vars : Array Expr) :
     TermElabM (Array Expr × Array (Array Nat)) := do
   let s ← saveState
   try
-    let shorts := all.map (·.T.getId)
-    let names := shorts.map ((← getCurrNamespace) ++ ·)
+    let shorts := all.map (·.shortName)
+    let names := all.map (·.declName)
     withRef ref <| Term.withoutErrToSorry <| Term.withoutSavingRecAppSyntax do
     let hdrs ← all.mapM fun d => withRef d.ref do elabHeader shorts d.ps d.sort?
     let (hdr₀, np) := hdrs[0]!
@@ -458,8 +583,7 @@ constructors are seen. -/
 def declareMixIx (all : Array DeclStx) (runs : Array MixRun) (ref : Syntax)
     (vars : Array Expr) : TermElabM Unit := do
   if runs.all (·.ix?.isNone) then return
-  let shorts := all.map (·.T.getId)
-  let ns ← getCurrNamespace
+  let shorts := all.map (·.shortName)
   withSavedLevelNames <| withRef ref <| Term.withoutErrToSorry <| Term.withoutSavingRecAppSyntax do
   let hdrs ← all.mapM fun d => withRef d.ref do elabHeader shorts d.ps d.sort?
   let (hdr₀, np) := hdrs[0]!
@@ -472,7 +596,7 @@ def declareMixIx (all : Array DeclStx) (runs : Array MixRun) (ref : Syntax)
   let sorts ← sorts.mapM instantiateMVars
   for run in runs do
     let some ix := run.ix? | continue
-    let ss := blockShorts ns (run.decls.map (shorts[·]!))
+    let ss := blockShorts (run.decls.map (all[·]!.userName))
     openTelescopes (run.decls.map (sorts[·]!)) fun opened => do
       discard <| declareIx ix userLevels (vars ++ params)
         (run.decls.zipIdx.map fun (_, m) => (ss[m]!, opened[m]!.1)) ref
@@ -501,7 +625,7 @@ private partial def mixFam (mx : Mix) (need : Array Nat) (xs vars params tys : A
     | some ix =>
       let us := (← getConstInfo ix).levelParams.map mkLevelParam
       let I := mkAppN (.const ix us) (vars ++ params)
-      let ss := blockShorts (← getCurrNamespace) (run.decls.map (shorts[·]!))
+      let ss := blockShorts (run.decls.map (mx.all[·]!.userName))
       return ← withLocalDeclD `i I fun i => do
         mkLambdaFVars #[i] (← mkCasesOnApp ix us (vars ++ params) i (mkLevelSucc r).succ
           (fun _ _ => return mkSort r.succ) fun cname idx => do
@@ -547,21 +671,22 @@ def withCtx (decls : Array DeclStx) (ref : Syntax) (vars : Array Expr) (k : Ctx 
     | some mx => mx.runs[mx.r]!.decls
     | none => Array.range decls.size
   let co := decls[0]!.co
-  let allShorts : Array Name := all.map (·.T.getId)
+  -- The names by which the declarations refer to the types, as `inductive` binds them.
+  let allShorts : Array Name := all.map (·.shortName)
   let shorts : Array Name := own.map (allShorts[·]!)
-  let ns ← getCurrNamespace
-  let allNames : Array Name := allShorts.map (ns ++ ·)
+  let allNames : Array Name := all.map (·.declName)
   let names : Array Name := match mix? with
     | some mx => mx.runs[mx.r]!.names
-    | none => shorts.map (ns ++ ·)
+    | none => decls.map (·.declName)
   let isBlock := decls.size ≥ 2
   -- The names of the types in their block, for the constructors of its index.
-  let ownShorts := blockShorts ns shorts
+  let ownShorts := blockShorts (own.map (all[·]!.userName))
   let name := match mix? with
     | some mx => mx.runs[mx.r]!.fam
-    | none => if isBlock then blockName ns shorts else names[0]!
+    | none => if isBlock then privateLike names[0]! (blockName (decls.map (·.userName)))
+      else names[0]!
   -- The names, before anything is declared; those of a mixed block by `elabMixed`.
-  if mix?.isNone then checkNames decls (if isBlock then some name else none) ref[0]
+  if mix?.isNone then checkNames decls (if isBlock then some name else none) (keywordOf ref)
   -- As in `inductive`: no `_recApp` annotations on the occurrences of the types.
   withSavedLevelNames <| withRef ref <| Term.withoutErrToSorry <| Term.withoutSavingRecAppSyntax do
   let hdrs ← all.mapM fun d => withRef d.ref do elabHeader allShorts d.ps d.sort?
@@ -659,7 +784,7 @@ def withCtx (decls : Array DeclStx) (ref : Syntax) (vars : Array Expr) (k : Ctx 
     plainOr (usedNames ++ allShorts) n
   let xLevels := need.foldl (init := #[]) fun acc k => Id.run do
     let some mx := mix? | return acc
-    let base := Name.mkSimple ("u_" ++ (allShorts[mx.runs[k]!.decls[0]!]!).toString)
+    let base := Name.mkSimple ("u_" ++ (all[mx.runs[k]!.decls[0]!]!.T.getId).toString)
     let mut u := base
     while userLevels.contains u || acc.contains u do u := u.appendAfter "'"
     return acc.push u
@@ -702,7 +827,7 @@ def withCtx (decls : Array DeclStx) (ref : Syntax) (vars : Array Expr) (k : Ctx 
           let pack ← if nIdx[d]! ≥ 2 then some <$> packFn sorts[d]! else pure none
           let ixCtor ← run.ix?.mapM fun ix => do
             let us := (← getConstInfo ix).levelParams.map mkLevelParam
-            let s := (blockShorts ns (run.decls.map (allShorts[·]!)))[m]!
+            let s := (blockShorts (run.decls.map (all[·]!.userName)))[m]!
             return mkAppN (.const (ix ++ Name.mkSimple s) us) (vars ++ params)
           return some fun (idx : Array Expr) => match ixCtor, pack with
             | some c, _ => mkApp xs[i]! (mkAppN c idx)
@@ -802,8 +927,8 @@ def withCtx (decls : Array DeclStx) (ref : Syntax) (vars : Array Expr) (k : Ctx 
   for (m, cname, _, refs, resRef, c) in ctors, (xs, body) in opened do
     let badRes : MessageData :=
       m!"the result type must be `{shorts[m]!}` applied to its parameters and indices"
-    let some (m', uidx) := b.occ? (← whnfOcc body) | throwErrorAt c badRes
-    unless m' == m do throwErrorAt c badRes
+    let some (m', uidx) := b.occ? (← whnfOcc body) | throwErrorAt c.ref badRes
+    unless m' == m do throwErrorAt c.ref badRes
     let mut args : Array ArgInfo := #[]
     for x in xs, i in [0:xs.size] do
       let ref := refs[i]?.getD resRef
@@ -826,13 +951,13 @@ def withCtx (decls : Array DeclStx) (ref : Syntax) (vars : Array Expr) (k : Ctx 
     for a in args do
       unless a.kind.isData do
         if uidx.any (·.containsFVar a.fvar.fvarId!) then
-          throwErrorAt c "the indices of the result type may not depend on a recursive argument"
+          throwErrorAt c.ref "the indices of the result type may not depend on a recursive argument"
     let fname := if clash cname then
         Name.mkSimple (ownShorts[m]! ++ "_" ++ cname.toString)
       else cname
     out := out.push
-      { name := cname, fname, owner := m, args, idx := b.wrap m uidx, uidx, ref := c
-        nameRef := c.raw[1] }
+      { name := cname, fname, owner := m, args, idx := b.wrap m uidx, uidx, ref := c.ref
+        nameRef := c.name }
   -- The universe, fixed now or the placeholder; the analysis at it.
   let fixedLvl? ← match ← instantiateLevelMVars r with
     | .mvar id => assignLevelMVar id (.param uT); pure none
