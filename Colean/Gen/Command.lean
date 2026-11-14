@@ -10,13 +10,15 @@ block (`Gen/Mixed.lean`): the declarations are analysed
 dependencies, all inside one `TermElabM` run (`runTermElabM`, for the section variables): the
 functor (step 1), for `codata` the lifting `T.F.Rel` (step 4, needed by the model), the
 signature, the isomorphism and the contract (step 2), in a block the types `Tₘ`, the framework
-(step 3), the constructors and `casesOn` (step 4), for `data` the recursor (step 2b, stated with
-the constructors) and the computation rules, and in a block the recursors per type (`data`) and
-the aliases. Before them, the declared sorts with a universe are checked against the types'
-(`checkSorts`). Each declaration is checked by the kernel as it is added, so a failure stops the
-command there, and the state is restored: a failed command declares nothing. Each step has its
-own heartbeat budget. Then, separately, the derived instances (step 5, `Gen/Derive.lean`), whose
-failure is only a warning. Last, the internals are made `protected`
+(step 3), in a block the layer, the destructor and the constructor per type (step 4), the
+constructors and `casesOn` (step 4), in a block Lambek's lemma and the rules of the destructor
+and the constructor per type, for `data` the recursor (step 2b, stated with the constructors)
+and the computation rules, and in a block the recursors and the folds per type (`data`), or
+corecursion and coinduction per type (`codata`). Before them, the declared sorts with a universe
+are checked against the types' (`checkSorts`). Each declaration is checked by the kernel as it is
+added, so a failure stops the command there, and the state is restored: a failed command
+declares nothing. Each step has its own heartbeat budget. Then, separately, the derived instances (step 5,
+`Gen/Derive.lean`), whose failure is only a warning. Last, the internals are made `protected`
 (`protectGenerated`, `Gen/Decl.lean`), as `inductive` protects its own.
 
 Around the pipeline, as `inductive` does around its declarations: before it, the modifiers
@@ -76,14 +78,16 @@ def pipeline (ctx : Ctx) (afterTypes : Ctx → TermElabM Ctx := pure) : TermElab
   step ctx.genTypes
   let ctx ← step (afterTypes ctx)
   step ctx.genFramework
+  step ctx.genLayers
   step ctx.genCtors
+  step ctx.genTypeLambek
   step ctx.genCases
-  if ctx.co then step ctx.genAliases
+  if ctx.co then step ctx.genTypeCorecs
   else
     step ctx.genRec
     step ctx.genRecLemmas
     step ctx.genTypeRecs
-    step ctx.genDataAliases
+    step ctx.genTypeFolds
   -- A separate step, after the type is complete: it cannot fail the declaration, unless it is
   -- an open run of a mixed block that an outer run nests through.
   ctx.deriveInstances

@@ -29,21 +29,33 @@ example (p : Pa 0) : p = Pa.nil := by
   cases p with
   | nil => rfl
 
+/-- An algebra per type matches its constructors, at the type's own indices. -/
+def paDepth : ∀ n, Pa.F (fun _ => Nat) (fun _ => Nat) n → Nat
+  | _, .nil => 0
+  | _, .Pa_mk k => k + 1
+
+def qaDepth : ∀ b, Qa.F (fun _ => Nat) (fun _ => Nat) b → Nat
+  | _, .Qa_mk k => k + 1
+
+def Pa.depth {n : Nat} (p : Pa n) : Nat := Pa.fold paDepth qaDepth p
+def Qa.depth {b : Bool} (q : Qa b) : Nat := Qa.fold paDepth qaDepth q
+
+@[simp] theorem Pa.depth_nil : Pa.nil.depth = 0 := by
+  simp [Pa.depth, paDepth]
+
+@[simp] theorem Pa.depth_mk {n : Nat} (q : Qa true) :
+    (Pa.mk q : Pa (n + 1)).depth = q.depth + 1 := by
+  simp [Pa.depth, Qa.depth, paDepth]
+
 /-- An algebra over the block matches the type and its indices at once. -/
 def depthAlg : ∀ i, Pa_Qa.F (fun _ => Nat) i → Nat
   | .Pa _, .nil => 0
   | .Pa _, .Pa_mk k => k + 1
   | .Qa _, .Qa_mk k => k + 1
 
-def Pa.depth {n : Nat} (p : Pa n) : Nat := Pa.fold depthAlg p
-def Qa.depth {b : Bool} (q : Qa b) : Nat := Qa.fold depthAlg q
-
-@[simp] theorem Pa.depth_nil : Pa.nil.depth = 0 := by
-  simp [Pa.depth, depthAlg]
-
-@[simp] theorem Pa.depth_mk {n : Nat} (q : Qa true) :
-    (Pa.mk q : Pa (n + 1)).depth = q.depth + 1 := by
-  simp [Pa.depth, Qa.depth, depthAlg]
+example {n : Nat} (q : Qa true) :
+    Pa_Qa.fold depthAlg (Pa.mk q : Pa (n + 1)) = Pa_Qa.fold depthAlg q + 1 := by
+  simp [depthAlg]
 
 /-- Induction over the block: the motive is a family over `Ix`. -/
 def Tops : ∀ i, Pa_Qa i → Prop
@@ -69,16 +81,27 @@ codata Cc (α : Type u) : (n : Nat) → Fin n → Type u
   | go {n : Nat} {i : Fin n} (l : List α) (p : Ca α l) : Cc α n i
 end
 
-/-- A coalgebra with a trivial state: the same list everywhere. -/
+/-- A step per type with a trivial state: the same list everywhere. The states are a family
+over the indices of each type, as declared (`S₃ : (n : Nat) → Fin n → Type`). -/
+def Cb.const {α : Type u} (l : List α) : Cb α :=
+  Cb.corec (S₁ := fun _ => Unit) (S₂ := Unit) (S₃ := fun _ _ => Unit)
+    (fun l' _ => .nil l' ()) (fun _ => .mk ()) (fun _ _ _ => .go l ()) ()
+
+example {α : Type u} (l : List α) :
+    (Cb.const l).dtor = .mk (Cc.corec (S₁ := fun _ => Unit) (S₂ := Unit) (S₃ := fun _ _ => Unit)
+      (fun l' _ => .nil l' ()) (fun _ => .mk ()) (fun _ _ _ => .go l ()) ()) := by
+  simp [Cb.const]
+
+/-- The same over the block: one family of states over `Ix`, one coalgebra. -/
 def constCoalg {α : Type u} (l : List α) : ∀ i, Unit → Ca_Cb_Cc.F α (fun _ => Unit) i
   | .Ca l', _ => .nil l' ()
   | .Cb, _ => .mk ()
   | .Cc _ _, _ => .go l ()
 
-def Cb.const {α : Type u} (l : List α) : Cb α := Cb.corec (constCoalg l) ()
-
-example {α : Type u} (l : List α) : (Cb.const l).dtor = .mk (Ca_Cb_Cc.corec (constCoalg l) ()) := by
-  simp [Cb.const, Ca_Cb_Cc.dtor_corec, constCoalg]
+example {α : Type u} (l : List α) :
+    Ca_Cb_Cc.dtor (Ca_Cb_Cc.corec (constCoalg l) (m := .Cb) ()) =
+      .mk (Ca_Cb_Cc.corec (constCoalg l) ()) := by
+  simp [Ca_Cb_Cc.dtor_corec, constCoalg]
 
 /-! A type under a built-in form or a leaf in its own constructors, and a type of a block with
 indices under them. -/

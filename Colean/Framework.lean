@@ -22,7 +22,8 @@ or at a model.
   the command can instantiate them for its universe-polymorphic `corec`/`fold` (the contract
   structure fixes one universe).
 * The last section holds three index-free lemmas for the surface layer (`cast_ctor_dtor`,
-  `inj_of`, `ne_of`).
+  `inj_of`, `ne_of`), and `rel_of_map_heq`, a lifting read along a map between equal families,
+  for the bisimulation of the types of a block, one relation per type.
 
 The contract is documented in `contract.md`; the decomposition in `architecture.md`.
 -/
@@ -209,6 +210,22 @@ theorem ne_of (dtor : T → FT) {x y : T} {a b : FT} (hx : dtor x = a) (hy : dto
   fun h => hab (by rw [← hx, ← hy, h])
 
 end
+
+/-- A lifting of relations along a map from a family to an equal one that leaves every element
+as it is: two values are related when their images are, by the same relation read in the other
+family. For any functor with a map and its identity law, and any lifting. -/
+theorem rel_of_map_heq {I : Type w} {F : (I → Type u) → I → Type v}
+    (map : ∀ {X Y : I → Type u}, (∀ i, X i → Y i) → ∀ {i}, F X i → F Y i)
+    (map_id : ∀ {X : I → Type u} {i} (a : F X i), map (fun _ x => x) a = a)
+    (Rel : ∀ {X : I → Type u}, (∀ i, X i → X i → Prop) → ∀ {i}, F X i → F X i → Prop)
+    {X Y : I → Type u} (h : X = Y) (f : ∀ i, X i → Y i) (hf : ∀ i x, HEq (f i x) x)
+    {R : ∀ i, X i → X i → Prop} {R' : ∀ i, Y i → Y i → Prop}
+    (hR : ∀ i x y, R i x y ↔ R' i (f i x) (f i y)) {i : I} {a b : F X i}
+    (hr : Rel R' (map f a) (map f b)) : Rel R a b := by
+  subst h
+  obtain rfl : f = fun _ x => x := funext fun i => funext fun x => eq_of_heq (hf i x)
+  obtain rfl : R = R' := funext fun i => funext fun x => funext fun y => propext (hR i x y)
+  rwa [map_id, map_id] at hr
 
 end Codata
 

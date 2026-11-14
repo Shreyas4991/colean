@@ -600,6 +600,15 @@ def tCtor (c : Ctor) : Name := ctx.tyName c.owner ++ c.name
 def tName' (c : Ctor) (pre post : String) : Name :=
   ctx.tyName c.owner ++ Name.mkSimple (pre ++ c.name.toString ++ post)
 def tyGen (m : Nat) (s : String) : Name := .str (ctx.tyName m) s
+/-- `Tₘ.s`, primed when `s` is the type's own name (`F.F'` for a type `F`), as `gen` does; for
+the declarations of a `codata` block per type (`Tₘ.F`, `Tₘ.corec`, …). -/
+def tyGenP (m : Nat) (s : String) : Name :=
+  let n := ctx.tyName m
+  let own := if ctx.isOpen then n.getPrefix else n
+  let last := match own with
+    | .str _ l => l
+    | _ => ""
+  .str n (if last == s then s ++ "'" else s)
 
 /-- A binder name users may refer to (`motive := …`, `S := …`): plain, unless the declaration
 uses it (`plainOr`). -/

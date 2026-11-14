@@ -194,14 +194,15 @@ example {X Y : Type} (f : X → Y) {n : Nat} (a : Vec X n) :
           ((Vec.Poly.toL idH a.dtor).2.2 b)⟩ :=
   (Vec.Poly.fix idH X).d_map (Vec.Poly.fix idH Y) f a
 
--- In a block, at the index of a type.
+-- In a block, at the index of a type, with the block's `dtor` (`a.dtor` is `CPong.dtor`, into the
+-- layer per type).
 example {X Y : Type} (f : X → Y) (a : CPong X) :
-    CPing_CPong.Poly.toL idH (i := .CPong)
-      (((CPing_CPong.Poly.fix idH X).map (CPing_CPong.Poly.fix idH Y) f (i := .CPong) a).dtor) =
-      ⟨(CPing_CPong.Poly.toL idH (i := .CPong) a.dtor).1,
-        fun q => f ((CPing_CPong.Poly.toL idH (i := .CPong) a.dtor).2.1 q),
+    CPing_CPong.Poly.toL idH (i := .CPong) (CPing_CPong.dtor
+      ((CPing_CPong.Poly.fix idH X).map (CPing_CPong.Poly.fix idH Y) f (i := .CPong) a)) =
+      ⟨(CPing_CPong.Poly.toL idH (i := .CPong) (CPing_CPong.dtor a)).1,
+        fun q => f ((CPing_CPong.Poly.toL idH (i := .CPong) (CPing_CPong.dtor a)).2.1 q),
         fun b => (CPing_CPong.Poly.fix idH X).map (CPing_CPong.Poly.fix idH Y) f
-          ((CPing_CPong.Poly.toL idH (i := .CPong) a.dtor).2.2 b)⟩ :=
+          ((CPing_CPong.Poly.toL idH (i := .CPong) (CPing_CPong.dtor a)).2.2 b)⟩ :=
   (CPing_CPong.Poly.fix idH X).d_map (CPing_CPong.Poly.fix idH Y) f (i := .CPong) a
 
 -- The map of the instance is the one of the fixpoint.

@@ -184,6 +184,14 @@ theorem map_id (x : G X) : map o o (fun _ x => x) x = x := o.ofC_toC x
 
 theorem map_id' (x : G X) : map o o (fun _ => id) x = x := o.ofC_toC x
 
+/-- The map from a family to an equal one, by a function that leaves every element as it is,
+leaves a value as it is. -/
+theorem map_heq_self {Y : J → Type u} (h : X = Y) (f : ∀ j, X j → Y j)
+    (hf : ∀ j x, HEq (f j x) x) (x : G X) : HEq (map o o f x) x := by
+  subst h
+  obtain rfl : f = fun _ x => x := funext fun j => funext fun x => eq_of_heq (hf j x)
+  exact heq_of_eq (map_id o x)
+
 theorem map_ofC (f : ∀ j, X j → Y j) (sh : Sh) (c : (q : Pos sh) → X (pidx sh q)) :
     map o o' f (o.ofC ⟨sh, c⟩) = o'.ofC ⟨sh, fun q => f _ (c q)⟩ := by
   unfold map

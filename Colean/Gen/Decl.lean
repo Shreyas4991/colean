@@ -293,24 +293,25 @@ def addThm (name : Name) (levelParams : List Name) (type value : Expr) (ref : Sy
 
 /-! ### Protection -/
 
-/-- The generated declarations `T.s` that are `protected`, by `s`, relative to their type `T`
-(a block `Blk`, an open type `T.Open` of a mixed block): after `open T` they are not `s`, only
-`T.s` (and `t.s` by dot notation). As Lean's `inductive` protects its auxiliary constructions
-(`recOn`, `noConfusion`, `below`, `brecOn`, `ctorIdx`, …, which the inductive types generated here
-get from it), the other generated declarations that are not user API: `ctor`, `bisim`, the
-functor `F`, `contract`; and the internals: the signature (`Shape`, `B`, `Ix`, `ShapeP`, `idx`, `sig`), the
+/-- The generated declarations `T.s` that are `protected`, by `s`, relative to their type `T` (a
+block `Blk` and each of its types, an open type `T.Open` of a mixed block): after `open T` they
+are not `s`, only `T.s` (and `t.s` by dot notation). As Lean's `inductive` protects its
+auxiliary constructions (`recOn`, `noConfusion`, `below`, `brecOn`, `ctorIdx`, …, which the
+inductive types generated here get from it), the other generated declarations that are not user
+API: `ctor`, `bisim`, the functor `F`, `contract`; and the internals: the signature (`Shape`,
+`B`, `Ix`, `ShapeP`, `idx`, `sig`), the packing of one family per type of a block (`St`), the
 isomorphism and its laws (`toC`, `ofC`, `ofC_toC`, `toC_ofC`, `ofC_map`, `rel_ofC`), the model's
-recursor and its rule (`recPos`, `recAux`, `recPos_ctor`), the model's `fold_ctor`, the cases
-before the cast (`casesOnAux`, `casesOn_ctor`), and the open type `T.Open` of a mixed block.
-Everything under `T.Poly` (step 5) is protected too (`isProtectedGen`). Not protected, as with
-`inductive`: the types, the constructors `T.cᵢ`, the eliminators `rec` and `casesOn` (as Lean
-leaves them) and our `fold`, `corec`, `dtor`, and the user-facing lemmas (`T.cᵢ_inj`,
-`T.cᵢ_ne_cⱼ`, `T.rec_cᵢ`, `T.fold_cᵢ`, `T.casesOn_cᵢ`, `T.dtor_cᵢ`, `T.ctor_cᵢ`, `dtor_corec`,
-`corec_eq`, `corec_unique`, `fold_eq`, `fold_unique`, `ctor_dtor`, `dtor_ctor`, `ctor_injective`,
-and those of `T.F`). -/
+recursor and its rule (`recPos`, `recAux`, `recPos_ctor`), the model's `fold_ctor` (and the same
+per type of a block), the cases before the cast (`casesOnAux`, `casesOn_ctor`), and the open
+type `T.Open` of a mixed block. Everything under `T.Poly` (step 5) is protected too
+(`isProtectedGen`). Not protected, as with `inductive`: the types, the constructors `T.cᵢ`, the
+eliminators `rec` and `casesOn` (as Lean leaves them) and our `fold`, `corec`, `dtor`, and the
+user-facing lemmas (`T.cᵢ_inj`, `T.cᵢ_ne_cⱼ`, `T.rec_cᵢ`, `T.fold_cᵢ`, `T.casesOn_cᵢ`,
+`T.dtor_cᵢ`, `T.ctor_cᵢ`, `dtor_corec`, `corec_eq`, `corec_unique`, `fold_eq`, `fold_unique`,
+`ctor_dtor`, `dtor_ctor`, `ctor_injective`, and those of `T.F`). -/
 def protectedGen : List String :=
   ["ctor", "bisim", "F", "contract",
-    "Shape", "B", "Ix", "ShapeP", "idx", "sig",
+    "Shape", "B", "Ix", "ShapeP", "idx", "sig", "St",
     "toC", "ofC", "ofC_toC", "toC_ofC", "ofC_map", "rel_ofC",
     "recPos", "recAux", "recPos_ctor", "fold_ctor", "casesOnAux", "casesOn_ctor",
     "Open"]

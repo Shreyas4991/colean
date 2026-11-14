@@ -172,6 +172,7 @@ def restate (C C' : Name) (np : Nat) (args : Array Expr) (xLevels : Array Name)
         else `(Parser.Term.attrInstance| cases_eliminator))
   unless attrs.isEmpty do addAttrs C' attrs
   if ci.isTheorem && (← getSimpTheorems).isLemma (.decl C) then addSimp C'
+  if packAttr.hasTag env C then packAttr.setTag C'
   return { openN := C, closedN := C', np, args, dropLvls }
 
 /-- The names `ns`, ordered so that every one comes after those its type mentions. -/

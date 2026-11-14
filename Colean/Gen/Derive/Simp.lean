@@ -310,7 +310,7 @@ def polyCtorData (P : Poly) (X : Expr) (c : Ctor) (ys : Array Expr) (σ : Expr �
   let T := mkAppN (← ctx.constWith ctx.name []) pX
   let yL := [(P.fresh[2]!, L)]
   let M ← ctx.polyFixAt P [] P.Hs P.insts X
-  let dtorc := mkAppN (← ctx.constWith (ctx.tName' c "dtor_" "") []) (pX ++ ys)
+  let dtorc := mkAppN (← ctx.constWith (ctx.dtorRuleN c) []) (pX ++ ys)
   let some (_, _, fc) := (← inferType dtorc).eq?
     | throwError "internal error: `dtor_{c.name}` is not an equation"
   let rwTac := rwSteps #[(false, ctx.dtor_ctor), (false, ctx.polyName "toL_ofL")] (close := true)

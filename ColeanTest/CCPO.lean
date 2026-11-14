@@ -149,7 +149,7 @@ codata Res (α : Type)
   | ret (a : α)
   | step (r : Res α)
 
-attribute [with_ccpo done] Res
+attribute [with_ccpo (bot := done)] Res
 
 /-- info: @Res.bot_eq : ∀ {α : Type}, ⊥ = Res.done -/
 #guard_msgs in #check @Res.bot_eq
@@ -160,7 +160,7 @@ codata Two
   | b
   | next (t : Two)
 
-attribute [with_ccpo Two.b] Two
+attribute [with_ccpo (bot := Two.b)] Two
 
 /-- info: Two.bot_eq : ⊥ = Two.b -/
 #guard_msgs in #check @Two.bot_eq
@@ -403,10 +403,18 @@ codata Bin
 /--
 error: with_ccpo: the bottom `Bin.node` must be a constructor without arguments
 -/
-#guard_msgs in attribute [with_ccpo node] Bin
+#guard_msgs in attribute [with_ccpo (bot := node)] Bin
 
 /-- error: with_ccpo: `none` is not a constructor of `Bin` -/
-#guard_msgs in attribute [with_ccpo none] Bin
+#guard_msgs in attribute [with_ccpo (bot := none)] Bin
+
+-- The bottom is a named argument: the positional form does not parse.
+/-- info: <input>:1:21: expected ']' -/
+#guard_msgs in
+run_cmd
+  match Lean.Parser.runParserCategory (← Lean.getEnv) `command "attribute [with_ccpo nil] Bin" with
+  | .ok _ => Lean.logInfo "parsed"
+  | .error e => Lean.logInfo e
 
 codata Vec (α : Type) : Nat → Type
   | nil : Vec α 0

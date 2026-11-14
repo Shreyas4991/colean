@@ -1,6 +1,10 @@
 import Colean.MutualCmd
 
-/-! # Test: a mutual `codata` block, trees and forests of infinite depth and width -/
+/-! # Test: a mutual `codata` block, trees and forests of infinite depth and width
+
+The block-level interface: one state family over `Tree_Forest.Ix`, one coalgebra, one relation.
+The interface per type (a state, a step and a relation per type) is `ColeanTest/MutualCorec.lean`.
+-/
 
 universe u
 
@@ -32,15 +36,17 @@ def fullCoalg {α : Type u} (a : α) : ∀ m, Unit → Tree_Forest.F α (fun _ =
   | .Tree, _ => .node a ()
   | .Forest, _ => .cons () ()
 
-def Tree.full {α : Type u} (a : α) : Tree α := Tree.corec (fullCoalg a) ()
-def Forest.full {α : Type u} (a : α) : Forest α := Forest.corec (fullCoalg a) ()
+def Tree.full {α : Type u} (a : α) : Tree α := Tree_Forest.corec (fullCoalg a) (m := .Tree) ()
+def Forest.full {α : Type u} (a : α) : Forest α :=
+  Tree_Forest.corec (fullCoalg a) (m := .Forest) ()
 
+/-- The block's `dtor` (`(Tree.full a).dtor` is `Tree.dtor`, into the layer per type). -/
 @[simp] theorem Tree.dtor_full {α : Type u} (a : α) :
-    (Tree.full a).dtor = .node a (Forest.full a) := by
+    Tree_Forest.dtor (Tree.full a) = .node a (Forest.full a) := by
   simp [Tree.full, Forest.full, Tree_Forest.dtor_corec, fullCoalg]
 
 @[simp] theorem Forest.dtor_full {α : Type u} (a : α) :
-    (Forest.full a).dtor = .cons (Tree.full a) (Forest.full a) := by
+    Tree_Forest.dtor (Forest.full a) = .cons (Tree.full a) (Forest.full a) := by
   simp [Tree.full, Forest.full, Tree_Forest.dtor_corec, fullCoalg]
 
 /-- The unfolding equations, through `ctor_dtor`. -/
@@ -65,7 +71,8 @@ def natCoalg {α : Type u} (a : α) : ∀ m, Nat → Tree_Forest.F α (fun _ => 
   | .Forest, k => .cons (k + 1) (k + 1)
 
 /-- Bisimulation over the block: both coalgebras give the same trees and forests. -/
-example {α : Type u} (a : α) (n : Nat) : Tree.full a = Tree.corec (natCoalg a) n := by
+example {α : Type u} (a : α) (n : Nat) :
+    Tree.full a = Tree_Forest.corec (natCoalg a) (m := .Tree) n := by
   refine Tree_Forest.bisim (fun _ x y => x = Tree_Forest.corec (fullCoalg a) () ∧
     ∃ k, y = Tree_Forest.corec (natCoalg a) k) ?_ ⟨rfl, n, rfl⟩
   rintro m _ _ ⟨rfl, k, rfl⟩

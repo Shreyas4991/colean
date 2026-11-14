@@ -6,7 +6,8 @@ import Colean.Model.Occ
 # Generators on `Expr`: an order for `partial_fixpoint` (`with_ccpo`)
 
 *Spec.* Input: a type `T` declared by a single `codata` declaration, with parameters and at most
-one index, and the constructor without arguments chosen as the bottom (by name, or the first one).
+one index, and the constructor without arguments chosen as the bottom (by name,
+`with_ccpo (bot := c)`, or the first one).
 Output, from the type's public declarations (`T.contract`, `T.F`, `T.F.Rel`, `T.F.rel_map`,
 `T.sig`, `T.toC`, `T.ofC` and their laws) and the theory of `Model/CCPO.lean`:
 
@@ -229,8 +230,8 @@ def genMonotone (c : Name) (ps : Array Expr) (plain : Bool)
   addThm name (lvls ++ [v]) type value
   addAttrs name #[← `(Parser.Term.attrInstance| partial_fixpoint_monotone)]
 
-/-- The generator of `with_ccpo` on the type `T`, with the bottom constructor `bot?` (by its short
-name), or the first constructor without arguments. -/
+/-- The generator of `with_ccpo` on the type `T`, with the bottom constructor `bot?` (named by
+`(bot := c)`, short or qualified), or the first constructor without arguments. -/
 def genCCPO (bot? : Option Name) : TermElabM Unit := do
   let env ← getEnv
   let some kci := env.find? (T ++ `contract)

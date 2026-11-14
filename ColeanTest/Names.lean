@@ -52,7 +52,7 @@ codata Od
   | od (e : Ev)
 end
 
-example : Ev := Ev.corec (S := fun _ => Unit) (fun | .Ev, _ => .ev () | .Od, _ => .od ()) ()
+example : Ev := Ev.corec (S₁ := Unit) (S₂ := Unit) (fun _ => .ev ()) (fun _ => .od ()) ()
 
 example : Ev_Od Ev_Od.Ix.Ev := Ev_Od.corec (S := fun _ => Unit) (m := .Ev)
   (fun | .Ev, _ => .ev () | .Od, _ => .od ()) ()

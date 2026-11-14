@@ -31,8 +31,8 @@ noncomputable section
 
 /-! ### 1. The attribute
 
-`with_ccpo` takes the first constructor without arguments as the bottom, `with_ccpo c` the
-constructor `c`. It orders the type by *approximation*: `x ⊑ y` when `x` is the bottom, or `x` and
+`with_ccpo` takes the first constructor without arguments as the bottom, `with_ccpo (bot := c)`
+the constructor `c`. It orders the type by *approximation*: `x ⊑ y` when `x` is the bottom, or `x` and
 `y` have the same constructor and data and related recursive arguments, coinductively. This is a
 chain-complete partial order, Lean's `Lean.Order.CCPO`, which is what `partial_fixpoint` needs on
 the result type of a definition. -/
@@ -137,7 +137,7 @@ codata Res (α : Type)
   | done
   | step (r : Res α)
 
-attribute [with_ccpo done] Res
+attribute [with_ccpo (bot := done)] Res
 
 #check @Res.bot_eq
 

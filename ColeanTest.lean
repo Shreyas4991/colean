@@ -27,6 +27,8 @@ import ColeanTest.Names
 import ColeanTest.Section
 import ColeanTest.MTree
 import ColeanTest.MutualIx
+import ColeanTest.MutualCorec
+import ColeanTest.MutualFold
 import ColeanTest.MRose
 import ColeanTest.EvenOdd
 import ColeanTest.Nest

@@ -45,7 +45,7 @@ does, implicit elsewhere):
 * `T.toC`, `T.ofC` with the four laws `T.ofC_toC`, `T.toC_ofC`, `T.ofC_map`, `T.rel_ofC`;
 * the contract: `T`, `T.dtor`, `T.corec`, `T.dtor_corec` (simp), `T.bisim`, transported from the
   generic `Signature` theorems; `T.corec` accepts a state in any universe;
-* derived from the contract (`Codata.Contract`): `T.ctor`, `T.dtor_ctor`, `T.ctor_dtor`,
+* derived from the contract (`Codata.Contract`): `T.ctor`, `T.dtor_ctor` (simp), `T.ctor_dtor`,
   `T.ctor_injective`, `T.corec_eq`, `T.corec_unique`; the individual constructors `T.ctorᵢ` with
   the simp lemmas `T.dtor_ctorᵢ` and `T.ctor_ctorᵢ` (`T.ctor (T.F.ctorᵢ …) = T.ctorᵢ …`),
   injectivity `T.ctorᵢ_inj` (as `injEq`: proofs left out, `HEq` where the two sides' types differ,
@@ -105,7 +105,8 @@ approximation, Lean's `Lean.Order.CCPO`, with which `partial_fixpoint` defines c
 functions into it, and the monotonicity lemmas of its constructors (`Gen/CCPO.lean`): applied
 after the declaration, `attribute [with_ccpo] T`, or among the declaration's modifiers,
 `@[with_ccpo] codata T …`, applied once everything is declared, as `inductive` applies its
-attributes.
+attributes. The bottom is the first constructor without arguments, or the one named by
+`with_ccpo (bot := c)`.
 
 The declaration is parsed as Lean's `inductive` (`Syntax.lean`): doc comments, attributes,
 `private`, `protected` and `noncomputable` on the type and on the constructors, universe names
@@ -127,7 +128,7 @@ initialize registerBuiltinAttribute {
   add := fun decl stx kind => do
     unless kind == .global do throwError "with_ccpo: the attribute is global only"
     let bot? := match stx with
-      | `(attr| with_ccpo $c:ident) => some c.getId
+      | `(attr| with_ccpo (bot := $c:ident)) => some c.getId
       | _ => none
     let env ← getEnv
     try

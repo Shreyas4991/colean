@@ -2,7 +2,7 @@
 
 (Co)inductive types for Lean 4.
 
-Lean's type theory has no coinductive types. 
+Lean's type theory has no coinductive types.
 Colean adds the `codata` command that declares them, with `inductive`-like syntax.
 
 ```lean
@@ -27,150 +27,187 @@ Then `import Colean`.
 
 ## Examples
 
-### Corecursion, coinduction, case analysis
+### Coinductive types
 
 ```lean
-codata Strm (α : Type)
-  | cons (head : α) (tail : Strm α)
+/-- Infinite lists -/
+codata Stream (α : Type)
+  | cons (head : α) (tail : Stream α)
 
--- Corecursion: one step from a state. Here the state is the next element.
-noncomputable def Strm.iterate {α : Type} (f : α → α) (a : α) : Strm α :=
-  Strm.corec (fun x => .cons x (f x)) a
+def Stream.map {α β : Type} (f : α → β) : Stream α → Stream β :=
+  -- `corec` defines a corecursive function
+  Stream.corec fun s : Stream α =>
+    -- to pattern match, first apply the destructor `dtor`
+    match s.dtor with
+    | .cons h t => .cons (f h) t
 
-noncomputable def Strm.const {α : Type} (a : α) : Strm α :=
-  Strm.corec (fun _ => .cons a ()) ()
-
--- Coinduction: related streams have equal heads and related tails.
-theorem Strm.iterate_id {α : Type} (a : α) : Strm.iterate id a = Strm.const a := by
-  refine Strm.bisim (fun x y => x = .iterate id a ∧ y = .const a) ?_ ⟨rfl, rfl⟩
-  rintro _ _ ⟨rfl, rfl⟩
-  simp only [Strm.iterate, Strm.const, Strm.dtor_corec, Strm.F.map_cons, id]
-  exact .cons _ _ _ ⟨rfl, rfl⟩
-
--- Case analysis, by `casesOn` or the `cases` tactic.
-noncomputable def Strm.head {α : Type} (s : Strm α) : α := s.casesOn fun a _ => a
-
-example {α : Type} (a : α) (s : Strm α) : (Strm.cons a s).head = a := by simp [Strm.head]
+-- Coinduction: bisimilar streams are equal
+theorem Stream.map_comp {α β γ : Type} (f : α → β) (g : β → γ) (s : Stream α) : 
+    s.map (g ∘ f) = (s.map f).map g := by
+  refine Stream.bisim (fun lhs rhs => ∃ s, lhs = s.map (g ∘ f) ∧ rhs = (s.map f).map g)
+    ?_ ⟨s, rfl, rfl⟩
+  rintro _ _ ⟨s, rfl, rfl⟩
+  -- coinductive step
+  cases s with | cons h t => -- `cases` works with `codata`
+  simp [map]
+  apply F.Rel.cons
+  use t
 ```
 
-### Inductive types and families
+### Corecursion by `partial_fixpoint`
+
+An easier way to define corecursive functions is Lean's `partial_fixpoint`:
 
 ```lean
--- `data` declares inductive types, here an indexed family.
-data Vec (α : Type) : Nat → Type
-  | nil : Vec α 0
-  | cons {n : Nat} (a : α) (v : Vec α n) : Vec α (n + 1)
+/-- Potentially infinite lists -/
+-- `with_ccpo` creates a CCPO structure, which `partial_fixpoint` uses
+@[with_ccpo (bot := nil)] -- `bot` chooses the bottom `⊥` of the CCPO; it can be omitted here
+codata CoList (α : Type)
+  | nil
+  | cons (head : α) (tail : CoList α)
 
-noncomputable def Vec.toList {α : Type} {n : Nat} (v : Vec α n) : List α :=
-  Vec.rec (motive := fun _ _ => List α) [] (fun a _ l => a :: l) v
+def nats (n : Nat) : CoList Nat :=
+  .cons n (nats (n + 1))
+partial_fixpoint
 
--- Induction, by `rec` or the `induction` tactic.
-theorem Vec.length_toList {α : Type} {n : Nat} (v : Vec α n) : v.toList.length = n := by
-  induction v with
-  | nil => simp [Vec.toList]
-  | cons a v ih => simp_all [Vec.toList]
+def CoList.filter {α : Type} (p : α → Bool) (s : CoList α) : CoList α :=
+  match s.dtor with
+  | .nil => .nil
+  | .cons h t => if p h then .cons h (t.filter p) else t.filter p
+partial_fixpoint
+
+example : (nats 0).filter (· % 2 == 0) = .cons 0 ((nats 2).filter (· % 2 == 0)) := by
+  repeat
+    rw [CoList.filter, nats]; simp
+```
+
+### Indexed families
+
+```lean
+/-- Infinite walk starting from `n` -/
+codata Walk : Int → Type
+  | up {n : Int} (tail : Walk (n + 1)) : Walk n
+  | down {n : Int} (tail : Walk (n - 1)) : Walk n
+
+-- The step may depend on the index: always head back to `0`.
+def Walk.toZero {n : Int} : Walk n :=
+  .corec (s := ()) fun (n : Int) (_ : Unit) =>
+    if n < 0 then .up () else .down ()
+
+/-- A helper for the next definition -/
+def Walk.cast {m n : Int} (h : m = n) (w : Walk m) : Walk n := h ▸ w
+
+-- The state may depend on the index: a walk from `-i` is the state at `i`.
+def Walk.mirror {n : Int} (w : Walk n) : Walk (-n) :=
+  .corec (S := fun i => Walk (-i))
+    (fun _ w => match w.dtor with
+      | .up t => .down (t.cast (by lia))
+      | .down t => .up (t.cast (by lia)))
+    (w.cast (by lia))
 ```
 
 ### Mutual blocks
 
 ```lean
 mutual
-data Tree
-  | node (n : Nat) (cs : Forest)
-data Forest
+/-- Trees of any depth and any breadth. -/
+codata Tree (α : Type)
+  | node (a : α) (children : Forest α)
+/-- Sequences of trees, possibly infinite. -/
+codata Forest (α : Type)
   | nil
-  | cons (t : Tree) (f : Forest)
+  | cons (t : Tree α) (f : Forest α)
 end
 
--- One motive per type, as for Lean's mutual inductives.
-noncomputable def Tree.size (t : Tree) : Nat :=
-  Tree.rec (motive_1 := fun _ => Nat) (motive_2 := fun _ => Nat)
-    (fun _ _ k => k + 1) 0 (fun _ _ a b => a + b) t
+-- Corecursion with one state and one step per type: the infinite binary tree.
+-- A forest's state counts the trees still to come.
+def Tree.binary {α : Type} (a : α) : Tree α :=
+  -- .node a (.cons binary (.cons binary nil))
+  Tree.corec (fun () => .node a (2 : Fin 3)) (fun | 0 => .nil | 1 => .cons () 0 | 2 => .cons () 1) ()
+
+theorem Tree.binary_eq {α : Type} (a : α) : 
+    binary a = .node a (.cons (binary a) <| .cons (binary a) <| .nil) := by
+  conv => lhs; rw [binary, Tree.corec_eq]
+  simp [Forest.corec_eq]
+  rfl
 ```
 
 ### Nesting
 
 ```lean
--- Nesting through `List`, `Option`, products, functions, other `data`/`codata` types, ...
-data Rose (α : Type)
-  | node (a : α) (children : List (Rose α))
+/-- Nondeterministic computations: a result, or a finite choice of ways to continue. -/
+codata NDet (α : Type)
+  | ret (a : α)
+  | choose (next : List (NDet α)) -- nesting through `List`
 
--- Infinite trees, each node with a finite list of children.
-codata Tree (α : Type)
-  | node (a : α) (children : List (Tree α))
+def NDet.coin : NDet Bool := .choose [.ret false, .ret true]
 
--- `fold` gets the children already folded.
-noncomputable def Rose.size {α : Type} (t : Rose α) : Nat :=
-  Rose.fold (S := Nat) (fun | .node _ cs => cs.sum + 1) t
+/-- Flip coins until one shows `true`, counting the flips: stop now, or flip again. -/
+def NDet.flips : NDet Nat :=
+  NDet.corec (S := Nat ⊕ Nat) (s := .inr 0) (fun
+    | .inl n => .ret n
+    | .inr n => .choose [.inl (n + 1), .inr (n + 1)]) 
+
+-- One can nest through a predefined set of standard Lean types (`Prod`, `Sum`, `List`, `Option`,
+-- etc.) and through types defined with `codata` and `data` (see below).
 ```
 
-### Mixed blocks (best effort)
+### Inductive types
+
+Inductive types are declared with `data`. They can also be in a `mutual` block and used in nesting.
 
 ```lean
--- `data` and `codata` in one block: the first declaration is outermost.
--- Here trees are infinite, and every forest is finite.
+data LogicalFormula
+  | const (b : Bool)
+  | and (x y : LogicalFormula)
+  | or (x y : LogicalFormula)
+  | not (x : LogicalFormula)
+```
+
+### Mixed blocks
+
+Finally, `data` and `codata` can be mixed in a `mixed_mutual` block:
+
+```lean
 mixed_mutual
-codata Tree (α : Type)
-  | node (a : α) (children : Forest α)
-data Forest (α : Type)
-  | nil
-  | cons (t : Tree α) (f : Forest α)
+/-- Stream processors: they keep producing outputs forever... -/
+codata SP (I O : Type)
+  | step (s : Step I O)
+/-- ...and read finitely many inputs before each output. -/
+data Step (I O : Type)
+  | get (k : I → Step I O)
+  | put (o : O) (next : SP I O)
 end
 
-noncomputable def Tree.bin {α : Type} (a : α) : Tree α :=
-  Tree.corec (S := Unit) (fun _ => .node a (.cons () (.cons () .nil))) ()
+/-- Read two inputs, output their sum, forever. -/
+def SP.pairSums : SP Nat Nat :=
+  .corec (S := Unit) (s := ()) fun _ => .step (.get fun a => .get fun b => .put (a + b) ()) 
 ```
 
-### Corecursion by `partial_fixpoint`
-
-```lean
--- With `with_ccpo`, corecursive functions can be written directly, by `partial_fixpoint`.
-@[with_ccpo]
-codata CoList (α : Type)
-  | nil
-  | cons (head : α) (tail : CoList α)
-
-noncomputable def CoList.map {α β : Type} (f : α → β) (s : CoList α) : CoList β :=
-  match s.dtor with
-  | .nil => .nil
-  | .cons a t => .cons (f a) (map f t)
-partial_fixpoint
-
-noncomputable def CoList.nats (n : Nat) : CoList Nat := .cons n (nats (n + 1))
-partial_fixpoint
-
-example {α β : Type} (f : α → β) (a : α) (t : CoList α) :
-    (CoList.cons a t).map f = .cons (f a) (t.map f) := by
-  rw [CoList.map]; simp
-```
-
-More examples, with what works and what does not yet, are in
-[`Sketch/MutualTour.lean`](Sketch/MutualTour.lean),
-[`Sketch/NestingTour.lean`](Sketch/NestingTour.lean),
-[`Sketch/MixedTour.lean`](Sketch/MixedTour.lean) and
-[`Sketch/CCPOTour.lean`](Sketch/CCPOTour.lean).
+It is important to note that `mixed_mutual`, unlike a uniform `mutual`, depends on the order of
+the types. Types are defined bottom-up, each treating the types above it as placeholders. So
+`data Step` only makes the reads up to the next `put` finite, while `codata SP` lets the
+processor as a whole run forever. In the reverse order, `SP I O` would be empty: the whole
+processor would have to be finite, but nothing ever ends it.
 
 ## How it works, and why you can trust it
 
-Most of this project's code was written with heavy use of AI. For a library that declares
-types, this raises a fair question: how do you know that the type you get is the type you mean
-when you write a `codata` or `data` declaration? The question is fair whoever wrote the
-implementation, a person or a model, since the construction behind each type is long and
-intricate. The answer does not ask you to read it. A (co)inductive type has a short
-mathematical specification, and Colean proves that specification for every type it declares.
+The project was developed with heavy use of AI, but it is designed so that the trusted code base
+(TCB) grows very little.
 
-A declaration is processed in four steps.
+A declaration of a type `T` is processed in four steps.
 
-1. **The functor.** The constructors define a functor `T.F`: the same constructors with every
-   occurrence of `T` replaced by a variable `X`, and its action on functions `T.F.map`. This is
-   a small piece of code, [`Colean/Gen/Functor.lean`](Colean/Gen/Functor.lean), and its
-   output is an ordinary `inductive` that you can read:
+1. **The functor.** We start from the syntax of your declaration and generate a functor `T.F`:
+   an ordinary `inductive` with the same constructors, where every occurrence of `T` is
+   replaced by a variable `X`, together with its action on functions `T.F.map`. The code that
+   does this is small, [`Colean/Gen/Functor.lean`](Colean/Gen/Functor.lean), and you can read
+   its output directly:
 
    ```
-   #print Strm.F
-   -- Strm.F.cons : {α : Type} → {X : Type u_1} → α → X → Strm.F α X
-   #print Strm.F.map
-   -- fun f a => Strm.F.casesOn a fun head tail => Strm.F.cons head (f tail)
+   #print Stream.F
+   -- Stream.F.cons : {α : Type} → {X : Type u_1} → α → X → Stream.F α X
+   #print Stream.F.map
+   -- fun f a => Stream.F.casesOn a fun head tail => Stream.F.cons head (f tail)
    ```
 
 2. **The type.** `T` is built as a subtype of a general carrier, a least or greatest fixpoint
@@ -195,46 +232,34 @@ A declaration is processed in four steps.
      contains no proofs of its own.
    - [`Colean/Gen/Surface.lean`](Colean/Gen/Surface.lean) builds the user-facing declarations
      from these pieces. A constructor is the contract's constructor at the functor's
-     constructor (`#print Strm.cons` shows `Strm.ctor (Strm.F.cons head tail)`), and
+     constructor (`#print Stream.cons` shows `Stream.ctor (Stream.F.cons head tail)`), and
      `casesOn` is case analysis on `dtor`.
 
    The dependent recursor `T.rec` of a `data` type is built on the encoding, but its type and
    its computation rules `T.rec_cᵢ`, which are theorems, say what it is.
 
-So a skeptic needs to review three short pieces: the functor extraction, the definition of the
-contract, and the derivation of the interface. Then, for each declared type, check its functor
-and its contract:
-
-```
-#print T.F            -- your constructors, with `T` replaced by `X`
-#print T.F.map        -- the obvious action on functions
-#check @T.contract    -- a `Codata.Contract T T.F` or a `Data.Contract T T.F`
-#print T.contract     -- its `map` is `T.F.map`
-#print axioms T.contract
-```
+So the TCB consists of three short pieces: the functor extraction, the definition of the
+contract, and the derivation of the interface. To check a declared type, it is then enough to
+look at its functor and its contract (`#print T.F`, `#check @T.contract`).
 
 A `mutual` block is one family indexed by which type you mean, `Tree_Forest.Ix`, with one
 contract for the block, and each type is that family at its index
 (`#print Tree` shows `Tree_Forest Tree_Forest.Ix.Tree`). In a `mixed_mutual` block, an inner
-type is first declared with the outer types as a parameter (`Forest.Open α X`), with its own
-contract, and the closed type is that one at the outer type (`Forest α := Forest.Open α (Tree α)`).
+type is first declared with the outer types as a parameter (`Step.Open I O X`), with its own
+contract, and the closed type is that one at the outer type (`Step I O := Step.Open I O (SP I O)`).
 
 Colean does not handle every declaration you can write: it supports most of the types that are
 useful in practice, and it may reject some it could in principle accept. When it cannot build
-a type or prove its contract, the command fails with an error and declares nothing. It never produces a
-type that does not satisfy its contract, because every declaration and every proof is checked
-by Lean's kernel. The types are definitions, not axioms, and use only the standard axioms
-`propext`, `Classical.choice` and `Quot.sound`. Bug reports and feature requests are welcome in the
-[issues](https://github.com/vasnesterov/colean/issues).
-
-The contracts are described in more detail in [`contract.md`](contract.md), and the steps and
-files in [`architecture.md`](architecture.md).
+a type or prove its contract, the command fails with an error and declares nothing. It never
+produces a type that does not satisfy its contract. Bug reports and feature requests are welcome
+in the [issues](https://github.com/vasnesterov/colean/issues).
 
 ## Limitations
 
-- **`mixed_mutual` is best effort.** It is supported only partly. An outer type with indices
-  or an outer `mutual` block is not supported, and some blocks fail with errors that are hard
-  to read. See Part II of [`Sketch/MixedTour.lean`](Sketch/MixedTour.lean).
+- **No coinduction tactic and no general corecursion.** Coinduction is by applying `T.bisim`
+  with a relation you write. Corecursion is primitive, through `T.corec`, or through
+  `partial_fixpoint` for a type with `with_ccpo`. There is nothing like Isabelle's
+  `coinduction` proof method or its framework for corecursion up to friendly operations.
 - **No `match` on the declared types.** The types are subtypes and their constructors are
   definitions, so `match`, `rcases` patterns, structural recursion and the equation compiler
   cannot see them. Use `casesOn`, `rec`, `fold`, `corec`, the `cases` and `induction` tactics
@@ -242,10 +267,12 @@ files in [`architecture.md`](architecture.md).
   functor, an ordinary inductive type. Lean's
   [RFC: custom recursors (lean4#2716)](https://github.com/leanprover/lean4/issues/2716) would
   lift this restriction.
+- **Everything is noncomputable.** The generated types and functions cannot be run with `#eval`
+  or compiled, so definitions that use them must be marked `noncomputable`. We plan to lift this
+  in the future.
+- **`mixed_mutual` is best effort.** It is supported only partly. An outer type with indices
+  or an outer `mutual` block is not supported, and some blocks fail with errors that are hard
+  to read. See Part II of [`Sketch/MixedTour.lean`](Sketch/MixedTour.lean).
 - **Computation rules are theorems.** `rec`, `fold` and `corec` compute on constructors by
   `simp` lemmas (`T.rec_cᵢ`, `T.fold_cᵢ`, `T.dtor_corec`), not by definitional unfolding, so
-  `rfl` and `decide` do not evaluate them. Everything generated is noncomputable.
-- **No coinduction tactic and no general corecursion.** Coinduction is by applying `T.bisim`
-  with a relation you write. Corecursion is primitive, through `T.corec`, or through
-  `partial_fixpoint` for a type with `with_ccpo`. There is nothing like Isabelle's
-  `coinduction` proof method or its framework for corecursion up to friendly operations.
+  `rfl` and `decide` do not evaluate them.

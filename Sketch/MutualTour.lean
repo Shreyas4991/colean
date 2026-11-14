@@ -58,13 +58,17 @@ end
 #check @Even_Odd.rec
 #check @Even_Odd.rec_Even_succ
 
--- Per type: constructors, case analysis, the fold, the recursor, the computation rules,
--- disjointness.
+-- Per type: constructors, case analysis, the layer, the destructor and the constructor, the
+-- fold, the recursor, the computation rules, disjointness.
 #check @Even.zero
 #check @Even.succ
 #check @Odd.succ
 #check @Even.casesOn
+#check @Even.F
+#check @Even.dtor
+#check @Even.ctor
 #check @Even.fold
+#check @Even.fold_unique
 #check @Even.rec
 #check @Even.fold_succ
 #check @Even.rec_succ
@@ -78,8 +82,14 @@ end Basic
 
 /-! ### 2. `data`: folds and induction
 
-One algebra serves the whole block: it says what to do at every constructor of `Ix`. `T.fold` restricts it to
-a type. -/
+As Lean's mutual recursors have a motive per type, each type has a fold with a family and an
+algebra per type: `Rose.fold a₁ a₂ t` with `a₁ : Rose.F α S₁ S₂ → S₁`, `a₂ : Forest.F α S₁ S₂ → S₂`
+and `t : Rose α`. The layer of a type, `Rose.F α S₁ S₂`, is the block's functor at the families
+packed by cases on `Ix` (`Rose_Forest.St`), so its constructors are the block functor's and
+patterns find them (`.node _ n`). The rules `Rose.fold_node`, `Forest.fold_cons` fold the
+arguments with `Rose.fold a₁ a₂` and `Forest.fold a₁ a₂`; `Rose.fold_unique` says the fold is the
+only morphism. Over the block, `Rose_Forest.fold` takes one algebra over `Ix` instead, which says
+what to do at every constructor of `Ix`. -/
 
 namespace Finite
 
@@ -91,24 +101,43 @@ data Forest (α : Type u)
   | cons (t : Rose α) (f : Forest α)
 end
 
+def sizeRose {α : Type u} : Rose.F α Nat Nat → Nat
+  | .node _ n => n + 1
+
+def sizeForest {α : Type u} : Forest.F α Nat Nat → Nat
+  | .nil => 0
+  | .cons n k => n + k
+
+def Rose.size {α : Type u} (t : Rose α) : Nat := Rose.fold sizeRose sizeForest t
+def Forest.size {α : Type u} (f : Forest α) : Nat := Forest.fold sizeRose sizeForest f
+
+@[simp] theorem Rose.size_node {α : Type u} (a : α) (c : Forest α) :
+    (Rose.node a c).size = c.size + 1 := by
+  simp [Rose.size, Forest.size, sizeRose]
+
+@[simp] theorem Forest.size_nil {α : Type u} : (Forest.nil : Forest α).size = 0 := by
+  simp [Forest.size, sizeForest]
+
+@[simp] theorem Forest.size_cons {α : Type u} (t : Rose α) (f : Forest α) :
+    (Forest.cons t f).size = t.size + f.size := by
+  simp [Rose.size, Forest.size, sizeForest]
+
+/-- The fold is the only morphism: a function per type satisfying the equations is the fold. -/
+theorem Rose.size_eq {α : Type u} (h₁ : Rose α → Nat) (h₂ : Forest α → Nat)
+    (hn : ∀ a c, h₁ (.node a c) = h₂ c + 1) (hnil : h₂ .nil = 0)
+    (hc : ∀ t f, h₂ (.cons t f) = h₁ t + h₂ f) (t : Rose α) : h₁ t = t.size :=
+  Rose.fold_unique sizeRose sizeForest h₁ h₂ (fun | .node a c => by simp [hn, sizeRose])
+    (fun | .nil => by simp [hnil, sizeForest] | .cons t f => by simp [hc, sizeForest]) t
+
+/-- Over the block, one algebra over `Ix`. -/
 def sizeAlg {α : Type u} : ∀ m, Rose_Forest.F α (fun _ => Nat) m → Nat
   | .Rose, .node _ n => n + 1
   | .Forest, .nil => 0
   | .Forest, .cons n k => n + k
 
-def Rose.size {α : Type u} (t : Rose α) : Nat := Rose.fold sizeAlg t
-def Forest.size {α : Type u} (f : Forest α) : Nat := Forest.fold sizeAlg f
-
-@[simp] theorem Rose.size_node {α : Type u} (a : α) (c : Forest α) :
-    (Rose.node a c).size = c.size + 1 := by
-  simp [Rose.size, Forest.size, sizeAlg]
-
-@[simp] theorem Forest.size_nil {α : Type u} : (Forest.nil : Forest α).size = 0 := by
-  simp [Forest.size, sizeAlg]
-
-@[simp] theorem Forest.size_cons {α : Type u} (t : Rose α) (f : Forest α) :
-    (Forest.cons t f).size = t.size + f.size := by
-  simp [Rose.size, Forest.size, sizeAlg]
+example {α : Type u} (a : α) (c : Forest α) :
+    Rose_Forest.fold sizeAlg (Rose.node a c) = Rose_Forest.fold sizeAlg c + 1 := by
+  simp [sizeAlg]
 
 /-- Induction over the block, with a motive over `Ix`: the statement for one type comes by
 restricting. Induction per type, with a motive per type, is section 7. -/
@@ -134,7 +163,18 @@ end Finite
 
 /-! ### 3. `codata`: corecursion and bisimulation
 
-A state is a family over `Ix`, and one coalgebra serves the block. -/
+As Lean's mutual recursors have a motive per type, each type has a corecursor with a state and a
+step per type, and a bisimulation with a relation per type: `Tree.corec c₁ c₂ s` with
+`c₁ : S₁ → Tree.F α S₁ S₂`, `c₂ : S₂ → Forest.F α S₁ S₂` and `s : S₁`. The layer of a type at
+its states, `Tree.F α S₁ S₂`, is the block's functor at the states packed by cases on `Ix`
+(`Tree_Forest.St`), so its constructors are the block functor's and dot notation finds them
+(`.node a s`). `t.dtor` is in the layer at the types, `Tree.F α (Tree α) (Forest α)`, and the
+rule `Tree.dtor_corec` maps with `Tree.corec c₁ c₂` and `Forest.corec c₁ c₂` (`Tree.F.map`, one
+function per type). Nothing mentions `Ix`. The rest of the interface of a single type is there
+too: `Tree.ctor`, Lambek's lemma (`Tree.ctor_dtor`, …), `Tree.corec_eq`, and `Tree.corec_unique`
+with a morphism per type. In `match t.dtor with | .node a cs`, `cs` shows as `Forest α`. The
+block-level `Tree_Forest.corec` and `Tree_Forest.bisim` take one state family and one relation
+over `Ix` instead. -/
 
 namespace Infinite
 
@@ -146,37 +186,58 @@ codata Forest (α : Type u)
   | cons (t : Tree α) (f : Forest α)
 end
 
+def Tree.full {α : Type u} (a : α) : Tree α :=
+  Tree.corec (fun () => .node a ()) (fun () => .cons () ()) ()
+def Forest.full {α : Type u} (a : α) : Forest α :=
+  Forest.corec (fun () => .node a ()) (fun () => .cons () ()) ()
+
+@[simp] theorem Tree.dtor_full {α : Type u} (a : α) :
+    (Tree.full a).dtor = .node a (Forest.full a) := by
+  simp [Tree.full, Forest.full]
+
+@[simp] theorem Forest.dtor_full {α : Type u} (a : α) :
+    (Forest.full a).dtor = .cons (Tree.full a) (Forest.full a) := by
+  simp [Tree.full, Forest.full]
+
+/-- A match on `t.dtor` takes the constructors of the layer. -/
+def Tree.label {α : Type u} (t : Tree α) : α :=
+  match t.dtor with
+  | .node a _ => a
+
+example {α : Type u} (a : α) : (Tree.full a).label = a := by simp [Tree.label]
+
+/-- The unfolding equation, by `corec_eq`. -/
+theorem Tree.full_eq {α : Type u} (a : α) : Tree.full a = Tree.node a (Forest.full a) := by
+  conv_lhs => rw [Tree.full, Tree.corec_eq]
+  simp [Forest.full]
+
+/-- A counter that is never looked at. -/
+def Tree.count {α : Type u} (a : α) : Nat → Tree α :=
+  Tree.corec (fun k => .node a (k + 1)) (fun k => .cons (k + 1) (k + 1))
+def Forest.count {α : Type u} (a : α) : Nat → Forest α :=
+  Forest.corec (fun k => .node a (k + 1)) (fun k => .cons (k + 1) (k + 1))
+
+/-- Bisimulation with a relation per type, and a hypothesis per type, stated with the lifting
+per type `Tree.F.Rel R₁ R₂`. -/
+example {α : Type u} (a : α) (n : Nat) : Tree.full a = Tree.count a n := by
+  refine Tree.bisim (fun x y => x = Tree.full a ∧ ∃ k, y = Tree.count a k)
+    (fun x y => x = Forest.full a ∧ ∃ k, y = Forest.count a k) ?_ ?_ ⟨rfl, n, rfl⟩
+  · rintro _ _ ⟨rfl, k, rfl⟩
+    simp only [Tree.dtor_full, Tree.count, Tree.dtor_corec, Tree.F.map_node]
+    exact .node _ _ _ ⟨rfl, _, rfl⟩
+  · rintro _ _ ⟨rfl, k, rfl⟩
+    simp only [Forest.dtor_full, Forest.count, Forest.dtor_corec, Forest.F.map_cons]
+    exact .cons _ _ _ _ ⟨rfl, _, rfl⟩ ⟨rfl, _, rfl⟩
+
+/-- Over the block, a state is a family over `Ix` and one coalgebra serves the block. -/
 def fullCoalg {α : Type u} (a : α) : ∀ m, Unit → Tree_Forest.F α (fun _ => Unit) m
   | .Tree, _ => .node a ()
   | .Forest, _ => .cons () ()
 
-def Tree.full {α : Type u} (a : α) : Tree α := Tree.corec (fullCoalg a) ()
-def Forest.full {α : Type u} (a : α) : Forest α := Forest.corec (fullCoalg a) ()
-
-@[simp] theorem Tree.dtor_full {α : Type u} (a : α) :
-    (Tree.full a).dtor = .node a (Forest.full a) := by
-  simp [Tree.full, Forest.full, Tree_Forest.dtor_corec, fullCoalg]
-
-/-- The unfolding equation, through `ctor_dtor`. -/
-theorem Tree.full_eq {α : Type u} (a : α) : Tree.full a = Tree.node a (Forest.full a) := by
-  conv => lhs; rw [← Tree_Forest.ctor_dtor (Tree.full a), Tree.dtor_full]
-  rfl
-
-def natCoalg {α : Type u} (a : α) : ∀ m, Nat → Tree_Forest.F α (fun _ => Nat) m
-  | .Tree, k => .node a (k + 1)
-  | .Forest, k => .cons (k + 1) (k + 1)
-
-/-- Bisimulation over the block: the relation is a family over `Ix` too, and the proof looks at
-each type in turn. -/
-example {α : Type u} (a : α) (n : Nat) : Tree.full a = Tree.corec (natCoalg a) n := by
-  refine Tree_Forest.bisim (fun _ x y => x = Tree_Forest.corec (fullCoalg a) () ∧
-    ∃ k, y = Tree_Forest.corec (natCoalg a) k) ?_ ⟨rfl, n, rfl⟩
-  rintro m _ _ ⟨rfl, k, rfl⟩
-  cases m
-  · simp only [Tree_Forest.dtor_corec, fullCoalg, natCoalg, Tree_Forest.F.map_node]
-    exact .node _ _ _ ⟨rfl, _, rfl⟩
-  · simp only [Tree_Forest.dtor_corec, fullCoalg, natCoalg, Tree_Forest.F.map_cons]
-    exact .cons _ _ _ _ ⟨rfl, _, rfl⟩ ⟨rfl, _, rfl⟩
+example {α : Type u} (a : α) :
+    Tree_Forest.dtor (Tree_Forest.corec (fullCoalg a) (m := .Tree) ()) =
+      .node a (Tree_Forest.corec (fullCoalg a) ()) := by
+  simp [Tree_Forest.dtor_corec, fullCoalg]
 
 end Infinite
 
@@ -225,6 +286,10 @@ codata Qa : Nat → Type
   | mk {n : Nat} (p : Pa n) : Qa n
 end
 
+-- Per type, the states and the relations are families over the type's own indices.
+#check @Pa.corec
+#check @Qa.bisim
+-- Over the block, over `Ix`.
 #check @Pa_Qa.corec
 #check @Pa_Qa.bisim
 

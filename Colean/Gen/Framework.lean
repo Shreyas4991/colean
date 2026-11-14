@@ -9,7 +9,9 @@ the contract alone, by instantiating `Framework.lean`: `T.ctor`, `T.dtor_ctor`, 
 `T.ctor_injective`, `T.fold_eq`, `T.fold_unique` for data. Nothing here looks at the
 constructors, and there are no proofs. `corec_eq`, `corec_unique`, `fold_eq` and `fold_unique`
 are for a state or family in any universe, so they instantiate the `_of` theorems with the
-contract's pieces rather than the contract itself (which fixes one universe).
+contract's pieces rather than the contract itself (which fixes one universe). In a block these
+are the block's, over `Blk.Ix`; the same per type, with a family per type of the block, are step
+4's (`Gen/Surface.lean`), from these.
 -/
 
 open Lean Meta Elab Term
@@ -67,6 +69,7 @@ def genLambek (K : Name) : TermElabM Unit := do
   ctx.addOver ctx.dtor_ctor true (some (`y, FT))
     (fun xs => do mkEq (← dtorAt (← ctorAt xs[0]!)) xs[0]!)
     fun xs => ctx.contractAt (K ++ `dtor_ctor) xs
+  addSimp ctx.dtor_ctor
   ctx.addOver ctx.ctor_dtor true (some (`t, TI))
     (fun xs => do mkEq (← ctorAt (← dtorAt xs[0]!)) xs[0]!)
     fun xs => ctx.contractAt (K ++ `ctor_dtor) xs

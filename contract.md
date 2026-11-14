@@ -165,7 +165,7 @@ codata CoList (α : Type u)
   | nil
   | cons (a : α) (t : CoList α)
 
-attribute [with_ccpo] CoList     -- or `@[with_ccpo] codata CoList …`, or `with_ccpo nil`
+attribute [with_ccpo] CoList     -- or `@[with_ccpo] codata CoList …`, or `with_ccpo (bot := nil)`
 
 def map (f : α → β) (s : CoList α) : CoList β :=
   match s.dtor with
@@ -174,8 +174,8 @@ def map (f : α → β) (s : CoList α) : CoList β :=
 partial_fixpoint
 ```
 
-Off by default. The attribute `with_ccpo`, optionally naming a constructor without arguments (by
-default the first one; an error if there is none), orders a `codata` type by *approximation*, the
+Off by default. The attribute `with_ccpo`, optionally naming a constructor without arguments,
+`with_ccpo (bot := c)` (by default the first one; an error if there is none), orders a `codata` type by *approximation*, the
 named constructor at the bottom, `⊥ := ctor e` for its layer `e`:
 
 ```

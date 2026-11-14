@@ -8,7 +8,7 @@ import Colean.Gen.Rel
 * `T := Cotype (T.sig params)` (`Intype` for `data`), curried in the indices;
 * for `codata`: `T.dtor`, `T.corec` (with a state in any universe), `T.dtor_corec` (simp),
   `T.bisim` (for `T.F.Rel`), and `T.contract : Codata.Contract T F`;
-* for `data`: `T.ctor`, `T.fold` (into a family in any universe), `T.fold_ctor`, and
+* for `data`: `T.ctor`, `T.fold` (into a family in any universe), `T.fold_ctor` (simp), and
   `T.contract : Data.Contract T F`.
 
 No proofs: every theorem instantiates a transport theorem of `Model/Cotype.lean`,
@@ -329,6 +329,7 @@ def genDataContract : TermElabM Unit := do
     (#[σ, Sp, FSp, FTp, toCT, ofCT, ofCS, map, ofC_toC, ofC_map, ← ctx.uncurryN a 1, pI,
       y].map some)
   addThm ctx.fold_ctor (← ctx.elimLevelParamsOf fresh #[type]) type (← mkLambdaFVars xs value) ctx.ref
+  addSimp ctx.fold_ctor
 
 /-- `T.contract : Data.Contract T F`, the model packaged for the framework; its `induction` is
 `Signature.induction_of` at the packed index. -/

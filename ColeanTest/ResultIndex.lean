@@ -266,18 +266,20 @@ codata Cb : Bool → Type
   | mk {b : Bool} (p : Ca b) : Cb (!b)
 end
 
-/-- Ends as soon as it can: a coalgebra over the block matches the type and its index. -/
-def shortCoalg : ∀ i, Unit → Ca_Cb.F (fun _ => Unit) i
-  | .Ca true, _ => .nil
-  | .Ca false, _ => .Ca_mk (b := true) ()
-  | .Cb true, _ => .Cb_mk (b := false) ()
-  | .Cb false, _ => .Cb_mk (b := true) ()
+/-- Ends as soon as it can: a step per type, matching on its index. -/
+def caStep : ∀ b, Unit → Ca.F (fun _ => Unit) (fun _ => Unit) b
+  | true, _ => .nil
+  | false, _ => .Ca_mk (b := true) ()
 
-def Ca.short (b : Bool) : Ca b := Ca.corec shortCoalg ()
-def Cb.short (b : Bool) : Cb b := Cb.corec shortCoalg ()
+def cbStep : ∀ b, Unit → Cb.F (fun _ => Unit) (fun _ => Unit) b
+  | true, _ => .Cb_mk (b := false) ()
+  | false, _ => .Cb_mk (b := true) ()
 
-theorem Ca.dtor_short_false : (Ca.short false).dtor = .Ca_mk (Cb.short true) := by
-  simp [Ca.short, Cb.short, Ca_Cb.dtor_corec, shortCoalg]
+def Ca.short (b : Bool) : Ca b := Ca.corec caStep cbStep ()
+def Cb.short (b : Bool) : Cb b := Cb.corec caStep cbStep ()
+
+theorem Ca.dtor_short_false : (Ca.short false).dtor = .Ca_mk (b := true) (Cb.short true) := by
+  simp [Ca.short, Cb.short, caStep]
 
 end
 

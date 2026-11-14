@@ -23,35 +23,40 @@ end
 #check @Rose.casesOn
 #check @Forest.casesOn
 #check @Rose.fold_node
+#check @Rose_Forest.fold_cons
 #check @Forest.rec_cons
 
-/-- One algebra for the block: the number of nodes. -/
-def sizeAlg {α : Type u} : ∀ m, Rose_Forest.F α (fun _ => Nat) m → Nat
-  | .Rose, .node _ n => n + 1
-  | .Forest, .nil => 0
-  | .Forest, .cons n k => n + k
+/-- The number of nodes, by the folds per type: one algebra per type, as Lean's mutual
+recursors have one motive per type. -/
+def sizeRose {α : Type u} : Rose.F α Nat Nat → Nat
+  | .node _ n => n + 1
 
-def Rose.size {α : Type u} (t : Rose α) : Nat := Rose.fold sizeAlg t
-def Forest.size {α : Type u} (f : Forest α) : Nat := Forest.fold sizeAlg f
+def sizeForest {α : Type u} : Forest.F α Nat Nat → Nat
+  | .nil => 0
+  | .cons n k => n + k
+
+def Rose.size {α : Type u} (t : Rose α) : Nat := Rose.fold sizeRose sizeForest t
+def Forest.size {α : Type u} (f : Forest α) : Nat := Forest.fold sizeRose sizeForest f
 
 @[simp] theorem Rose.size_node {α : Type u} (a : α) (c : Forest α) :
     (Rose.node a c).size = c.size + 1 := by
-  simp [Rose.size, Forest.size, sizeAlg]
+  simp [Rose.size, Forest.size, sizeRose]
 
 @[simp] theorem Forest.size_nil {α : Type u} : (Forest.nil : Forest α).size = 0 := by
-  simp [Forest.size, sizeAlg]
+  simp [Forest.size, sizeForest]
 
 @[simp] theorem Forest.size_cons {α : Type u} (t : Rose α) (f : Forest α) :
     (Forest.cons t f).size = t.size + f.size := by
-  simp [Rose.size, Forest.size, sizeAlg]
+  simp [Rose.size, Forest.size, sizeForest]
 
-/-- The number of trees in a forest. -/
+/-- The number of trees in a forest, by the fold over the block: one algebra for the block, over
+`Rose_Forest.Ix`. -/
 def lengthAlg {α : Type u} : ∀ m, Rose_Forest.F α (fun _ => Nat) m → Nat
   | .Rose, _ => 0
   | .Forest, .nil => 0
   | .Forest, .cons _ k => k + 1
 
-def Forest.length {α : Type u} (f : Forest α) : Nat := Forest.fold lengthAlg f
+def Forest.length {α : Type u} (f : Forest α) : Nat := Rose_Forest.fold lengthAlg f
 
 @[simp] theorem Forest.length_nil {α : Type u} : (Forest.nil : Forest α).length = 0 := by
   simp [Forest.length, lengthAlg]
