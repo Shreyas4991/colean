@@ -2,7 +2,7 @@
 
 (Co)inductive types for Lean 4.
 
-Lean's type theory has no coinductive types.
+Lean has coinductive predicates (`coinductive`, in `Prop`), but no coinductive data types.
 Colean adds the `codata` command that declares them, with `inductive`-like syntax.
 
 ```lean
@@ -50,7 +50,6 @@ theorem Stream.map_comp {α β γ : Type} (f : α → β) (g : β → γ) (s : S
   -- coinductive step
   cases s with | cons h t => -- `cases` works with `codata`
   simp [map]
-  apply F.Rel.cons
   use t
 ```
 
@@ -238,7 +237,7 @@ A declaration of a type `T` is processed in four steps.
    The dependent recursor `T.rec` of a `data` type is built on the encoding, but its type and
    its computation rules `T.rec_cᵢ`, which are theorems, say what it is.
 
-So the TCB consists of three short pieces: the functor extraction, the definition of the
+So the TCB consists of three pieces: the functor extraction, the definition of the
 contract, and the derivation of the interface. To check a declared type, it is then enough to
 look at its functor and its contract (`#print T.F`, `#check @T.contract`).
 

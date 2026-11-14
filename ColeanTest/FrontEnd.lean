@@ -9,7 +9,9 @@ motive's universe first, as does every declaration with a motive or a state, nam
 (`T.fold.{u, u_1}`). A default value or tactic is on the constructor only. Injectivity is
 stated as `injEq` is, with `HEq` where the two sides' types differ. Types with dotted names may
 form a block. A single index that is a proposition is reported at the index. A constructor has
-the declaration ranges of its own syntax. The internals are `protected`. -/
+the declaration ranges of its own syntax. The internals are `protected`. `induction` on a
+`codata` type is its case analysis, and on a type of a `data` block it is refused, as on a mutual
+inductive. -/
 
 namespace FrontEndTest
 
@@ -440,5 +442,125 @@ data RG
 #guard_msgs in #eval rangeOf ``RG ``RG.cons
 
 end
+
+/-! ### `induction` on the types
+
+`induction` on a `codata` type is its case analysis, `T.casesOn` being the `induction`
+eliminator as well as the `cases` one: `codata` has no induction, and the type is not shown as
+its encoding. On a type of a `data` block, plain `induction` is refused, as Lean refuses a mutual
+inductive, with the recursor per type as the hint; `induction t using Tm.rec (motive_2 := …)`
+is the induction. -/
+
+codata ICo (α : Type)
+  | nil
+  | cons (head : α) (tail : ICo α)
+
+/--
+error: unsolved goals
+case nil
+⊢ True
+
+case cons
+head✝ : ℕ
+tail✝ : ICo ℕ
+⊢ True
+-/
+#guard_msgs in
+example (s : ICo Nat) : True := by induction s
+
+example (s : ICo Nat) : True := by
+  induction s with
+  | nil => trivial
+  | cons h t => trivial
+
+mutual
+codata ICA
+  | a (x : ICB)
+codata ICB
+  | b (y : ICA)
+  | e
+end
+
+/--
+error: unsolved goals
+case b
+y✝ : ICA
+⊢ True
+
+case e
+⊢ True
+-/
+#guard_msgs in
+example (t : ICB) : True := by induction t
+
+mixed_mutual
+data IOut
+  | node (a : Nat) (children : IIn)
+codata IIn
+  | nil
+  | cons (t : IOut) (f : IIn)
+end
+
+/--
+error: unsolved goals
+case nil
+⊢ True
+
+case cons
+t✝ : IOut
+f✝ : IIn
+⊢ True
+-/
+#guard_msgs in
+example (t : IIn) : True := by induction t
+
+mutual
+data ITm
+  | var (n : Nat)
+  | app (f : ITm) (args : IArgs)
+data IArgs
+  | nil
+  | cons (t : ITm) (rest : IArgs)
+end
+
+/--
+error: The `induction` tactic does not support the type `ITm` because it is a type of a mutual `data` block
+
+Hint: Use its recursor, with the other motives given by name: `induction t using ITm.rec (motive_2 := …)`, or the `cases` tactic
+-/
+#guard_msgs in
+example (t : ITm) : True := by induction t
+
+example (t : ITm) : 0 < 1 := by
+  induction t using ITm.rec (motive_2 := fun _ => 0 < 1) with
+  | var n => decide
+  | app f a _ _ => decide
+  | nil => decide
+  | cons t r _ _ => decide
+
+example (t : ITm) : True := by
+  cases t with
+  | var n => trivial
+  | app f a => trivial
+
+-- The closed types of a `data` block inside a `mixed_mutual` block are refused too.
+mixed_mutual
+codata IMOut
+  | node (a : Nat) (children : IMTm)
+data IMTm
+  | nil
+  | cons (t : IMOut) (f : IMArgs)
+data IMArgs
+  | nil
+  | cons (t : IMTm) (f : IMArgs)
+end
+
+/--
+error: The `induction` tactic does not support the type `IMArgs` because it is a type of a mutual `data` block
+
+Hint: Use its recursor, with the other motives given by name: `induction t using IMArgs.rec (motive_1 := …)`, or the `cases` tactic
+-/
+#guard_msgs in
+example (t : IMArgs) : True := by induction t
 
 end FrontEndTest

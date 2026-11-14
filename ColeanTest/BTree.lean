@@ -38,7 +38,6 @@ example {I : Type u} {α : Type v} (t : BTree I α) : BTree.map id t = t := by
   cases y with
   | node a c =>
     simp [BTree.map, BTree.dtor_corec]
-    exact .node a _ _ fun i => rfl
 
 -- Plain and functional recursive arguments together.
 codata Mixed (I : Type u)

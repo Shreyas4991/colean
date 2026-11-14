@@ -19,7 +19,9 @@ tactic proofs from what exists:
   constructors meet, with the arguments of one at which they meet those of the other
   (`withMeet`), and not otherwise;
 * the case analysis `T.casesOn` (by cases on `F` after `dtor`, cast along `ctor_dtor`; the
-  `cases` eliminator), `T.casesOnAux`, `T.casesOn_ctor` and the simp lemmas `T.casesOn_cᵢ`;
+  `cases` eliminator, and for `codata`, which has no induction, the `induction` one, so that
+  `induction` does not unfold the type to its encoding), `T.casesOnAux`, `T.casesOn_ctor` and the
+  simp lemmas `T.casesOn_cᵢ`;
 * for `data`, the computation rules `T.rec_cᵢ` and `T.fold_cᵢ` (simp lemmas), the hypothesis of
   a nested argument given as `fun t _ => T.rec … t` on its members; in a block the rules of the
   block-level recursor and fold are `Blk.rec_cᵢ`, `Blk.fold_cᵢ`, with the block-level names of
@@ -40,11 +42,21 @@ tactic proofs from what exists:
   `Tₘ.corec c₁ … cₖ`, `Tₘ.dtor_corec`, `Tₘ.corec_eq`, `Tₘ.corec_unique`,
   `Tₘ.bisim R₁ … Rₖ H₁ … Hₖ`; for `data`, `Tₘ.fold a₁ … aₖ`, `Tₘ.fold_ctor`, `Tₘ.fold_eq`,
   `Tₘ.fold_unique` and the rules `Tₘ.fold_cᵢ`. All from the block-level ones, which stay; the
-  contract stays the block's only;
+  contract stays the block's only. For `codata` also the lemmas of `T.F.Rel` of a single type
+  (`Gen/Rel.lean`), per type (`genLayerRels`): one step of `Tₘ.F.Rel R₁ … Rₖ` at two
+  constructors, `Tₘ.F.rel_cᵢ_cⱼ` (`simp`), `Tₘ.F.Rel.mono` from the block's, `Tₘ.F.rel_refl`;
+* equality by the destructor (`genDtorLemmas`): in a block, per type, `Tₘ.dtor_injective` and
+  `Tₘ.dtor_inj` (`simp`), as step 3 gives them for a single type; and for every constructor
+  `T.dtor_eq_cᵢ_iff : t.dtor = F.cᵢ ys ↔ t = T.cᵢ ys` (`simp`), from `T.dtor_inj` and `T.dtor_cᵢ`;
+* for `codata`, coinduction up to equality (`genCoinduct`), `T.coinduct R H`, with the step at
+  `R x y ∨ x = y`: `T.bisim` at that relation, the step at equal values by `T.F.rel_refl`; in a
+  block per type, `Tₘ.coinduct R₁ … Rₖ H₁ … Hₖ`;
 * in a `data` block, the recursors per type `Tₘ.rec`, in the shape of Lean's mutual inductives
   (a motive per type), as `Blk.rec` at the motive made of them, and their rules `Tₘ.rec_cᵢ`,
   which are the block-level rules by unfolding; a hypothesis by `IPolyIso.Mem` is one per type
-  of the argument there.
+  of the argument there. They are not `induction` eliminators, having a motive per type, but
+  carry the tag `colean_mutual_rec`, so that plain `induction` refuses the types as it refuses a
+  mutual inductive (`MutualCmd.lean`).
 
 The names the user wrote get their info trees, and the types and constructors their doc
 comments, once everything is declared (`finishDecls`, `Gen/Command.lean`).
@@ -518,6 +530,115 @@ def genLayers : TermElabM Unit := do
           ← mkLambdaFVars (ctx.params ++ uidx ++ #[y]) value)
       addDef (ctx.tyGenP m "ctor") (← ctx.levelParamsOf [] #[type, value]) type value (ref m)
 
+/-- In a `codata` block, per type, the lemmas of `T.F.Rel` for a single type (`Gen/Rel.lean`):
+the one-step lemmas of `Tₘ.F.Rel R₁ … Rₖ` (`RelStep`), `simp`, the premise at a recursive argument
+at the relation of its type, at a nested one the block's at the relations packed by cases;
+`Tₘ.F.Rel.mono`, the block's `T.F.Rel.mono` at the relations and the hypotheses packed by cases;
+and `Tₘ.F.rel_refl`, `Tₘ.F.rel_map` at the identities, rewritten by `Tₘ.F.map_id`. -/
+def genLayerRels : TermElabM Unit := do
+  unless ctx.co && ctx.isBlock do return
+  let n := ctx.types.size
+  let free (nm : Name) : MetaM Bool := return !(← getEnv).contains nm
+  -- The one-step lemmas.
+  do
+    let fresh := ctx.freshLevels 2
+    let [wX, wY] := fresh.map fun u => ctx.holeLevel (.param u) | unreachable!
+    ctx.withPerType "X" .implicit (ctx.tyFamType · wX) fun Xs => do
+    ctx.withPerType "Y" .implicit (ctx.tyFamType · wY) fun Ys => do
+    ctx.withPerType "R" .implicit (fun j => ctx.tyRelType j Xs[j]! Ys[j]!) fun Rs => do
+    let (StX, StY) := (← ctx.stAt wX Xs, ← ctx.stAt wY Ys)
+    let packR ← ctx.ixCases
+      (fun i => do mkArrow (mkApp StX i) (← mkArrow (mkApp StY i) (mkSort .zero)))
+      fun j uidx => pure (mkAppN Rs[j]! uidx)
+    let premise (a : ArgInfo) (σ : Expr → Expr) (y y' : Expr) : TermElabM Expr := do
+      match a.kind with
+      | .plain idx =>
+        let some (j, uidx) ← ctx.typeAt? (σ idx[0]!)
+          | throwError "internal error: a recursive argument at no type of the block"
+        return mkAppN Rs[j]! (uidx ++ #[y, y'])
+      | .fn k => withReducible <| forallBoundedTelescope (← inferType y) k fun zs body => do
+        let body ← whnfOcc body
+        let some j := Xs.findIdx? (·.getAppFn == body.getAppFn)
+          | throwError "internal error: a function into no type of the block"
+        let idx := body.getAppArgs.extract Xs[j]!.getAppNumArgs body.getAppNumArgs
+        mkForallFVars zs (mkAppN Rs[j]! (idx ++ #[mkAppN y zs, mkAppN y' zs]))
+      | .nest o => mkAppM ``Codata.IOcc.Rel #[ctx.nestAt o wX σ, ctx.nestAt o wY σ, packR, y, y']
+      | .data => throwError "internal error: a premise at a data argument"
+    for m in [0:n] do
+      ctx.genRelSteps {
+        vars := Xs ++ Ys ++ Rs, repX := fun j idx => mkAppN Xs[j]! idx
+        repY := fun j idx => mkAppN Ys[j]! idx, wX, wY, famX := StX, famY := StY
+        rel := fun uidx a b =>
+          ctx.genAt (ctx.layerRelN m) [wX, wY] (Xs ++ Ys ++ Rs ++ uidx ++ #[a, b])
+        premise, idxOf := fun c σ => c.uidx.map σ
+        name := fun c c' => .str (ctx.layerN m) s!"rel_{c.name}_{c'.name}"
+        ctors := ctx.ctors.filter (·.owner == m), fresh, ref := ctx.types[m]!.ref
+        post := ctx.foldTy }
+  -- `Tₘ.F.Rel.mono`
+  if (← getEnv).contains ctx.relMonoN then
+    let fresh := ctx.freshLevels 2
+    let [wX, wY] := fresh.map fun u => ctx.holeLevel (.param u) | unreachable!
+    ctx.withPerType "X" .implicit (ctx.tyFamType · wX) fun Xs => do
+    ctx.withPerType "Y" .implicit (ctx.tyFamType · wY) fun Ys => do
+    ctx.withPerType "R" .implicit (fun j => ctx.tyRelType j Xs[j]! Ys[j]!) fun Rs => do
+    ctx.withPerType "S" .implicit (fun j => ctx.tyRelType j Xs[j]! Ys[j]!) fun Ss => do
+    ctx.withPerType "h" .default (fun j => ctx.withTyIdx j .default fun js => do
+        withLocalDeclD `x (mkAppN Xs[j]! js) fun x => do
+        withLocalDeclD `y (mkAppN Ys[j]! js) fun y => do
+        mkForallFVars (js ++ #[x, y])
+          (← mkArrow (mkAppN Rs[j]! (js ++ #[x, y])) (mkAppN Ss[j]! (js ++ #[x, y])))) fun hs => do
+    let (StX, StY) := (← ctx.stAt wX Xs, ← ctx.stAt wY Ys)
+    let pack (Rs : Array Expr) := ctx.ixCases
+      (fun i => do mkArrow (mkApp StX i) (← mkArrow (mkApp StY i) (mkSort .zero)))
+      fun j uidx => pure (mkAppN Rs[j]! uidx)
+    let (packR, packS) := (← pack Rs, ← pack Ss)
+    let packH ← ctx.ixCases (fun i => do
+        withLocalDeclD `x (mkApp StX i) fun x => withLocalDeclD `y (mkApp StY i) fun y => do
+        mkForallFVars #[x, y]
+          (← mkArrow (mkApp3 packR i x y).headBeta (mkApp3 packS i x y).headBeta))
+      fun j uidx => pure (mkAppN hs[j]! uidx)
+    for m in [0:n] do
+      let nm := .str (ctx.layerRelN m) "mono"
+      unless ← free nm do continue
+      ctx.withTyIdx m .implicit fun uidx => do
+      withLocalDecl `a .implicit (← ctx.layerAt m wX Xs uidx) fun a => do
+      withLocalDecl `b .implicit (← ctx.layerAt m wY Ys uidx) fun b => do
+      let rel ← ctx.genAt (ctx.layerRelN m) [wX, wY] (Xs ++ Ys ++ Rs ++ uidx ++ #[a, b])
+      withLocalDeclD `hab rel fun hab => do
+      let stmt ← ctx.genAt (ctx.layerRelN m) [wX, wY] (Xs ++ Ys ++ Ss ++ uidx ++ #[a, b])
+      let value ← ctx.genAt ctx.relMonoN [wX, wY]
+        #[StX, StY, packR, packS, packH, ctx.ixAt m uidx, a, b, hab]
+      let xs := ctx.params ++ Xs ++ Ys ++ Rs ++ Ss ++ hs ++ uidx ++ #[a, b, hab]
+      let (type, value) ← withBinderInfo ctx.params .implicit do
+        return (← mkForallFVars xs stmt, ← mkLambdaFVars xs value)
+      addThm nm (← ctx.levelParamsOf fresh #[type]) type value ctx.types[m]!.ref
+  -- `Tₘ.F.rel_refl`
+  let fresh := ctx.freshLevels 1
+  let w := ctx.holeLevel (.param fresh[0]!)
+  ctx.withPerType "X" .implicit (ctx.tyFamType · w) fun Xs => do
+  ctx.withPerType "R" .implicit (fun j => ctx.tyRelType j Xs[j]! Xs[j]!) fun Rs => do
+  ctx.withPerType "h" .default (fun j => ctx.withTyIdx j .default fun js => do
+      withLocalDeclD `x (mkAppN Xs[j]! js) fun x => do
+      mkForallFVars (js.push x) (mkAppN Rs[j]! (js ++ #[x, x]))) fun hs => do
+  let ids ← (Array.range n).mapM fun j => ctx.withTyIdx j .default fun js => do
+    if js.isEmpty then mkAppOptM ``id #[Xs[j]!] else
+    withLocalDeclD `x (mkAppN Xs[j]! js) fun x => mkLambdaFVars (js.push x) x
+  for m in [0:n] do
+    let nm := .str (ctx.layerN m) "rel_refl"
+    unless ← free nm do continue
+    ctx.withTyIdx m .implicit fun uidx => do
+    withLocalDeclD `a (← ctx.layerAt m w Xs uidx) fun a => do
+    let relAt (b : Expr) := ctx.genAt (ctx.layerRelN m) [w, w] (Xs ++ Xs ++ Rs ++ uidx ++ #[b, b])
+    let relMap ← ctx.genAt (.str (ctx.layerN m) "rel_map") [w, w, w]
+      (Xs ++ Xs ++ Xs ++ Rs ++ ids ++ ids ++ uidx ++ #[a] ++ hs)
+    let mapId ← ctx.genAt (.str (ctx.layerN m) "map_id") [w] (Xs ++ uidx ++ #[a])
+    let relSelf ← lam `b (← ctx.layerAt m w Xs uidx) fun b => relAt b
+    let value ← mkAppM ``Eq.mp #[← mkCongrArg relSelf mapId, relMap]
+    let xs := ctx.params ++ Xs ++ Rs ++ hs ++ uidx ++ #[a]
+    let (type, value) ← withBinderInfo ctx.params .implicit do
+      return (← mkForallFVars xs (← relAt a), ← mkLambdaFVars xs value)
+    addThm nm (← ctx.levelParamsOf fresh #[type]) type value ctx.types[m]!.ref
+
 /-! ### The constructors -/
 
 /-- The rules of the family's `dtor` and `ctor` for `c`: `T.dtor_cᵢ`, `T.ctor_cᵢ`, or in a block
@@ -687,6 +808,70 @@ def genCtors : TermElabM Unit := do
       if done.isNone then
         discard <| ctx.withMeet c' c fun ys' ys new idx => disj ys ys' (ys' ++ new) idx
 
+/-- Equality by the destructor: in a block, per type, `Tₘ.dtor_injective` (`Tₘ.ctor_dtor` as a left
+inverse) and the `simp` lemma `Tₘ.dtor_inj`, as step 3 gives them for a single type; and for every
+constructor the `simp` lemma `T.dtor_eq_cᵢ_iff : t.dtor = F.cᵢ ys ↔ t = T.cᵢ ys`, `T.dtor_inj` at
+`T.cᵢ ys` after `T.dtor_cᵢ`, so that `simp` turns an equation of layers, from `match h : t.dtor`
+say, into one of values. A lemma whose name is taken is not generated. -/
+def genDtorLemmas : TermElabM Unit := do
+  let free (nm : Name) : MetaM Bool := return !(← getEnv).contains nm
+  -- `Tₘ.dtor_injective`, `Tₘ.dtor_inj`
+  if ctx.isBlock then
+    for m in [0:ctx.types.size] do
+      let (nI, nE) := (ctx.tyGenP m "dtor_injective", ctx.tyGenP m "dtor_inj")
+      unless (← free nI) && (← free nE) do continue
+      ctx.withTyIdx m .implicit fun uidx => do
+      let Tm ← ctx.tyAt m uidx
+      let ctorF ← ctx.genAt (ctx.tyGenP m "ctor") [] uidx
+      let dtorF ← ctx.genAt (ctx.tyGenP m "dtor") [] uidx
+      let inv ← lam `t Tm fun t => ctx.genAt (ctx.tyGenP m "ctor_dtor") [] (uidx.push t)
+      let value ← mkAppOptM ``Function.LeftInverse.injective #[none, none, ctorF, dtorF, inv]
+      let xs := ctx.params ++ uidx
+      let (type, value) ← withBinderInfo ctx.params .implicit do
+        return (← mkForallFVars xs (← mkAppM ``Function.Injective #[dtorF]),
+          ← mkLambdaFVars xs value)
+      addThm nI (← ctx.levelParamsOf [] #[type]) type value ctx.types[m]!.ref
+      withLocalDecl `x .implicit Tm fun x => do
+      withLocalDecl `y .implicit Tm fun y => do
+      let stmt := mkIff (← mkEq (mkApp dtorF x) (mkApp dtorF y)) (← mkEq x y)
+      let value ← mkAppOptM ``Function.Injective.eq_iff
+        #[none, none, none, ← ctx.genAt nI [] uidx, x, y]
+      let xs := ctx.params ++ uidx ++ #[x, y]
+      let (type, value) ← withBinderInfo ctx.params .implicit do
+        return (← mkForallFVars xs stmt, ← mkLambdaFVars xs value)
+      addThm nE (← ctx.levelParamsOf [] #[type]) type value ctx.types[m]!.ref
+      addSimp nE
+  -- `T.dtor_eq_cᵢ_iff`
+  for c in ctx.ctors do
+    let m := c.owner
+    let nm := ctx.tName' c "dtor_eq_" "_iff"
+    let injN := if ctx.isBlock then ctx.tyGenP m "dtor_inj" else ctx.dtor_inj
+    unless (← free nm) && !(← free injN) do continue
+    ctx.withTArgs c fun ys σ => do
+    let uidx := c.uidx.map σ
+    let capp ← ctx.tCtorApp c ys
+    let dtorc ← ctx.genAt (ctx.tName' c "dtor_" "") [] ys
+    let some (_, _, fapp) := (← inferType dtorc).eq?
+      | throwError "internal error: `dtor_{c.name}` is not an equation"
+    let used := c.args.map (·.name)
+    let tn := ([`t, `x, `s, `v].find? (!used.contains ·)).getD `t₀
+    withLocalDecl tn .implicit (← ctx.tyAt m uidx) fun t => do
+    let (dt, inj) ← if ctx.isBlock then
+        pure (← ctx.genAt (ctx.tyGenP m "dtor") [] (uidx.push t),
+          ← ctx.genAt injN [] (uidx ++ #[t, capp]))
+      else
+        let idx := c.idx.map σ
+        pure (← ctx.appAt ctx.dtor idx #[t], ← ctx.genAt injN [] (idx ++ #[t, capp]))
+    let stmt := mkIff (← mkEq dt fapp) (← mkEq t capp)
+    -- `(t.dtor = F.c ys) = (t.dtor = (T.c ys).dtor)`, then `dtor_inj`.
+    let e ← mkCongrArg (← lam `z (← inferType fapp) fun z => mkEq dt z) (← mkEqSymm dtorc)
+    let value ← mkAppM ``Iff.trans #[← mkAppM ``Iff.of_eq #[e], inj]
+    let xs := ctx.params ++ ys.push t
+    let (type, value) ← withBinderInfo (ctx.params ++ ys) .implicit do
+      return (← mkForallFVars xs stmt, ← mkLambdaFVars xs value)
+    addThm nm (← ctx.levelParamsOf [] #[type]) type value ctx.types[m]!.ref
+    addSimp nm
+
 /-! ### Case analysis -/
 
 /-- The value of `Tₘ.casesOnAux` in a block, on its statement `∀ params motive idx y minors, …`:
@@ -764,6 +949,8 @@ def genCasesOf (m : Nat) : TermElabM Unit := do
     addDef casesN (← ctx.elimLevelParamsOf fresh #[type, value]) type value ref
     addAttrs casesN #[← `(Parser.Term.attrInstance| elab_as_elim),
       ← `(Parser.Term.attrInstance| cases_eliminator)]
+    -- `codata` has no induction: `induction` is case analysis, not the encoding's.
+    if ctx.co then addAttrs casesN #[← `(Parser.Term.attrInstance| induction_eliminator)]
   -- `casesOn_ctor`: the cast disappears once `dtor (ctor y) = y` is substituted.
   do
     let aux ← lam `y FT fun y => auxAt y
@@ -1007,6 +1194,84 @@ def genTypeCorecs : TermElabM Unit := do
     let (type, value) ← withBinderInfo ctx.params .implicit do
       return (← mkForallFVars xs (← mkEq x y), ← mkLambdaFVars xs value)
     addThm (ctx.tyGenP m "bisim") (← ctx.levelParamsOf [] #[type]) type value ctx.types[m]!.ref
+
+/-- Coinduction up to equality, for `codata`: `T.coinduct R H h`, where the step `H` relates the
+layers by `R` or equality, `fun x y => R x y ∨ x = y`: `T.bisim` at that relation, the step at an
+equal pair by `T.F.rel_refl`. In a block, per type, `Tₘ.coinduct R₁ … Rₖ H₁ … Hₖ` from `Tₘ.bisim`
+and `Tⱼ.F.rel_refl`. Not generated when a constructor is named `coinduct`. -/
+def genCoinduct : TermElabM Unit := do
+  unless ctx.co do return
+  let L ← ctx.tLvl
+  let Ts ← if ctx.isBlock then ctx.tyFams else pure #[← ctx.tFam]
+  let n := Ts.size
+  -- `fun idx x y => R idx x y ∨ x = y`, and `fun idx x => Or.inr rfl` its reflexivity.
+  let orEq (j : Nat) (R : Expr) : TermElabM Expr := ctx.withTyIdx j .default fun js => do
+    let Tj := mkAppN Ts[j]! js
+    withLocalDeclD `x Tj fun x => withLocalDeclD `y Tj fun y => do
+    mkLambdaFVars (js ++ #[x, y]) (mkOr (mkAppN R (js ++ #[x, y])) (← mkEq x y))
+  let orRefl (j : Nat) (R : Expr) : TermElabM Expr := ctx.withTyIdx j .default fun js => do
+    withLocalDeclD `x (mkAppN Ts[j]! js) fun x => do
+    mkLambdaFVars (js.push x)
+      (mkApp3 (Lean.mkConst ``Or.inr) (mkAppN R (js ++ #[x, x])) (← mkEq x x) (← mkEqRefl x))
+  -- The layers and the lifting of the `j`-th type.
+  let dtorAt (j : Nat) (js : Array Expr) (x : Expr) : MetaM Expr :=
+    if ctx.isBlock then ctx.genAt (ctx.tyGenP j "dtor") [] (js.push x)
+    else ctx.appAt ctx.dtor js #[x]
+  let relAt (j : Nat) (Rs : Array Expr) (js : Array Expr) (a b : Expr) : MetaM Expr :=
+    if ctx.isBlock then ctx.genAt (ctx.layerRelN j) [L, L] (Ts ++ Ts ++ Rs ++ js ++ #[a, b])
+    else ctx.relAt L L Ts[0]! Ts[0]! Rs[0]! js a b
+  let reflAt (j : Nat) (Rs hs : Array Expr) (js : Array Expr) (a : Expr) : MetaM Expr :=
+    if ctx.isBlock then ctx.genAt (.str (ctx.layerN j) "rel_refl") [L] (Ts ++ Rs ++ hs ++ js.push a)
+    else ctx.genAt ctx.relReflN [L] (#[Ts[0]!, Rs[0]!, hs[0]!] ++ js.push a)
+  let names := (Array.range n).map fun m =>
+    if ctx.isBlock then ctx.tyGenP m "coinduct" else ctx.gen "coinduct"
+  let reflN := (Array.range n).map fun j =>
+    if ctx.isBlock then .str (ctx.layerN j) "rel_refl" else ctx.relReflN
+  unless (← reflN.allM fun nm => return (← getEnv).contains nm) do return
+  let withRs (k : Array Expr → TermElabM Unit) : TermElabM Unit :=
+    if ctx.isBlock then ctx.withPerType "R" .default (fun j => ctx.tyRelType j Ts[j]! Ts[j]!) k
+    else do withLocalDeclD `R (← ctx.famRel Ts[0]! Ts[0]!) fun R => k #[R]
+  withRs fun Rs => do
+  let R's ← (Array.range n).mapM fun j => orEq j Rs[j]!
+  let hrefl ← (Array.range n).mapM fun j => orRefl j Rs[j]!
+  let HTy (j : Nat) : TermElabM Expr := ctx.withTyIdx j .default fun js => do
+    let Tj := mkAppN Ts[j]! js
+    withLocalDeclD `x Tj fun x => withLocalDeclD `y Tj fun y => do
+    let rel ← relAt j R's js (← dtorAt j js x) (← dtorAt j js y)
+    mkForallFVars (js ++ #[x, y]) (← mkArrow (mkAppN Rs[j]! (js ++ #[x, y])) rel)
+  let withHs (k : Array Expr → TermElabM Unit) : TermElabM Unit :=
+    if ctx.isBlock then ctx.withPerType "H" .default HTy k
+    else do withLocalDeclD `H (← HTy 0) fun H => k #[H]
+  withHs fun Hs => do
+  -- The steps of `bisim` at the relations up to equality.
+  let H's ← (Array.range n).mapM fun j => ctx.withTyIdx j .default fun js => do
+    let Tj := mkAppN Ts[j]! js
+    withLocalDeclD `x Tj fun x => withLocalDeclD `y Tj fun y => do
+    withLocalDeclD `h (mkAppN R's[j]! (js ++ #[x, y])).headBeta fun h => do
+    let motive ← lam `y Tj fun y => do relAt j R's js (← dtorAt j js x) (← dtorAt j js y)
+    let atEq ← withLocalDeclD `e (← mkEq x y) fun e => do
+      mkLambdaFVars #[e] (← mkAppOptM ``Eq.ndrec
+        #[none, x, motive, ← reflAt j R's hrefl js (← dtorAt j js x), y, e])
+    mkLambdaFVars (js ++ #[x, y, h])
+      (← mkAppM ``Or.elim #[h, mkAppN Hs[j]! (js ++ #[x, y]), atEq])
+  for m in [0:n] do
+    if (← getEnv).contains names[m]! then continue
+    let ref := if ctx.isBlock then ctx.types[m]!.ref else ctx.ref
+    let idxBinders (k : Array Expr → TermElabM Unit) : TermElabM Unit :=
+      if ctx.isBlock then ctx.withTyIdx m .implicit k else k ctx.idx
+    idxBinders fun js => do
+    let Tm := mkAppN Ts[m]! js
+    withLocalDecl `x .implicit Tm fun x => do
+    withLocalDecl `y .implicit Tm fun y => do
+    withLocalDeclD `h (mkAppN Rs[m]! (js ++ #[x, y])) fun h => do
+    let hor ← mkAppOptM ``Or.inl #[none, ← mkEq x y, h]
+    let value ← if ctx.isBlock then
+        ctx.genAt (ctx.tyGenP m "bisim") [] (R's ++ H's ++ js ++ #[x, y, hor])
+      else ctx.genAt ctx.bisim [] (#[R's[0]!, H's[0]!] ++ js ++ #[x, y, hor])
+    let xs := ctx.params ++ Rs ++ Hs ++ js ++ #[x, y, h]
+    let (type, value) ← withBinderInfo (ctx.params ++ js) .implicit do
+      return (← mkForallFVars xs (← mkEq x y), ← mkLambdaFVars xs value)
+    addThm names[m]! (← ctx.levelParamsOf [] #[type]) type value ref
 
 /-- In a `data` block, folding per type, in the shape of Lean's mutual recursors (one motive per
 type), with one family and one algebra per type, as step 3 states it for a single type:
@@ -1334,6 +1599,7 @@ def genTypeRecs : TermElabM Unit := do
     let n := ctx.tyGen m "rec"
     addDef n (← ctx.elimLevelParamsOf fresh #[type, value]) type value t.ref
     addAttrs n #[← `(Parser.Term.attrInstance| elab_as_elim)]
+    mutualRecAttr.setTag n
   -- `Tₘ.rec_cᵢ`
   let recAt (idx : Array Expr) (x : Expr) : TermElabM Expr := do
     match ← ctx.typeAt? idx[0]! with

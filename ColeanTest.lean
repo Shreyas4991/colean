@@ -57,4 +57,5 @@ import ColeanTest.MixedRejected
 import ColeanTest.FrontEnd
 import ColeanTest.Modifiers
 import ColeanTest.CCPO
+import ColeanTest.RelSimp
 import ColeanTest.Readme

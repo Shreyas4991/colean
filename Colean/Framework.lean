@@ -12,11 +12,11 @@ or at a model.
   value over related pairs; a predicate when the value is the projection of one over elements
   satisfying it).
 * `Codata.Contract T F`: `dtor`, `corec`, `dtor_corec`, `bisim` for `Rel map`; the derived
-  `ctor` (Lambek), `dtor_ctor`, `ctor_dtor`, `ctor_injective`, `corec_unique`,
+  `ctor` (Lambek), `dtor_ctor`, `ctor_dtor`, `ctor_injective`, `dtor_injective`, `corec_unique`,
   `corec_dtor_self`, `corec_corec` (two contracts for one functor are isomorphic).
 * `Data.Contract T F`: `ctor`, `fold`, `fold_ctor`, `induction` for `All map`; the derived
-  `dtor` (Lambek), `dtor_ctor`, `ctor_dtor`, `ctor_injective`, `fold_unique`, `fold_ctor_self`,
-  `fold_fold`.
+  `dtor` (Lambek), `dtor_ctor`, `ctor_dtor`, `ctor_injective`, `dtor_injective`, `fold_unique`,
+  `fold_ctor_self`, `fold_fold`.
 * The `_of` theorems (`bisim_canonical_of`, `corec_eq_of`, `corec_unique_of`, `fold_eq_of`,
   `fold_unique_of`) are the same derivations with the contract's fields as hypotheses, so that
   the command can instantiate them for its universe-polymorphic `corec`/`fold` (the contract
@@ -91,6 +91,10 @@ theorem dtor_ctor {i : I} (y : F T i) : K.dtor (K.ctor y) = y := by
 
 theorem ctor_injective {i : I} : Function.Injective (K.ctor (i := i)) := fun a b h => by
   rw [← K.dtor_ctor a, ← K.dtor_ctor b, h]
+
+/-- The destructor is injective too: two values with the same layer are equal. -/
+theorem dtor_injective {i : I} : Function.Injective (K.dtor (i := i)) := fun a b h => by
+  rw [← K.ctor_dtor a, ← K.ctor_dtor b, h]
 
 end Contract
 
@@ -285,6 +289,10 @@ theorem dtor_ctor {i : I} (y : F T i) : K.dtor (K.ctor y) = y := by
 
 theorem ctor_injective {i : I} : Function.Injective (K.ctor (i := i)) := fun a b h => by
   rw [← K.dtor_ctor a, ← K.dtor_ctor b, h]
+
+/-- The destructor is injective too: two values with the same layer are equal. -/
+theorem dtor_injective {i : I} : Function.Injective (K.dtor (i := i)) := fun a b h => by
+  rw [← K.ctor_dtor a, ← K.ctor_dtor b, h]
 
 end Contract
 

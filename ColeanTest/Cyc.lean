@@ -53,7 +53,6 @@ example (n : Nat) (i : Fin (n + 1)) :
     y = Cyc.corec (S := fun _ _ => Unit) (fun _ _ _ => .next ()) ()) ?_ ⟨rfl, rfl⟩
   rintro n i x y ⟨rfl, rfl⟩
   simp [Cyc.dtor_corec]
-  exact .next _ _ ⟨rfl, rfl⟩
 
 end
 

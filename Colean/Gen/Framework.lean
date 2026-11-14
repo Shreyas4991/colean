@@ -6,7 +6,8 @@ import Colean.Gen.Model
 *Spec.* Input: `T.contract` and the names in the context. Output: the declarations derived from
 the contract alone, by instantiating `Framework.lean`: `T.ctor`, `T.dtor_ctor`, `T.ctor_dtor`, `T.ctor_injective`,
 `T.corec_eq`, `T.corec_unique` for codata; `T.dtor`, `T.dtor_ctor`, `T.ctor_dtor`,
-`T.ctor_injective`, `T.fold_eq`, `T.fold_unique` for data. Nothing here looks at the
+`T.ctor_injective`, `T.fold_eq`, `T.fold_unique` for data; for both, `T.dtor_injective` and the
+`simp` lemma `T.dtor_inj : x.dtor = y.dtor ↔ x = y`. Nothing here looks at the
 constructors, and there are no proofs. `corec_eq`, `corec_unique`, `fold_eq` and `fold_unique`
 are for a state or family in any universe, so they instantiate the `_of` theorems with the
 contract's pieces rather than the contract itself (which fixes one universe). In a block these
@@ -51,8 +52,13 @@ def addOver (n : Name) (thm : Bool) (arg? : Option (Name × Expr))
 def appAt (n : Name) (idx args : Array Expr) : MetaM Expr := do
   ctx.genAt n [] (idx ++ args)
 
+/-- `T.dtor_injective`, `T.dtor_inj`. -/
+def dtor_injective : Name := ctx.gen "dtor_injective"
+def dtor_inj : Name := ctx.gen "dtor_inj"
+
 /-- Lambek's lemma from the contract (`K` its namespace, `Codata.Contract` or `Data.Contract`):
-`ctor` (codata) or `dtor` (data), `dtor_ctor`, `ctor_dtor`, `ctor_injective`. -/
+`ctor` (codata) or `dtor` (data), `dtor_ctor`, `ctor_dtor`, `ctor_injective`, and
+`dtor_injective` with `dtor_inj` (`simp`: two values with the same layer are equal). -/
 def genLambek (K : Name) : TermElabM Unit := do
   let L ← ctx.tLvl
   let T ← ctx.tFam
@@ -76,6 +82,22 @@ def genLambek (K : Name) : TermElabM Unit := do
   ctx.addOver ctx.ctor_injective true none
     (fun _ => do mkAppM ``Function.Injective #[← ctx.appAt ctx.ctor ctx.idx #[]])
     fun _ => ctx.contractAt (K ++ `ctor_injective) #[]
+  -- `dtor_injective`, `dtor_inj`, unless a constructor takes one of the names.
+  if ctx.ctors.any fun c => ctx.tCtor c == ctx.dtor_injective || ctx.tCtor c == ctx.dtor_inj then
+    return
+  ctx.addOver ctx.dtor_injective true none
+    (fun _ => do mkAppM ``Function.Injective #[← ctx.appAt ctx.dtor ctx.idx #[]])
+    fun _ => ctx.contractAt (K ++ `dtor_injective) #[]
+  withLocalDecl `x .implicit TI fun x => do
+  withLocalDecl `y .implicit TI fun y => do
+  let stmt := mkIff (← mkEq (← dtorAt x) (← dtorAt y)) (← mkEq x y)
+  let value ← mkAppOptM ``Function.Injective.eq_iff
+    #[none, none, none, ← ctx.appAt ctx.dtor_injective ctx.idx #[], x, y]
+  let xs := ctx.params ++ ctx.idx ++ #[x, y]
+  let (type, value) ← withBinderInfo (ctx.params ++ ctx.idx) .implicit do
+    return (← mkForallFVars xs stmt, ← mkLambdaFVars xs value)
+  addThm ctx.dtor_inj (← ctx.levelParamsOf [] #[type]) type value ctx.ref
+  addSimp ctx.dtor_inj
 
 /-- Function types on the packed index: `∀ j, X j → Y j`. -/
 def fnP (X Y : Expr) : TermElabM Expr := do

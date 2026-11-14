@@ -56,8 +56,8 @@ example {α : Type u} {β : Type v} {i : Bool} (s : Alt α β i) : Alt.map id id
   refine Alt.bisim (fun _ x y => x = Alt.map id id y) ?_ rfl
   rintro i x y rfl
   cases y with
-  | left a t => simp; exact .left _ _ _ rfl
-  | right b t => simp; exact .right _ _ _ rfl
+  | left a t => simp
+  | right b t => simp
 
 /-- The head of a stream at index `true`, by case analysis with a motive over the index. -/
 def Alt.headLeft {α : Type u} {β : Type v} (s : Alt α β true) : α :=
