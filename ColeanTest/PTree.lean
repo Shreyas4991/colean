@@ -25,10 +25,9 @@ example {α : Type u} {β : Type v} (t : PTree α β) : t.mirror.mirror = t := b
   intro x y hxy
   subst hxy
   cases y with
-  | leaf b => simp [PTree.mirror, PTree.dtor_corec]; exact .leaf b
+  | leaf b => simp [PTree.mirror, PTree.dtor_corec]
   | node a l r =>
     simp [PTree.mirror, PTree.dtor_corec]
-    exact .node a _ _ _ _ rfl rfl
 
 end
 

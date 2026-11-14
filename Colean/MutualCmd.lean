@@ -30,13 +30,13 @@ constructor of `Ix`; where their universe is written, it must be the same, the b
 (`checkNames`, `Gen/Front.lean`): all are checked before the types are declared. Then, per type:
 `Tree α := Tree_Forest α .Tree`, and `Even n := Even_Odd (.Even n)` with an index, its
 constructors `Tree.node` with their lemmas under `Tree`, `Tree.casesOn` with only the
-constructors of `Tree`, registered as the `cases` eliminator, and the rest of the interface of a
-single type, in the shape of Lean's mutual recursors (a motive per type): a family, a step or an
-algebra, a morphism and a relation per type where a single type has one, and nothing about
-`Ix`. The block-level declarations stay (`Tree_Forest.ctor`, `Tree_Forest.corec`,
-`Tree_Forest.fold`, `Tree_Forest.bisim`, …), with one family over `Ix`
-(`S : Tree_Forest.Ix α → Type _`, `c : ∀ i, S i → Tree_Forest.F α S i`); so does the contract,
-`Tree_Forest.contract`, the block's only, from which everything follows.
+constructors of `Tree`, registered as the `cases` eliminator (for `codata` the `induction` one
+too), and the rest of the interface of a single type, in the shape of Lean's mutual recursors (a
+motive per type): a family, a step or an algebra, a morphism and a relation per type where a
+single type has one, and nothing about `Ix`. The block-level declarations stay
+(`Tree_Forest.ctor`, `Tree_Forest.corec`, `Tree_Forest.fold`, `Tree_Forest.bisim`, …), with one
+family over `Ix` (`S : Tree_Forest.Ix α → Type _`, `c : ∀ i, S i → Tree_Forest.F α S i`); so
+does the contract, `Tree_Forest.contract`, the block's only, from which everything follows.
 
 ```
 Tree.dtor : Tree α → Tree.F α (Tree α) (Forest α)
@@ -89,11 +89,13 @@ block-level rules are `Rose_Forest.rec_cons`, …), or per type, with the recurs
 `motive_2` in block order), the minor premises of every constructor of the block, and the
 type's own indices. They are `Rose_Forest.rec` at the motive made of these by cases on `Ix`. As
 with Lean's mutual inductives, the other motives are given by name,
-`induction t using Rose.rec (motive_2 := …)`, and plain `induction t` does not apply. Their
-rules are `Rose.rec_node`, `Forest.rec_cons`, …, stated with the recursors per type. A nested
-argument whose positions are at one type only after cases on them (`p : Own × Nat`) has its
-hypothesis by `PolyIso.Mem` at that type's motive; one with positions at several types of the
-block (`p : Rose α × Forest α`), one hypothesis by `IPolyIso.Mem` per type.
+`induction t using Rose.rec (motive_2 := …)`, and plain `induction t` is refused with this
+hint, as Lean refuses a mutual inductive, instead of unfolding the type to its encoding
+(`evalInductionBlockType`). Their rules are `Rose.rec_node`, `Forest.rec_cons`, …, stated with
+the recursors per type. A nested argument whose positions are at one type only after cases on
+them (`p : Own × Nat`) has its hypothesis by `PolyIso.Mem` at that type's motive; one with
+positions at several types of the block (`p : Rose α × Forest α`), one hypothesis by
+`IPolyIso.Mem` per type.
 
 The types get `PolyIso` and `PolyMap` instances at their index of the block, when the parameters
 allow it (step 5, `Gen/Derive.lean`): the presentation is per block, `Tree_Forest.Poly.*`, over
@@ -195,7 +197,7 @@ these blocks stop with the error of step 5 for the inner run. A `mixed_mutual` b
 is a `mutual` block, with a warning.
 -/
 
-open Lean Elab Command
+open Lean Meta Elab Command Tactic
 
 namespace Codata
 
@@ -217,6 +219,34 @@ namespace Codata
 /-- The commands of a `mixed_mutual` block, in order. -/
 private partial def commandsOf (stx : Syntax) : Array Syntax :=
   if stx.isOfKind nullKind then stx.getArgs.flatMap commandsOf else #[stx]
+
+/-- `induction t` without `using`, for `t` in a type `T` of a `data` block: an error, as for a
+mutual inductive, with the recursor per type `T.rec` and its other motives given by name as the
+hint. Without it, `induction` would unfold `T` to its encoding. Anything else goes on to Lean's
+`induction`. -/
+@[tactic Lean.Parser.Tactic.induction, no_fallback]
+def evalInductionBlockType : Tactic := fun stx => do
+  unless stx[2].isNone do throwUnsupportedSyntax
+  let some target := stx[1].getSepArgs[0]? | throwUnsupportedSyntax
+  unless stx[1].getSepArgs.size == 1 do throwUnsupportedSyntax
+  let some (T, others) ← (withMainContext do
+      let t ← elabTerm target[1] none
+      if (← getCustomEliminator? #[t] true).isSome then return none
+      let .const T _ := (← instantiateMVars (← inferType t)).headBeta.getAppFn | return none
+      let some ci := (← getEnv).find? (T ++ `rec) | return none
+      unless Gen.mutualRecAttr.hasTag (← getEnv) ci.name do return none
+      forallTelescope ci.type fun xs body => do
+        let own := body.getAppFn
+        let others ← xs.filterMapM fun x => do
+          let n ← x.fvarId!.getUserName
+          return if x != own && "motive_".isPrefixOf n.toString then some n else none
+        return some (T, others)) <|> throwUnsupportedSyntax
+    | throwUnsupportedSyntax
+  let args := ", ".intercalate (others.map (s!"{·} := …")).toList
+  throwError m!"The `induction` tactic does not support the type `{.ofConstName T}` because it \
+    is a type of a mutual `data` block" ++ .hint' m!"Use its recursor, with the other motives \
+    given by name: `induction {target} using {.ofConstName (T ++ `rec)} ({args})`, or the \
+    `cases` tactic"
 
 @[command_elab mixedMutualCmd] def elabMixedMutual : CommandElab := fun stx => do
   let cmds := commandsOf stx[1]

@@ -134,8 +134,8 @@ example {α : Type u} (a : α) (n : Nat) :
     match n with | 0 => .nil | _ + 1 => .cons a ()) ()) ?_ ⟨rfl, rfl⟩
   rintro n x y ⟨rfl, rfl⟩
   cases n with
-  | zero => simp [Vec.dtor_corec]; constructor
-  | succ n => simp [Vec.dtor_corec]; exact .cons _ _ _ ⟨rfl, rfl⟩
+  | zero => simp [Vec.dtor_corec]
+  | succ n => simp [Vec.dtor_corec]
 
 end
 

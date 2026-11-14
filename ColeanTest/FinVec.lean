@@ -139,8 +139,8 @@ example {α : Type u} (a : α) (n : Nat) : CoVec.const a n = (FinVec.replicate a
     ⟨rfl, rfl⟩
   rintro n _ _ ⟨rfl, rfl⟩
   cases n with
-  | zero => simp [FinVec.replicate]; exact .nil
-  | succ n => simp [FinVec.replicate]; exact .cons a _ _ ⟨rfl, rfl⟩
+  | zero => simp [FinVec.replicate]
+  | succ n => simp [FinVec.replicate]
 
 end
 

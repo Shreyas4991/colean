@@ -10,8 +10,8 @@ file of theory and one generator file.
 | 1. Functor | the declaration | `T.F`, `T.F.map`, `map_id`, `map_comp` | tactic, per declaration |
 | 2. Model | `T.F` | `T.contract : Contract T F` (a signature, an isomorphism `F X ≃ σ.Obj X`, the fixpoint on `Raw`) | the isomorphism's laws by tactic; the rest instantiated |
 | 2b. Model extras | the model | polymorphic `fold`/`corec`, `T.recPos`, `T.rec` | instantiated |
-| 3. Framework | `T.contract` only | `ctor`, `dtor_ctor`, `ctor_dtor`, `ctor_injective`, `corec_eq`, `corec_unique` and the data duals | none: instantiation of generic theorems |
-| 4. Surface | the constructor list and steps 2–3 | `T.cᵢ` with their lemmas, `casesOn`, `rec_cᵢ`, `fold_cᵢ`, the characterisation `T.F.Rel`; in a block the types, and per type the interface of a single type with a family per type of the block: the layer `Tₘ.F` with its map, lifting and laws, `dtor`, `ctor` and Lambek's lemma, and `corec`, `dtor_corec`, `corec_eq`, `corec_unique`, `bisim` (`codata`) or `fold`, `fold_ctor`, `fold_eq`, `fold_unique`, `fold_cᵢ`, `rec` (`data`) | term assembly; by cases on the block's index, and two lemmas, between the block's family and the types packed by cases |
+| 3. Framework | `T.contract` only | `ctor`, `dtor_ctor`, `ctor_dtor`, `ctor_injective`, `dtor_injective`, `dtor_inj` (`simp`), `corec_eq`, `corec_unique` and the data duals | none: instantiation of generic theorems |
+| 4. Surface | the constructor list and steps 2–3 | `T.cᵢ` with their lemmas, `T.dtor_eq_cᵢ_iff`, `casesOn`, `rec_cᵢ`, `fold_cᵢ`, the characterisation `T.F.Rel` with one step of it at two constructors `T.F.rel_cᵢ_cⱼ` (`simp`), `T.F.Rel.mono`, `T.F.rel_refl`, and coinduction up to equality `T.coinduct`; in a block the types, and per type the interface of a single type with a family per type of the block: the layer `Tₘ.F` with its map, lifting and laws, `dtor`, `ctor`, Lambek's lemma and `dtor_inj`, and `corec`, `dtor_corec`, `corec_eq`, `corec_unique`, `bisim`, `coinduct`, the lemmas of the lifting (`codata`) or `fold`, `fold_ctor`, `fold_eq`, `fold_unique`, `fold_cᵢ`, `rec` (`data`) | term assembly; by cases on the block's index, and two lemmas, between the block's family and the types packed by cases; the one-step lemmas and `Rel.mono` by cases on the lifting (in general position) and its constructor |
 | 5. Instances | a declared type, family or block | `PolyIso`/`PolyMap` instances for it (`T.Poly.*`), and the `simp` lemmas `T.Poly.map_cᵢ`, `T.Poly.mem_cᵢ` | the layer's laws by tactic; the fixpoint instantiated; the lemmas by a theorem of `Model/Poly.lean` and definitional unfolding (map), cases on the positions of a layer (membership) |
 | 6. Order (`with_ccpo`, off by default) | a declared `codata` type, single, with at most one index | `T.instCCPO : Lean.Order.CCPO`, `T.approx_iff`, `T.approx_coind`, `T.bot_eq`, the monotonicity lemmas `T.monotone_cᵢ` | none for the order: `Model/CCPO.lean` instantiated; the bottom's positions empty by `cases`; the lemmas by the constructor of `T.F.Rel` |
 
@@ -25,27 +25,27 @@ Theory, in dependency order:
 - `Model/Cotype.lean`: signatures, the container functor `Obj`, the encoding, the greatest fixpoint `IsWf`, `Cotype`, its contract pieces and the transport theorems to a functor `F ≃ Obj`.
 - `Model/Intype.lean`: the least fixpoint `IsFin`, `Intype`, the dependent recursor by well-founded recursion, fold, and the transports.
 - `Model/Poly.lean`: a least or greatest fixpoint of a layer polynomial in a parameter is polynomial in that parameter: trees of shapes, `Path`, `PolyFix`, `coFix`, `inFix`; for a family, at every index (`ILay`, `IPath`, `IPolyFix`, `icoFix`, `iinFix`), on the total space of the plain case. The map through a right inverse of the destructor (`map_eq_of_d`) and membership in one step (`exists_val_iff`), for the `simp` lemmas of step 5.
-- `Model/Occ.lean`: occurrence structures `Occ`/`IOcc`, internal to the command: their combinators, laws and computation lemmas (`simp`, for `IOcc` as for `Occ`), the members of a value (`Occ.Mem`, `simp` through the combinators), and the map of an indexed structure at one index as the plain one's (`IOcc.map_flat_sum`, …); the leaves are `Occ.ofIso F`, from the `PolyIso` instances, and the instances of the built-in forms are the combinators by definition (`Occ.ofIso_prod`, …, `simp` lemmas but for the identity's).
+- `Model/Occ.lean`: occurrence structures `Occ`/`IOcc`, internal to the command: their combinators, laws and computation lemmas (`simp`, for `IOcc` as for `Occ`), the relation of two values through the combinators down to the leaves (`rel_prod`, …, `rel_list` as `List.Forall₂`, `rel_option` as `Option.Rel`), a map on either side moved into it and a value related to itself (`rel_map_left`, `rel_self`, `simp`), the members of a value (`Occ.Mem`, `simp` through the combinators), and the map of an indexed structure at one index as the plain one's (`IOcc.map_flat_sum`, …); the leaves are `Occ.ofIso F`, from the `PolyIso` instances, and the instances of the built-in forms are the combinators by definition (`Occ.ofIso_prod`, …, `simp` lemmas but for the identity's).
 - `Model/Occ2.lean`: occurrence structures in two variables `Occ₂`, `G X Y ≃ Lay PX PY X Y` with the layer of `Model/Poly.lean`, for a field with a parameter and the recursion in one argument: combinators, laws, the computation of the map, `AgreeY`, the agreement of its map in `Y` with that of the structure in `Y` alone, and membership in each variable (`MemX`, `MemY`, `simp` through the combinators down to the parts in one variable, whose members are `Occ.Mem`).
 - `Model/CCPO.lean`: the order of approximation on a coinductive type with a bottom layer, from a contract and a presentation of its functor as a container (`Contract.Container`): `Approx`, its unfolding and coinduction, the supremum of a chain by `corec` (`csup`), Lean's `Lean.Order.CCPO` (`Contract.ccpo`), the monotonicity of the constructor; the order on a nested argument through its occurrence structure (`Occ.order`) and the monotonicity of the maps of the library's leaves, for `partial_fixpoint` (step 6).
 - `Model/IOcc2.lean`: the same over a family, `IOcc₂`, the recursive variable a family over an index, each position in it at its index (the layer of `ILay`), for families and blocks: combinators, among them a plain structure at one index (`ofOcc₂`), laws, the map, `AgreeY` with the indexed structure in `Y` alone read along a map of the indices, and membership, a member in `Y` with its index.
 
 Generators, on `Expr`, in dependency order. `Syntax.lean` holds the command syntax: a declaration is Lean's `inductive` with its keyword swapped (`declModifiers`, `declId`, `optDeclSig`, `where`, Lean's `ctor`, `deriving`), and a `mixed_mutual` block holds commands up to `end`, as `mutual` does.
 
-- `Gen/Decl.lean`: adding declarations from closed `Expr`s, each checked by the kernel before the next: inductive types with the auxiliary constructions of `inductive` (fixed indices promoted to parameters, as `inductive` does), noncomputable definitions, theorems by term or by a tactic on a goal metavariable, simp lemmas and other attributes; definitions by cases (`mkCasesOnApp`).
+- `Gen/Decl.lean`: adding declarations from closed `Expr`s, each checked by the kernel before the next: inductive types with the auxiliary constructions of `inductive` (fixed indices promoted to parameters, as `inductive` does), noncomputable definitions, theorems by term or by a tactic on a goal metavariable, simp lemmas and other attributes, and the tag `colean_mutual_rec` of the recursors per type of a `data` block; definitions by cases (`mkCasesOnApp`).
 - `Gen/Occ.lean`: the occurrence structure of an elaborated argument type, by recursion on its head after `whnfR` (and `id`); instance search at leaves.
 - `Gen/Ctx.lean`: the context `Ctx`: parameters (section variables first), indices and constructor arguments as free variables of one `TermElabM` run, the types being defined as local variables at a placeholder universe, argument kinds, names; for a block, its index `Blk.Ix`.
 - `Gen/Front.lean`: syntax → `Ctx`, elaborating the declarations as `inductive` does, a single one or the types of a block, or a run of a mixed block with the other runs' types replaced (`Mix`); before that, the modifiers (`DeclStx.elabMods`): the full name of each type, private or not, its universe names, and the modifiers of the type and the constructors.
 - `Gen/Functor.lean`: step 1.
 - `Gen/Signature.lean`, `Gen/Iso.lean`, `Gen/Model.lean`: step 2 (the signature; the isomorphism and its laws; the type and the contract).
-- `Gen/Rel.lean`: `T.F.Rel`, `rel_map`, `rel_ofC` (step 4, generated before the model, see below).
+- `Gen/Rel.lean`: `T.F.Rel`, `rel_map`, `rel_ofC`, and the lemmas of the lifting: one step at two constructors `T.F.rel_cᵢ_cⱼ` (`simp`, `genRelSteps`, also per type of a block), by cases in general position (`casesRel`), `T.F.Rel.mono`, `T.F.rel_refl` (step 4, generated before the model, see below).
 - `Gen/Framework.lean`: step 3.
 - `Gen/Extras.lean`: step 2b (`T.recPos`, `T.rec`), and the instance of an occurrence structure (`isoOf`).
-- `Gen/Surface.lean`: step 4 (constructors and their lemmas, `casesOn`, `rec_cᵢ`, `fold_cᵢ`; in a block, the types `Tₘ`, and per type the layer `Tₘ.F`, `Tₘ.dtor`, `Tₘ.ctor` and Lambek's lemma, for `data` `Tₘ.fold` and its lemmas and the recursors `Tₘ.rec`, for `codata` `Tₘ.corec` and its lemmas and `Tₘ.bisim`).
+- `Gen/Surface.lean`: step 4 (constructors and their lemmas, `casesOn`, `rec_cᵢ`, `fold_cᵢ`, `T.dtor_eq_cᵢ_iff`, `T.coinduct`; in a block, the types `Tₘ`, and per type the layer `Tₘ.F` and the lemmas of its lifting, `Tₘ.dtor`, `Tₘ.ctor`, Lambek's lemma and `Tₘ.dtor_inj`, for `data` `Tₘ.fold` and its lemmas and the recursors `Tₘ.rec`, for `codata` `Tₘ.corec` and its lemmas, `Tₘ.bisim` and `Tₘ.coinduct`).
 - `Gen/Pack.lean`: the display of the packing `Blk.St` of a block's families at a constructor of `Blk.Ix`, as the family it packs there (a delaborator, for the attribute `colean_pack`).
 - `Gen/Derive.lean`: step 5, separate from the pipeline (see below), in parts under `Gen/Derive/`, each on the ones before: the holes and the structures of the fields (`Holes.lean`), the presentation (`Pres.lean`), the layer `toL`, `ofL` and its laws (`Layer.lean`), the fixpoint and the instances (`Fix.lean`), the `simp` lemmas (`Simp.lean`); `Derive.lean` runs them.
 - `Gen/CCPO.lean`: step 6, run by the attribute `with_ccpo` (`CodataCmd.lean`), separate from the pipeline (below).
-- `Gen/Command.lean`: the pipeline, and what comes after it as after `inductive`: the doc comments, `protected` constructors and the info trees (`finishDecls`), then the attributes (`applyDeclAttrs`). `CodataCmd.lean`, `DataCmd.lean`: the commands; `MutualCmd.lean`: `mutual` blocks of them, and `mixed_mutual` blocks.
+- `Gen/Command.lean`: the pipeline, and what comes after it as after `inductive`: the doc comments, `protected` constructors and the info trees (`finishDecls`), then the attributes (`applyDeclAttrs`). `CodataCmd.lean`, `DataCmd.lean`: the commands; `MutualCmd.lean`: `mutual` blocks of them, and `mixed_mutual` blocks, and the refusal of plain `induction` on a type of a `data` block (`evalInductionBlockType`).
 - `Gen/Mixed.lean`: a `mixed_mutual` block: its runs, the pipeline on each, the closed types of the runs inside, their membership instances, and their interface restated at the closed types.
 
 ## The generators
@@ -98,7 +98,7 @@ on the shape, `rel_ofC` by cases on `F.Rel` after writing the layers as `toC a`.
 
 ## Rules
 
-- Tactic proofs are the laws of the generated inductives: the functor laws (step 1), the isomorphism laws and the lifting laws (steps 2 and 4), and in step 5 the laws of the layer, the rewriting steps of the fixpoint and the cases on the positions of a layer (membership). Everything else instantiates a theorem of `Framework.lean` or `Model/`.
+- Tactic proofs are the laws of the generated inductives: the functor laws (step 1), the isomorphism laws and the lifting laws (steps 2 and 4, with one step of the lifting at two constructors and its monotonicity), and in step 5 the laws of the layer, the rewriting steps of the fixpoint and the cases on the positions of a layer (membership). Everything else instantiates a theorem of `Framework.lean` or `Model/`.
 - The framework never mentions a model, a signature or `Raw`; the model never mentions a declaration; the surface never proves anything.
 - A nested argument enters the model as a shape with positions; the user-facing `F` keeps its type.
 - Some generated proofs need the definitional unfolding of Lean before 4.34 (`withUnfolding`, around those proofs only): a term of the signature is the expected one only after unfolding.
@@ -116,7 +116,8 @@ types, the constructors, the eliminators `T.rec`, `T.casesOn` (which Lean leaves
 and `T.fold`, `T.corec`, `T.dtor`, and the user-facing lemmas (`T.cᵢ_inj`, `T.cᵢ_ne_cⱼ`, `T.rec_cᵢ`,
 `T.fold_cᵢ`, `T.casesOn_cᵢ`, `T.dtor_cᵢ`, `T.ctor_cᵢ`, `T.dtor_corec`, `T.corec_eq`,
 `T.corec_unique`, `T.fold_eq`, `T.fold_unique`, `T.ctor_dtor`, `T.dtor_ctor`, `T.ctor_injective`,
-the declarations under `T.F`) are not, as Lean protects neither constructors nor `inj`/`injEq`.
+`T.dtor_injective`, `T.dtor_inj`, `T.dtor_eq_cᵢ_iff`, `T.coinduct`, the declarations under `T.F`)
+are not, as Lean protects neither constructors nor `inj`/`injEq`.
 The list is `protectedGen` (`Gen/Decl.lean`), applied once the pipeline has declared everything,
 step 5 included (`protectGenerated`, at the end of `pipeline`, and for the closed types of a
 mixed block at the end of `elabMixed`), so protection changes no generated statement, and the
@@ -180,6 +181,16 @@ hypothesis by membership at an index of the block (`IPolyIso.Mem`) is one per ty
 argument in `Tₘ.rec`, each at its type's motive, and `Blk.rec`'s is given to each at its
 constructor of `Blk.Ix`.
 
+The eliminators of the types: `T.casesOn` is the `cases` eliminator, and for `codata` the
+`induction` one too, since `codata` has no induction and otherwise `induction` would unfold the
+type to its encoding (a subtype of `Raw`). For a single `data` type, `T.rec` is the `induction`
+eliminator (`Gen/Extras.lean`), and in a `data` block `Blk.rec` is. The recursors per type
+`Tₘ.rec` have a motive per type, which Lean's `induction` cannot take as its eliminator (the
+other motives would be left as metavariables), so they carry the tag `colean_mutual_rec`, and
+plain `induction t` on `t : Tₘ` is refused with a hint to `induction t using Tₘ.rec
+(motive_2 := …)`, as Lean refuses a mutual inductive (`MutualCmd.lean`). The block family of a
+`codata` block has no case analysis.
+
 `Blk.St S₁ … Sₖ` packs a family per type into one on `Blk.Ix` by cases (`Blk.Ix.casesOn`); the
 layer of a type, `Tₘ.F params S₁ … Sₖ idx`, is `Blk.F` at it and at `.Tₘ idx`, and its map
 `Tₘ.F.map f₁ … fₖ` and, for `codata`, its lifting `Tₘ.F.Rel R₁ … Rₖ` are the block's at the
@@ -203,9 +214,15 @@ these as for a single type; `Tₘ.corec_unique` and `Tₘ.fold_unique` are `Blk.
 `Blk.fold_unique` at the morphisms packed by cases, the hypothesis at each type from the per-type
 one under the map by `ρ` (`codata`) or at `Blk.F.map ι y` (`data`); `Tₘ.bisim R₁ … Rₖ` is
 `Blk.bisim` at the packed relation, its hypothesis at each type from the per-type one by
-`Codata.rel_of_map_heq` (`Framework.lean`). The block-level declarations, and the rules of the
-block's `dtor`, `ctor` and `fold`, `Blk.dtor_cᵢ`, `Blk.ctor_cᵢ`, `Blk.fold_cᵢ`, stay; step 5 uses
-these. A run inside a `mixed_mutual` block that is a block gets the same as `Tₘ.Open.F`,
+`Codata.rel_of_map_heq` (`Framework.lean`). The lemmas of the lifting per type are those of a
+single type: one step at two constructors `Tₘ.F.rel_cᵢ_cⱼ` (`simp`), stated with the relations
+per type (`R₂ f g` at a forest; at a nested argument the block's structure at the packed
+relations, which `simp` takes back to a type's, `IOcc.rel_ofOcc`), proved as for a single type,
+`Tₘ.F.Rel.mono`, the block's at the packed relations and hypotheses, and `Tₘ.F.rel_refl`,
+`Tₘ.F.rel_map` at the identities; `Tₘ.coinduct` is `Tₘ.bisim` at the relations up to equality,
+and `Tₘ.dtor_injective` is `Tₘ.ctor_dtor` as a left inverse. The block-level declarations, and
+the rules of the block's `dtor`, `ctor` and `fold`, `Blk.dtor_cᵢ`, `Blk.ctor_cᵢ`, `Blk.fold_cᵢ`,
+stay; step 5 uses these. A run inside a `mixed_mutual` block that is a block gets the same as `Tₘ.Open.F`,
 `Tₘ.Open.corec`, `Tₘ.Open.fold`, …, restated at the closed types as `Tₘ.F`, `Tₘ.corec`,
 `Tₘ.fold`, … (next section). In the infoview, `Blk.St S₁ … Sₖ` at a constructor `.Tⱼ idx` is
 shown as `Sⱼ idx` (`Gen/Pack.lean`), so that the fields of a match on `t.dtor` show as trees and
@@ -245,12 +262,12 @@ Then the interface of each run inside is restated at the closed types (`restateR
 public declaration `Tₘ.Open.d` (not those of the model or of step 5, nor the auxiliary
 constructions of inductive types) as `Tₘ.d`, its statement that of `Tₘ.Open.d` at the closed
 families written with the closed declarations, its value `Tₘ.Open.d` itself, with its
-attributes (`simp`, the eliminators, `elab_as_elim`); an inductive type (`T.F`) becomes a
-reducible definition and its constructors reducible definitions usable in patterns, the
-constructors `Tₘ.c` reducible too, so that the lemmas of the open types, those of step 5 among
-them, apply to the closed ones. Last, the `simp` lemmas `Tₘ.mem_c` of the membership instances,
-the `simp` normal form of the membership through the open types (`memLemmas`). The names the user
-wrote are the closed declarations in the info tree.
+attributes (`simp`, the eliminators, `elab_as_elim`, `colean_mutual_rec`); an inductive type
+(`T.F`) becomes a reducible definition and its constructors reducible definitions usable in
+patterns, the constructors `Tₘ.c` reducible too, so that the lemmas of the open types, those of
+step 5 among them, apply to the closed ones. Last, the `simp` lemmas `Tₘ.mem_c` of the membership
+instances, the `simp` normal form of the membership through the open types (`memLemmas`). The
+names the user wrote are the closed declarations in the info tree.
 
 The functor of a run at its state keeps the open types of the runs inside at that state
 (`Tree.F α X ∋ node (a : α) (children : Forest.Open α X)`): there is no closed form for it.

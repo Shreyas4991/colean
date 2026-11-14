@@ -8,14 +8,15 @@ import Colean.Gen.Derive
 block (`Gen/Mixed.lean`): the declarations are analysed
 (`Gen/Front.lean`) and the steps of `architecture.md` run on their context in the order of their
 dependencies, all inside one `TermElabM` run (`runTermElabM`, for the section variables): the
-functor (step 1), for `codata` the lifting `T.F.Rel` (step 4, needed by the model), the
-signature, the isomorphism and the contract (step 2), in a block the types `Tₘ`, the framework
-(step 3), in a block the layer, the destructor and the constructor per type (step 4), the
-constructors and `casesOn` (step 4), in a block Lambek's lemma and the rules of the destructor
-and the constructor per type, for `data` the recursor (step 2b, stated with the constructors)
-and the computation rules, and in a block the recursors and the folds per type (`data`), or
-corecursion and coinduction per type (`codata`). Before them, the declared sorts with a universe
-are checked against the types' (`checkSorts`). Each declaration is checked by the kernel as it is
+functor (step 1), for `codata` the lifting `T.F.Rel` with its lemmas (step 4, needed by the
+model), the signature, the isomorphism and the contract (step 2), in a block the types `Tₘ`, the
+framework (step 3), in a block the layer, the destructor and the constructor per type, and for
+`codata` the lemmas of the lifting per type (step 4), the constructors and `casesOn` (step 4), in
+a block Lambek's lemma and the rules of the destructor and the constructor per type, equality by
+the destructor, for `data` the recursor (step 2b, stated with the constructors) and the
+computation rules, and in a block the recursors and the folds per type (`data`), or corecursion
+and coinduction per type and coinduction up to equality (`codata`). Before them, the declared
+sorts with a universe are checked against the types' (`checkSorts`). Each declaration is checked by the kernel as it is
 added, so a failure stops the command there, and the state is restored: a failed command
 declares nothing. Each step has its own heartbeat budget. Then, separately, the derived instances (step 5,
 `Gen/Derive.lean`), whose failure is only a warning. Last, the internals are made `protected`
@@ -71,6 +72,7 @@ def pipeline (ctx : Ctx) (afterTypes : Ctx → TermElabM Ctx := pure) : TermElab
   if ctx.co then
     step ctx.genRelType
     step ctx.genRelMap
+    step ctx.genRelLemmas
   step ctx.genSignature
   step ctx.genIso
   if ctx.co then step ctx.genRelOfC
@@ -79,10 +81,14 @@ def pipeline (ctx : Ctx) (afterTypes : Ctx → TermElabM Ctx := pure) : TermElab
   let ctx ← step (afterTypes ctx)
   step ctx.genFramework
   step ctx.genLayers
+  step ctx.genLayerRels
   step ctx.genCtors
   step ctx.genTypeLambek
+  step ctx.genDtorLemmas
   step ctx.genCases
-  if ctx.co then step ctx.genTypeCorecs
+  if ctx.co then
+    step ctx.genTypeCorecs
+    step ctx.genCoinduct
   else
     step ctx.genRec
     step ctx.genRecLemmas

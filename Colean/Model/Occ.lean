@@ -33,8 +33,11 @@ happens at leaves only.
 universe and `G'` at another (`List.{u}` and `List.{v}`): this is what keeps the state of `corec`
 and `fold` in any universe. The simp lemmas `map_list`, `map_prod`, `map_comp`, … compute `map`
 through the combinators back to the usual maps (`List.map`, pairs, composition), the `rel_*`
-lemmas do the same for `Rel`, and `forall_toC_*` turn "for every position" into membership or
-components; the members of a value (`Mem`) are computed by `simp` the same way. The instances of
+lemmas do the same for `Rel` (`rel_prod`, `rel_comp`, …, down to `List.Forall₂` and `Option.Rel`
+at the leaves, a map on either side moved into the relation, `rel_map_left`, and a value related
+to itself related at its members, `rel_self`), and `forall_toC_*` turn "for every position" into
+membership or components; the members of a value (`Mem`) are computed by `simp` the same way. The
+instances of
 `PolyIso.lean` for products, sums, functions, dependent pairs and composites are these
 combinators by definition (`ofIso_prod`, …, at the end, simp lemmas too), so a hypothesis at
 every position of a structure is one by membership for the instance (`PolyIso.memRec`): this is
@@ -773,7 +776,7 @@ theorem forall_toC_prod {P : X → Prop} (x : G₁ X × G₂ X) :
   ⟨fun h => ⟨fun q => h (.inl q), fun q => h (.inr q)⟩,
     fun h q => by cases q with | inl q => exact h.1 q | inr q => exact h.2 q⟩
 
-theorem rel_const {A : Type v} (R : X → Y → Prop) (a b : A) :
+@[simp] theorem rel_const {A : Type v} (R : X → Y → Prop) (a b : A) :
     Rel (const A) (const A) R a b ↔ a = b := by
   constructor
   · rintro ⟨sh, c, c', ha, hb, _⟩
@@ -781,7 +784,7 @@ theorem rel_const {A : Type v} (R : X → Y → Prop) (a b : A) :
   · rintro rfl
     exact ⟨a, Empty.elim, Empty.elim, rfl, rfl, fun q => q.elim⟩
 
-theorem rel_hole (R : X → Y → Prop) (x : X) (y : Y) : Rel hole hole R x y ↔ R x y := by
+@[simp] theorem rel_hole (R : X → Y → Prop) (x : X) (y : Y) : Rel hole hole R x y ↔ R x y := by
   constructor
   · rintro ⟨_, c, c', hx, hy, h⟩
     cases hx
@@ -1018,6 +1021,219 @@ end Forms
 
 end ExistsMem
 
+/-! ### The computation of `Rel`
+
+`Rel o o' R x y` says that the layers of `x` and `y` have one shape and related contents. Through
+`ofC` the two values are substituted away (`rel_iff_ofC`), and every combinator computes by
+definition: `simp` takes the relation through products, sums, functions and composites, down to
+the leaves, whose relations are the library's (`List.Forall₂`, `Option.Rel`), with the generated
+`T.Poly.rel_cᵢ_cⱼ` for a declared type. A map on either side moves into the relation, and a value
+related to itself is a relation at its members (`rel_self`). -/
+
+section RelGeneric
+
+variable {Sh : Type s} {Pos : Sh → Type p}
+  {G : Type u → Type v} {G' : Type u' → Type v'} {G'' : Type u'' → Type v''}
+  {X : Type u} {Y : Type u'} {W : Type u''}
+
+/-- `Rel` through `ofC`: one shape, related contents. -/
+theorem rel_iff_ofC (o : Occ Sh Pos G) (o' : Occ Sh Pos G') {R : X → Y → Prop} {x : G X}
+    {y : G' Y} :
+    Rel o o' R x y ↔ ∃ (sh : Sh) (c : Pos sh → X) (c' : Pos sh → Y),
+      (∀ q, R (c q) (c' q)) ∧ x = o.ofC ⟨sh, c⟩ ∧ y = o'.ofC ⟨sh, c'⟩ := by
+  constructor
+  · rintro ⟨sh, c, c', hx, hy, h⟩
+    exact ⟨sh, c, c', h, by rw [← hx, ofC_toC], by rw [← hy, ofC_toC]⟩
+  · rintro ⟨sh, c, c', h, rfl, rfl⟩
+    exact rel_intro o o' sh c c' h
+
+/-- `Rel` as the canonical lifting: related values are the two projections of one value over
+related pairs, at any third structure with the same shapes. -/
+theorem rel_iff_exists_map {G₂ : Type (max u u') → Type w'} (o : Occ Sh Pos G)
+    (o' : Occ Sh Pos G') (o₂ : Occ Sh Pos G₂) {R : X → Y → Prop} {x : G X} {y : G' Y} :
+    Rel o o' R x y ↔ ∃ z : G₂ {p : X × Y // R p.1 p.2},
+      map o₂ o (fun p => p.1.1) z = x ∧ map o₂ o' (fun p => p.1.2) z = y :=
+  ⟨exists_map_of_rel o o' o₂,
+    fun ⟨z, hx, hy⟩ => hx ▸ hy ▸ rel_map o₂ o o' R _ _ z fun p => p.2⟩
+
+/-- A larger relation relates more. -/
+theorem Rel.mono (o : Occ Sh Pos G) (o' : Occ Sh Pos G') {R S : X → Y → Prop}
+    (hRS : ∀ x y, R x y → S x y) {x : G X} {y : G' Y} (h : Rel o o' R x y) : Rel o o' S x y := by
+  obtain ⟨sh, c, c', hx, hy, h⟩ := h
+  exact ⟨sh, c, c', hx, hy, fun q => hRS _ _ (h q)⟩
+
+/-- A map on the left moves into the relation. -/
+@[simp] theorem rel_map_left (o : Occ Sh Pos G'') (o₁ : Occ Sh Pos G) (o' : Occ Sh Pos G')
+    {R : X → Y → Prop} (f : W → X) (x : G'' W) (y : G' Y) :
+    Rel o₁ o' R (map o o₁ f x) y ↔ Rel o o' (fun a b => R (f a) b) x y := by
+  constructor
+  · rintro ⟨sh, c, c', hx, hy, h⟩
+    rw [toC_map] at hx
+    obtain ⟨rfl, hc⟩ := Sigma.mk.inj_iff.mp hx
+    cases hc
+    exact ⟨_, _, c', rfl, hy, h⟩
+  · rintro ⟨sh, c, c', hx, hy, h⟩
+    refine ⟨sh, fun q => f (c q), c', ?_, hy, h⟩
+    rw [toC_map, hx]
+
+/-- A map on the right moves into the relation. -/
+@[simp] theorem rel_map_right (o : Occ Sh Pos G) (o₁ : Occ Sh Pos G'') (o' : Occ Sh Pos G')
+    {R : X → Y → Prop} (g : W → Y) (x : G X) (y : G'' W) :
+    Rel o o' R x (map o₁ o' g y) ↔ Rel o o₁ (fun a b => R a (g b)) x y := by
+  constructor
+  · rintro ⟨sh, c, c', hx, hy, h⟩
+    rw [toC_map] at hy
+    obtain ⟨rfl, hc⟩ := Sigma.mk.inj_iff.mp hy
+    cases hc
+    exact ⟨_, c, _, hx, rfl, h⟩
+  · rintro ⟨sh, c, c', hx, hy, h⟩
+    refine ⟨sh, c, fun q => g (c' q), hx, ?_, h⟩
+    rw [toC_map, hy]
+
+/-- A value related to itself: the relation at each of its members. With the two lemmas above,
+`Rel R (map f x) (map g x)` becomes `∀ a, Mem a x → R (f a) (g a)`, and `simp` computes the
+members. -/
+@[simp] theorem rel_self (o : Occ Sh Pos G) {R : X → X → Prop} (x : G X) :
+    Rel o o R x x ↔ ∀ a, Mem o a x → R a a := by
+  constructor
+  · rintro ⟨sh, c, c', hx, hy, h⟩ a ⟨q, rfl⟩
+    have hc : c = c' := eq_of_heq (Sigma.mk.inj_iff.mp (hx.symm.trans hy)).2
+    subst hc
+    revert q
+    rw [hx]
+    exact h
+  · intro h
+    exact ⟨_, _, _, rfl, rfl, fun q => h _ ⟨q, rfl⟩⟩
+
+end RelGeneric
+
+section RelForms
+
+variable {X : Type u} {Y : Type u'}
+variable {Sh₁ : Type s} {Pos₁ : Sh₁ → Type p} {Sh₂ : Type s'} {Pos₂ : Sh₂ → Type p'}
+  {G₁ : Type u → Type v} {G₂ : Type u → Type v'} {G₁' : Type u' → Type w} {G₂' : Type u' → Type w'}
+  (o₁ : Occ Sh₁ Pos₁ G₁) (o₂ : Occ Sh₂ Pos₂ G₂) (o₁' : Occ Sh₁ Pos₁ G₁') (o₂' : Occ Sh₂ Pos₂ G₂')
+
+/-- A product, componentwise (the converse of `rel_prod_intro`). -/
+@[simp] theorem rel_prod {R : X → Y → Prop} (x : G₁ X × G₂ X) (y : G₁' Y × G₂' Y) :
+    Rel (prod o₁ o₂) (prod o₁' o₂') R x y ↔ Rel o₁ o₁' R x.1 y.1 ∧ Rel o₂ o₂' R x.2 y.2 := by
+  refine ⟨fun h => ?_, fun h => rel_prod_intro o₁ o₂ o₁' o₂' h.1 h.2⟩
+  obtain ⟨⟨s₁, s₂⟩, c, c', hc, rfl, rfl⟩ := (rel_iff_ofC _ _).mp h
+  exact ⟨rel_intro o₁ o₁' s₁ _ _ fun q => hc (.inl q), rel_intro o₂ o₂' s₂ _ _ fun q => hc (.inr q)⟩
+
+/-- A sum, by sides: the same side, related values. -/
+@[simp] theorem rel_sum_inl_inl {R : X → Y → Prop} (x : G₁ X) (y : G₁' Y) :
+    Rel (sum o₁ o₂) (sum o₁' o₂') R (.inl x) (.inl y) ↔ Rel o₁ o₁' R x y := by
+  constructor
+  · intro h
+    obtain ⟨sh | sh, c, c', hc, hx, hy⟩ := (rel_iff_ofC _ _).mp h
+    · cases hx; cases hy
+      exact rel_intro o₁ o₁' sh _ _ fun q => hc ⟨q⟩
+    · cases hx
+  · intro h
+    obtain ⟨sh, c, c', hc, rfl, rfl⟩ := (rel_iff_ofC _ _).mp h
+    exact rel_intro (sum o₁ o₂) (sum o₁' o₂') (.inl sh) (fun q => c q.down) (fun q => c' q.down)
+      fun q => hc q.down
+
+@[simp] theorem rel_sum_inr_inr {R : X → Y → Prop} (x : G₂ X) (y : G₂' Y) :
+    Rel (sum o₁ o₂) (sum o₁' o₂') R (.inr x) (.inr y) ↔ Rel o₂ o₂' R x y := by
+  constructor
+  · intro h
+    obtain ⟨sh | sh, c, c', hc, hx, hy⟩ := (rel_iff_ofC _ _).mp h
+    · cases hx
+    · cases hx; cases hy
+      exact rel_intro o₂ o₂' sh _ _ fun q => hc ⟨q⟩
+  · intro h
+    obtain ⟨sh, c, c', hc, rfl, rfl⟩ := (rel_iff_ofC _ _).mp h
+    exact rel_intro (sum o₁ o₂) (sum o₁' o₂') (.inr sh) (fun q => c q.down) (fun q => c' q.down)
+      fun q => hc q.down
+
+@[simp] theorem rel_sum_inl_inr {R : X → Y → Prop} (x : G₁ X) (y : G₂' Y) :
+    Rel (sum o₁ o₂) (sum o₁' o₂') R (.inl x) (.inr y) ↔ False := by
+  refine ⟨fun h => ?_, False.elim⟩
+  obtain ⟨sh | sh, c, c', hc, hx, hy⟩ := (rel_iff_ofC _ _).mp h
+  · cases hy
+  · cases hx
+
+@[simp] theorem rel_sum_inr_inl {R : X → Y → Prop} (x : G₂ X) (y : G₁' Y) :
+    Rel (sum o₁ o₂) (sum o₁' o₂') R (.inr x) (.inl y) ↔ False := by
+  refine ⟨fun h => ?_, False.elim⟩
+  obtain ⟨sh | sh, c, c', hc, hx, hy⟩ := (rel_iff_ofC _ _).mp h
+  · cases hx
+  · cases hy
+
+end RelForms
+
+/-- A function from a constant type, pointwise. -/
+@[simp] theorem rel_pi {X : Type u} {Y : Type u'} {A : Type a} {ShA : A → Type s}
+    {PosA : ∀ x, ShA x → Type p} {GA : A → Type u → Type v} {GA' : A → Type u' → Type w}
+    (o : ∀ x, Occ (ShA x) (PosA x) (GA x)) (o' : ∀ x, Occ (ShA x) (PosA x) (GA' x))
+    {R : X → Y → Prop} (k : ∀ x, GA x X) (k' : ∀ x, GA' x Y) :
+    Rel (pi A o) (pi A o') R k k' ↔ ∀ x, Rel (o x) (o' x) R (k x) (k' x) := by
+  constructor
+  · intro h x
+    obtain ⟨sh, c, c', hc, rfl, rfl⟩ := (rel_iff_ofC _ _).mp h
+    exact rel_intro (o x) (o' x) (sh x) _ _ fun q => hc ⟨x, q⟩
+  · intro h
+    choose sh c c' hc hk hk' using fun x => (rel_iff_ofC _ _).mp (h x)
+    exact (rel_iff_ofC _ _).mpr ⟨sh, fun q => c q.1 q.2, fun q => c' q.1 q.2,
+      fun q => hc q.1 q.2, funext hk, funext hk'⟩
+
+/-- A composite: the outer relation at the inner one. -/
+@[simp] theorem rel_comp {X : Type u} {Y : Type u'} {Sh : Type s} {Pos : Sh → Type p}
+    {Sh' : Type s'} {Pos' : Sh' → Type p'} {G : Type u'' → Type v} {G' : Type v'' → Type v'}
+    {H : Type u → Type u''} {H' : Type u' → Type v''} (oG : Occ Sh Pos G) (oG' : Occ Sh Pos G')
+    (oH : Occ Sh' Pos' H) (oH' : Occ Sh' Pos' H') {R : X → Y → Prop} (x : G (H X))
+    (y : G' (H' Y)) :
+    Rel (comp oG oH) (comp oG' oH') R x y ↔ Rel oG oG' (Rel oH oH' R) x y := by
+  constructor
+  · intro h
+    obtain ⟨⟨sh, t⟩, c, c', hc, rfl, rfl⟩ := (rel_iff_ofC _ _).mp h
+    exact rel_intro oG oG' sh _ _ fun q => rel_intro oH oH' (t q) _ _ fun r => hc ⟨q, r⟩
+  · intro h
+    obtain ⟨sh, c, c', hc, rfl, rfl⟩ := (rel_iff_ofC _ _).mp h
+    choose t d d' hd hdc hdc' using fun q => (rel_iff_ofC _ _).mp (hc q)
+    refine (rel_iff_ofC _ _).mpr ⟨⟨sh, t⟩, fun r => d r.1 r.2, fun r => d' r.1 r.2,
+      fun r => hd r.1 r.2, ?_, ?_⟩
+    · rw [ofC_comp]; exact congrArg (fun c => oG.ofC ⟨sh, c⟩) (funext hdc)
+    · rw [ofC_comp]; exact congrArg (fun c => oG'.ofC ⟨sh, c⟩) (funext hdc')
+
+/-- `List`: `List.Forall₂`, with Mathlib's `simp` lemmas (`List.forall₂_cons`,
+`List.forall₂_map_left_iff`, `List.forall₂_same`, …). -/
+@[simp] theorem rel_list {X : Type u} {Y : Type u'} {R : X → Y → Prop} (l : List X)
+    (l' : List Y) : Rel (ofIso List) (ofIso List) R l l' ↔ List.Forall₂ R l l' := by
+  rw [rel_iff_ofC]
+  constructor
+  · rintro ⟨n, c, c', hc, rfl, rfl⟩
+    show List.Forall₂ R (List.ofFn c) (List.ofFn c')
+    induction n with
+    | zero => simp
+    | succ n ih =>
+      simp only [List.ofFn_succ, List.forall₂_cons]
+      exact ⟨hc 0, ih _ _ fun q => hc _⟩
+  · intro h
+    induction h with
+    | nil => exact ⟨0, Fin.elim0, Fin.elim0, fun q => q.elim0, rfl, rfl⟩
+    | @cons a b l l' hab _ ih =>
+      obtain ⟨n, c, c', hc, rfl, rfl⟩ := ih
+      refine ⟨n + 1, Fin.cons a c, Fin.cons b c', fun q => Fin.cases hab hc q, ?_, ?_⟩
+      all_goals simp [List.ofFn_succ]
+
+/-- `Option`: `Option.Rel`, with its `simp` lemmas (`Option.rel_some_some`,
+`Option.rel_none_none`). -/
+@[simp] theorem rel_option {X : Type u} {Y : Type u'} {R : X → Y → Prop} (o : Option X)
+    (o' : Option Y) : Rel (ofIso Option) (ofIso Option) R o o' ↔ Option.Rel R o o' := by
+  rw [rel_iff_ofC]
+  constructor
+  · rintro ⟨_ | _, c, c', hc, rfl, rfl⟩
+    · exact .none
+    · exact .some (hc .unit)
+  · rintro (⟨h⟩ | _)
+    · exact ⟨true, fun _ => _, fun _ => _, fun _ => h, rfl, rfl⟩
+    · have e (q : OptionPos false) : False := nomatch q
+      exact ⟨false, fun q => (e q).elim, fun q => (e q).elim, fun q => (e q).elim, rfl, rfl⟩
+
+
 end Occ
 
 /-! ### The computation of `map` through the indexed combinators
@@ -1202,6 +1418,203 @@ theorem map_flat_compC {Sh : Type s} {Pos : Sh → Type p} {Sh' : Type s'} {Pos'
   congrArg (fun k => Occ.map oG oG' k y) (funext fun z => h g z)
 
 end MapFlat
+
+/-! ### The computation of `Rel` through the indexed combinators
+
+The same lemmas as for `Occ`, so that `simp` computes the premises of the lifting of a family or
+of a type of a block at a nested argument: a plain structure at one index is the plain relation at
+that index (`rel_ofOcc`). -/
+
+section RelGeneric
+
+variable {J : Type j} {Sh : Type s} {Pos : Sh → Type p} {pidx : (sh : Sh) → Pos sh → J}
+  {G : (J → Type u) → Type v} {G' : (J → Type u') → Type v'} {G'' : (J → Type u'') → Type v''}
+  {X : J → Type u} {Y : J → Type u'} {W : J → Type u''}
+
+/-- `Rel` through `ofC`: one shape, related contents. -/
+theorem rel_iff_ofC (o : IOcc Sh Pos pidx G) (o' : IOcc Sh Pos pidx G')
+    {R : ∀ j, X j → Y j → Prop} {x : G X} {y : G' Y} :
+    Rel o o' R x y ↔ ∃ (sh : Sh) (c : (q : Pos sh) → X (pidx sh q))
+      (c' : (q : Pos sh) → Y (pidx sh q)),
+      (∀ q, R _ (c q) (c' q)) ∧ x = o.ofC ⟨sh, c⟩ ∧ y = o'.ofC ⟨sh, c'⟩ := by
+  constructor
+  · rintro ⟨sh, c, c', hx, hy, h⟩
+    exact ⟨sh, c, c', h, by rw [← hx, ofC_toC], by rw [← hy, ofC_toC]⟩
+  · rintro ⟨sh, c, c', h, rfl, rfl⟩
+    exact rel_intro o o' sh c c' h
+
+/-- A larger relation relates more. -/
+theorem Rel.mono (o : IOcc Sh Pos pidx G) (o' : IOcc Sh Pos pidx G')
+    {R S : ∀ j, X j → Y j → Prop} (hRS : ∀ j x y, R j x y → S j x y) {x : G X} {y : G' Y}
+    (h : Rel o o' R x y) : Rel o o' S x y := by
+  obtain ⟨sh, c, c', hx, hy, h⟩ := h
+  exact ⟨sh, c, c', hx, hy, fun q => hRS _ _ _ (h q)⟩
+
+/-- A map on the left moves into the relation. -/
+@[simp] theorem rel_map_left (o : IOcc Sh Pos pidx G'') (o₁ : IOcc Sh Pos pidx G)
+    (o' : IOcc Sh Pos pidx G') {R : ∀ j, X j → Y j → Prop} (f : ∀ j, W j → X j) (x : G'' W)
+    (y : G' Y) : Rel o₁ o' R (map o o₁ f x) y ↔ Rel o o' (fun j a b => R j (f j a) b) x y := by
+  constructor
+  · rintro ⟨sh, c, c', hx, hy, h⟩
+    rw [toC_map] at hx
+    obtain ⟨rfl, hc⟩ := Sigma.mk.inj_iff.mp hx
+    cases hc
+    exact ⟨_, _, c', rfl, hy, h⟩
+  · rintro ⟨sh, c, c', hx, hy, h⟩
+    refine ⟨sh, fun q => f _ (c q), c', ?_, hy, h⟩
+    rw [toC_map, hx]
+
+/-- A map on the right moves into the relation. -/
+@[simp] theorem rel_map_right (o : IOcc Sh Pos pidx G) (o₁ : IOcc Sh Pos pidx G'')
+    (o' : IOcc Sh Pos pidx G') {R : ∀ j, X j → Y j → Prop} (g : ∀ j, W j → Y j) (x : G X)
+    (y : G'' W) : Rel o o' R x (map o₁ o' g y) ↔ Rel o o₁ (fun j a b => R j a (g j b)) x y := by
+  constructor
+  · rintro ⟨sh, c, c', hx, hy, h⟩
+    rw [toC_map] at hy
+    obtain ⟨rfl, hc⟩ := Sigma.mk.inj_iff.mp hy
+    cases hc
+    exact ⟨_, c, _, hx, rfl, h⟩
+  · rintro ⟨sh, c, c', hx, hy, h⟩
+    refine ⟨sh, c, fun q => g _ (c' q), hx, ?_, h⟩
+    rw [toC_map, hy]
+
+end RelGeneric
+
+section RelForms
+
+variable {J : Type j} {X : J → Type u} {Y : J → Type u'}
+
+/-- A plain structure at one index: the plain relation at that index. -/
+@[simp] theorem rel_ofOcc {Sh : Type s} {Pos : Sh → Type p} {G : Type u → Type v}
+    {G' : Type u' → Type v'} (o : Occ Sh Pos G) (o' : Occ Sh Pos G') (i : J)
+    {R : ∀ j, X j → Y j → Prop} (x : G (X i)) (y : G' (Y i)) :
+    Rel (ofOcc o i) (ofOcc o' i) R x y ↔ Occ.Rel o o' (R i) x y := Iff.rfl
+
+@[simp] theorem rel_hole (i : J) (R : ∀ j, X j → Y j → Prop) (x : X i) (y : Y i) :
+    Rel (hole i) (hole i) R x y ↔ R i x y := by
+  constructor
+  · rintro ⟨_, c, c', hx, hy, h⟩
+    cases hx
+    cases hy
+    exact h ()
+  · exact fun h => ⟨(), fun _ => x, fun _ => y, rfl, rfl, fun _ => h⟩
+
+@[simp] theorem rel_const {A : Type v} (R : ∀ j, X j → Y j → Prop) (a b : A) :
+    Rel (const (J := J) A) (const A) R a b ↔ a = b := by
+  constructor
+  · rintro ⟨sh, c, c', ha, hb, _⟩
+    exact (Sigma.mk.inj_iff.mp ha).1.trans (Sigma.mk.inj_iff.mp hb).1.symm
+  · rintro rfl
+    exact ⟨a, fun e => e.elim, fun e => e.elim, rfl, rfl, fun q => q.elim⟩
+
+variable {Sh₁ : Type s} {Pos₁ : Sh₁ → Type p} {pidx₁ : (sh : Sh₁) → Pos₁ sh → J}
+  {Sh₂ : Type s'} {Pos₂ : Sh₂ → Type p'} {pidx₂ : (sh : Sh₂) → Pos₂ sh → J}
+  {G₁ : (J → Type u) → Type v} {G₂ : (J → Type u) → Type v'}
+  {G₁' : (J → Type u') → Type w} {G₂' : (J → Type u') → Type w'}
+  (o₁ : IOcc Sh₁ Pos₁ pidx₁ G₁) (o₂ : IOcc Sh₂ Pos₂ pidx₂ G₂)
+  (o₁' : IOcc Sh₁ Pos₁ pidx₁ G₁') (o₂' : IOcc Sh₂ Pos₂ pidx₂ G₂')
+
+/-- A product, componentwise. -/
+@[simp] theorem rel_prod {R : ∀ j, X j → Y j → Prop} (x : G₁ X × G₂ X) (y : G₁' Y × G₂' Y) :
+    Rel (prod o₁ o₂) (prod o₁' o₂') R x y ↔ Rel o₁ o₁' R x.1 y.1 ∧ Rel o₂ o₂' R x.2 y.2 := by
+  constructor
+  · intro h
+    obtain ⟨⟨s₁, s₂⟩, c, c', hc, rfl, rfl⟩ := (rel_iff_ofC _ _).mp h
+    exact ⟨rel_intro o₁ o₁' s₁ _ _ fun q => hc (.inl q),
+      rel_intro o₂ o₂' s₂ _ _ fun q => hc (.inr q)⟩
+  · rintro ⟨h₁, h₂⟩
+    obtain ⟨s₁, c₁, c₁', hc₁, hx₁, hy₁⟩ := (rel_iff_ofC _ _).mp h₁
+    obtain ⟨s₂, c₂, c₂', hc₂, hx₂, hy₂⟩ := (rel_iff_ofC _ _).mp h₂
+    obtain ⟨x₁, x₂⟩ := x
+    obtain ⟨y₁, y₂⟩ := y
+    dsimp only at hx₁ hx₂ hy₁ hy₂
+    subst hx₁ hx₂ hy₁ hy₂
+    refine (rel_iff_ofC _ _).mpr ⟨(s₁, s₂), Occ.sumRec c₁ c₂, Occ.sumRec c₁' c₂', ?_, rfl, rfl⟩
+    rintro (q | q)
+    · exact hc₁ q
+    · exact hc₂ q
+
+/-- A sum, by sides: the same side, related values. -/
+@[simp] theorem rel_sum_inl_inl {R : ∀ j, X j → Y j → Prop} (x : G₁ X) (y : G₁' Y) :
+    Rel (sum o₁ o₂) (sum o₁' o₂') R (.inl x) (.inl y) ↔ Rel o₁ o₁' R x y := by
+  constructor
+  · intro h
+    obtain ⟨sh | sh, c, c', hc, hx, hy⟩ := (rel_iff_ofC _ _).mp h
+    · cases hx; cases hy
+      exact rel_intro o₁ o₁' sh _ _ fun q => hc ⟨q⟩
+    · cases hx
+  · intro h
+    obtain ⟨sh, c, c', hc, rfl, rfl⟩ := (rel_iff_ofC _ _).mp h
+    exact rel_intro (sum o₁ o₂) (sum o₁' o₂') (.inl sh) (fun q => c q.down) (fun q => c' q.down)
+      fun q => hc q.down
+
+@[simp] theorem rel_sum_inr_inr {R : ∀ j, X j → Y j → Prop} (x : G₂ X) (y : G₂' Y) :
+    Rel (sum o₁ o₂) (sum o₁' o₂') R (.inr x) (.inr y) ↔ Rel o₂ o₂' R x y := by
+  constructor
+  · intro h
+    obtain ⟨sh | sh, c, c', hc, hx, hy⟩ := (rel_iff_ofC _ _).mp h
+    · cases hx
+    · cases hx; cases hy
+      exact rel_intro o₂ o₂' sh _ _ fun q => hc ⟨q⟩
+  · intro h
+    obtain ⟨sh, c, c', hc, rfl, rfl⟩ := (rel_iff_ofC _ _).mp h
+    exact rel_intro (sum o₁ o₂) (sum o₁' o₂') (.inr sh) (fun q => c q.down) (fun q => c' q.down)
+      fun q => hc q.down
+
+@[simp] theorem rel_sum_inl_inr {R : ∀ j, X j → Y j → Prop} (x : G₁ X) (y : G₂' Y) :
+    Rel (sum o₁ o₂) (sum o₁' o₂') R (.inl x) (.inr y) ↔ False := by
+  refine ⟨fun h => ?_, False.elim⟩
+  obtain ⟨sh | sh, c, c', hc, hx, hy⟩ := (rel_iff_ofC _ _).mp h
+  · cases hy
+  · cases hx
+
+@[simp] theorem rel_sum_inr_inl {R : ∀ j, X j → Y j → Prop} (x : G₂ X) (y : G₁' Y) :
+    Rel (sum o₁ o₂) (sum o₁' o₂') R (.inr x) (.inl y) ↔ False := by
+  refine ⟨fun h => ?_, False.elim⟩
+  obtain ⟨sh | sh, c, c', hc, hx, hy⟩ := (rel_iff_ofC _ _).mp h
+  · cases hx
+  · cases hy
+
+end RelForms
+
+/-- A function from a constant type, pointwise. -/
+@[simp] theorem rel_pi {J : Type j} {X : J → Type u} {Y : J → Type u'} {A : Type a}
+    {ShA : A → Type s} {PosA : ∀ x, ShA x → Type p} {pidxA : ∀ x (sh : ShA x), PosA x sh → J}
+    {GA : A → (J → Type u) → Type v} {GA' : A → (J → Type u') → Type w}
+    (o : ∀ x, IOcc (ShA x) (PosA x) (pidxA x) (GA x))
+    (o' : ∀ x, IOcc (ShA x) (PosA x) (pidxA x) (GA' x)) {R : ∀ j, X j → Y j → Prop}
+    (k : ∀ x, GA x X) (k' : ∀ x, GA' x Y) :
+    Rel (pi A o) (pi A o') R k k' ↔ ∀ x, Rel (o x) (o' x) R (k x) (k' x) := by
+  constructor
+  · intro h x
+    obtain ⟨sh, c, c', hc, rfl, rfl⟩ := (rel_iff_ofC _ _).mp h
+    exact rel_intro (o x) (o' x) (sh x) _ _ fun q => hc ⟨x, q⟩
+  · intro h
+    choose sh c c' hc hk hk' using fun x => (rel_iff_ofC _ _).mp (h x)
+    exact (rel_iff_ofC _ _).mpr ⟨sh, fun q => c q.1 q.2, fun q => c' q.1 q.2,
+      fun q => hc q.1 q.2, funext hk, funext hk'⟩
+
+/-- A plain type constructor applied to an expression with occurrences: the outer relation at the
+inner one. -/
+@[simp] theorem rel_compC {J : Type j} {X : J → Type u} {Y : J → Type u'} {Sh : Type s}
+    {Pos : Sh → Type p} {Sh' : Type s'} {Pos' : Sh' → Type p'} {pidx' : (sh : Sh') → Pos' sh → J}
+    {G : Type u'' → Type v} {G' : Type v'' → Type v'} {H : (J → Type u) → Type u''}
+    {H' : (J → Type u') → Type v''} (oG : Occ Sh Pos G) (oG' : Occ Sh Pos G')
+    (oH : IOcc Sh' Pos' pidx' H) (oH' : IOcc Sh' Pos' pidx' H') {R : ∀ j, X j → Y j → Prop}
+    (x : G (H X)) (y : G' (H' Y)) :
+    Rel (compC oG oH) (compC oG' oH') R x y ↔ Occ.Rel oG oG' (Rel oH oH' R) x y := by
+  constructor
+  · intro h
+    obtain ⟨⟨sh, t⟩, c, c', hc, rfl, rfl⟩ := (rel_iff_ofC _ _).mp h
+    exact Occ.rel_intro oG oG' sh _ _ fun q => rel_intro oH oH' (t q) _ _ fun r => hc ⟨q, r⟩
+  · intro h
+    obtain ⟨sh, c, c', hc, rfl, rfl⟩ := (Occ.rel_iff_ofC _ _).mp h
+    choose t d d' hd hdc hdc' using fun q => (rel_iff_ofC _ _).mp (hc q)
+    refine (rel_iff_ofC _ _).mpr ⟨⟨sh, t⟩, fun r => d r.1 r.2, fun r => d' r.1 r.2,
+      fun r => hd r.1 r.2, ?_, ?_⟩
+    · exact congrArg (fun c => oG.ofC ⟨sh, c⟩) (funext hdc)
+    · exact congrArg (fun c => oG'.ofC ⟨sh, c⟩) (funext hdc')
+
 
 end IOcc
 

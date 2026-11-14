@@ -52,7 +52,8 @@ does, implicit elsewhere):
   none when nothing is left) and disjointness `T.ctorᵢ_ne_ctorⱼ` where it is found (below), all
   simp lemmas;
 * a case analysis principle `T.casesOn`, registered as the `cases` eliminator for `T`, with
-  its computation rules `T.casesOn_ctorᵢ` as simp lemmas.
+  its computation rules `T.casesOn_ctorᵢ` as simp lemmas. It is the `induction` eliminator too:
+  `codata` has no induction, and `induction s` is `cases s` rather than a look at the encoding.
 
 `T.ctor`, `T.bisim`, `T.F`, `T.contract` and the internals (the signature, the isomorphism and
 its laws, the model's recursor, everything under `T.Poly`) are `protected`, as `inductive`
