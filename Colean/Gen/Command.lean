@@ -6,7 +6,7 @@ import Colean.Gen.Derive
 
 `codata` and `data`, single declarations, `mutual` blocks, and the runs of a `mixed_mutual`
 block (`Gen/Mixed.lean`): the declarations are analysed
-(`Gen/Front.lean`) and the steps of `architecture.md` run on their context in the order of their
+(`Gen/Front.lean`) and the generation steps run on their context in the order of their
 dependencies, all inside one `TermElabM` run (`runTermElabM`, for the section variables): the
 functor (step 1), for `codata` the lifting `T.F.Rel` (step 4, needed by the model), the
 signature, the isomorphism and the contract (step 2), in a block the types `Tₘ`, the framework

@@ -10,11 +10,6 @@ name = "Colean"
 [[lean_lib]]
 name = "ColeanTest"
 
-# Hand-written experiments, not part of the default build: `lake build Sketch`.
-[[lean_lib]]
-name = "Sketch"
-globs = ["Sketch.+"]
-
 [[require]]
 name = "mathlib"
 git = "https://github.com/leanprover-community/mathlib4"

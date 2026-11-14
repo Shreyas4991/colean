@@ -272,7 +272,7 @@ in the [issues](https://github.com/vasnesterov/colean/issues).
   in the future.
 - **`mixed_mutual` is best effort.** It is supported only partly. An outer type with indices
   or an outer `mutual` block is not supported, and some blocks fail with errors that are hard
-  to read. See Part II of [`Sketch/MixedTour.lean`](Sketch/MixedTour.lean).
+  to read.
 - **Computation rules are theorems.** `rec`, `fold` and `corec` compute on constructors by
   `simp` lemmas (`T.rec_cᵢ`, `T.fold_cᵢ`, `T.dtor_corec`), not by definitional unfolding, so
   `rfl` and `decide` do not evaluate them.

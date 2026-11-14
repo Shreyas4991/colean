@@ -92,8 +92,8 @@ encoding decides equality of shapes classically, and a `PolyIso` instance may be
 too.
 
 The declaration is analysed (`Gen/Front.lean`) and the generated declarations are built as
-`Expr`s and added directly, by the generators of `Gen/`, split by the steps of
-`architecture.md`: `Gen/Functor.lean` (step 1), `Gen/Signature.lean`, `Gen/Iso.lean`,
+`Expr`s and added directly, by the generators of `Gen/`, split by steps:
+`Gen/Functor.lean` (step 1), `Gen/Signature.lean`, `Gen/Iso.lean`,
 `Gen/Model.lean` (step 2), `Gen/Extras.lean` (step 2b), `Gen/Framework.lean` (step 3),
 `Gen/Rel.lean` and `Gen/Surface.lean` (step 4), `Gen/Derive.lean` (step 5); `Gen/Command.lean`
 is the pipeline, shared with the `data` command (`DataCmd.lean`), which differs only in the

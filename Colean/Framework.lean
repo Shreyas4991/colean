@@ -25,7 +25,6 @@ or at a model.
   `inj_of`, `ne_of`), and `rel_of_map_heq`, a lifting read along a map between equal families,
   for the bisimulation of the types of a block, one relation per type.
 
-The contract is documented in `contract.md`; the decomposition in `architecture.md`.
 -/
 
 universe w u u₀ v u₁ u₂ u₃

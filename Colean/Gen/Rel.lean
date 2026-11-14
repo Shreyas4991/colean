@@ -12,8 +12,7 @@ import Colean.Gen.Iso
 * `T.rel_ofC`: the lifting through the isomorphism is the signature's (`Signature.Obj.Rel`).
 
 `T.F.Rel` belongs to the surface (step 4), but the model's `rel_ofC` and the contract's `bisim`
-are stated with it, so it is generated before them (a boundary violation recorded in
-`architecture.md`). The two lemmas are proved by tactic scripts: `cases`,
+are stated with it, so it is generated before them (a boundary violation). The two lemmas are proved by tactic scripts: `cases`,
 then `constructor` and the hypothesis for `rel_map`; for `rel_ofC`, the layers written as
 `toC a`, `toC a'` (`toC_ofC`), `cases` on the hypothesis, which is then at variables, the layers
 of the nested arguments rewritten with the hypotheses on them, then the witnesses, and the

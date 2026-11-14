@@ -37,6 +37,5 @@ The framework (`Framework`), the user interface for nesting (`PolyIso`), the mod
 the command syntax (`Syntax`), the command generators by step, on `Expr` (`Gen/`), the `codata`
 and `data` commands (`CodataCmd`, `DataCmd`) and their mutual and mixed blocks (`MutualCmd`), and
 the attribute `with_ccpo` for `partial_fixpoint` (`Model/CCPO`, `Gen/CCPO`, `CodataCmd`).
-The tests are the separate library `ColeanTest`. The decomposition is described in
-`architecture.md`.
+The tests are the separate library `ColeanTest`.
 -/
