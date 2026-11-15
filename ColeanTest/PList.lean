@@ -8,7 +8,7 @@ namespace CodataTest
 
 noncomputable section
 
-codata PList (α : Type u)
+codatatype PList (α : Type u)
   | nil
   | cons (a : α) (s : PList α)
 

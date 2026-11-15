@@ -1,9 +1,9 @@
 import Colean.MutualCmd
 
 /-!
-# A tour of `partial_fixpoint` on `codata` types
+# A tour of `partial_fixpoint` on `codatatype`s
 
-What the attribute `with_ccpo` gives a `codata` type, and how Lean's `partial_fixpoint` then
+What the attribute `with_ccpo` gives a `codatatype`, and how Lean's `partial_fixpoint` then
 defines corecursive functions into it, productive or not. Read it top to bottom. Part I (sections 1
 to 8) is what works, Part II (sections 9 to 13) what does not work yet but could.
 
@@ -37,7 +37,7 @@ the constructor `c`. It orders the type by *approximation*: `x ⊑ y` when `x` i
 chain-complete partial order, Lean's `Lean.Order.CCPO`, which is what `partial_fixpoint` needs on
 the result type of a definition. -/
 
-codata CoList (α : Type u)
+codatatype CoList (α : Type u)
   | nil
   | cons (a : α) (t : CoList α)
 
@@ -55,7 +55,7 @@ attribute [with_ccpo] CoList
 /-! ### 2. Productive definitions
 
 A definition by `partial_fixpoint` is the least fixpoint of its equation, `f.eq_1`. Cases are by
-`match` on `dtor`, which `partial_fixpoint` splits (the constructors of a `codata` type are not
+`match` on `dtor`, which `partial_fixpoint` splits (the constructors of a `codatatype` are not
 those of an inductive type). -/
 
 namespace CoList
@@ -129,10 +129,10 @@ end CoList
 
 /-! ### 4. Choosing the bottom, and writing the attribute first
 
-With several constructors without arguments, the bottom is named. `@[with_ccpo] codata …` is the
+With several constructors without arguments, the bottom is named. `@[with_ccpo] codatatype …` is the
 declaration followed by `attribute [with_ccpo] …`. -/
 
-codata Res (α : Type)
+codatatype Res (α : Type)
   | fail
   | done
   | step (r : Res α)
@@ -142,7 +142,7 @@ attribute [with_ccpo (bot := done)] Res
 #check @Res.bot_eq
 
 @[with_ccpo]
-codata Stream' (α : Type u)
+codatatype Stream' (α : Type u)
   | stop
   | cons (a : α) (t : Stream' α)
 
@@ -158,7 +158,7 @@ the library's leaves, and the pairs of a product, are monotone for it
 (`Codata.Occ.monotone_list_map`, `Codata.Occ.monotone_list_cons`,
 `Codata.Occ.monotone_prod_mk_hole`, …). -/
 
-codata Tree (α : Type)
+codatatype Tree (α : Type)
   | leaf
   | node (a : α) (k : Nat → Tree α)
   | rose (a : α) (cs : List (Tree α))
@@ -179,7 +179,7 @@ def Tree.map {α β : Type} (f : α → β) (t : Tree α) : Tree β :=
 partial_fixpoint
 
 -- Recursive calls written out: a list literal, `some`, a pair.
-codata Rose
+codatatype Rose
   | leaf
   | node (cs : List Rose)
   | opt (o : Option Rose)
@@ -202,7 +202,7 @@ The bottom of a family is a constructor at every index: its result index is a va
 no other argument. The order is at every index, and so is `partial_fixpoint` on a dependent
 result. -/
 
-codata Delay : Nat → Type
+codatatype Delay : Nat → Type
   | stop {n : Nat} : Delay n
   | now {n : Nat} (v : Fin (n + 1)) : Delay n
   | later {n : Nat} (d : Delay (n + 1)) : Delay n
@@ -224,7 +224,7 @@ A function of the user's that a recursive call goes through needs its own monoto
 continuation, after which `iter` is accepted: it need not be productive (`iter` of a body that
 never returns is `spin`, the bottom). -/
 
-codata ITree (E : Type → Type) (R : Type)
+codatatype ITree (E : Type → Type) (R : Type)
   | spin
   | ret (r : R)
   | tau (t : ITree E R)
@@ -267,7 +267,7 @@ partial_fixpoint
 
 end ITree
 
-/-! ### 8. The outer `codata` of a mixed block
+/-! ### 8. The outer `codatatype` of a mixed block
 
 It is a single type, whose functor has the open type of the run inside: the attribute applies, and
 the argument through the run inside, a declared type, is nested through a leaf. -/
@@ -275,11 +275,11 @@ the argument through the run inside, a declared type, is nested through a leaf. 
 namespace Mixed
 
 mixed_mutual
-codata Tree (α : Type)
+codatatype Tree (α : Type)
   | leaf
   | node (a : α) (children : Forest α)
   | single (t : Tree α)
-data Forest (α : Type)
+datatype Forest (α : Type)
   | nil
   | cons (t : Tree α) (f : Forest α)
 end
@@ -300,7 +300,7 @@ Everything here could be supported. -/
 The contract of a family with several indices is over their packed index (`T.Ix`), and the
 instance and the lemmas would be stated curried, as the command states its own. -/
 
-codata Grid : Nat → Nat → Type
+codatatype Grid : Nat → Nat → Type
   | stop {m n : Nat} : Grid m n
   | right {m n : Nat} (g : Grid (m + 1) n) : Grid m n
 
@@ -313,10 +313,10 @@ every index, a constructor without arguments in every type of the block, and the
 lemmas per type, the attribute on one type acting for the block. -/
 
 mutual
-codata A
+codatatype A
   | nilA
   | a (b : B)
-codata B
+codatatype B
   | nilB
   | b (a : A)
 end
@@ -331,9 +331,9 @@ declared with the outer types as parameters. -/
 namespace Inner
 
 mixed_mutual
-data Box (α : Type)
+datatype Box (α : Type)
   | mk (s : Strm α)
-codata Strm (α : Type)
+codatatype Strm (α : Type)
   | stop
   | cons (a : α) (b : Box α)
 end
@@ -352,7 +352,7 @@ structurally to be Lean's where Lean has one (functions, `PProd`). -/
 
 namespace Nested
 
-codata Rose
+codatatype Rose
   | leaf
   | opt (o : Option (List Rose))
   | fan (k : Nat → List Rose)

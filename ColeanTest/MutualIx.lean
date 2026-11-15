@@ -16,10 +16,10 @@ noncomputable section
 /-! Different index types, used as in the user's declaration. -/
 
 mutual
-data Pa : Nat → Type
+datatype Pa : Nat → Type
   | nil : Pa 0
   | mk {n : Nat} (q : Qa true) : Pa (n + 1)
-data Qa : Bool → Type
+datatype Qa : Bool → Type
   | mk (p : Pa 3) : Qa true
 end
 
@@ -73,11 +73,11 @@ theorem Qa.index {b : Bool} (q : Qa b) : b = true := tops (.Qa b) q
 /-! No index, one index, two indices, with a parameter that the indices depend on. -/
 
 mutual
-codata Ca (α : Type u) : List α → Type u
+codatatype Ca (α : Type u) : List α → Type u
   | nil (l : List α) (q : Cb α) : Ca α l
-codata Cb (α : Type u)
+codatatype Cb (α : Type u)
   | mk (r : Cc α 2 1)
-codata Cc (α : Type u) : (n : Nat) → Fin n → Type u
+codatatype Cc (α : Type u) : (n : Nat) → Fin n → Type u
   | go {n : Nat} {i : Fin n} (l : List α) (p : Ca α l) : Cc α n i
 end
 
@@ -107,11 +107,11 @@ example {α : Type u} (l : List α) :
 indices under them. -/
 
 mutual
-data Own
+datatype Own
   | nil
   | mk (p : List Own)
   | pr (p : Own × Nat)
-data Other : Nat → Type
+datatype Other : Nat → Type
   | stop : Other 0
   | mk {n : Nat} (a : Own) (l : List (Other n)) (p : Other n × Nat) : Other (n + 1)
 end
@@ -139,9 +139,9 @@ example (p : List Own) : (Own.mk p).width = p.length := by
   rw [Own.width, Own.rec_mk]
 
 mutual
-codata OwnCo
+codatatype OwnCo
   | mk (p : OwnCo' × OwnCo)
-codata OwnCo'
+codatatype OwnCo'
   | mk (a : OwnCo)
 end
 
@@ -151,7 +151,7 @@ inductive Color
   | red
   | blue
 
-data Paint : Color → Type
+datatype Paint : Color → Type
   | nil : Paint Color.red
   | mk (p : List (Paint Color.red)) : Paint Color.red
 

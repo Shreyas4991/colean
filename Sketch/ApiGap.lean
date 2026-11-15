@@ -1,13 +1,13 @@
 import Colean.MutualCmd
 
 /-!
-# What `inductive` gives, and what `data` and `codata` give
+# What `inductive` gives, and what `datatype` and `codatatype` give
 
 Lean's `inductive` (and `structure`) generate a fixed set of declarations, and a number of tactics
 and commands work on any inductive type. This file goes through them one by one and shows, next
-to each, what `data` gives, and `codata` where it makes sense: the generated name, or that it is
-missing, with a short note (needed or not, how hard, what stands in the way). Part I to Part VI
-follow the API of `inductive` and `structure`; Part VII is what a user of `codata` expects
+to each, what `datatype` gives, and `codatatype` where it makes sense: the generated name, or that
+it is missing, with a short note (needed or not, how hard, what stands in the way). Part I to Part
+VI follow the API of `inductive` and `structure`; Part VII is what a user of `codatatype` expects
 beyond Lean; Part VIII ends with a table of the missing items by priority.
 
 Two facts explain most of the gaps. A declared type is a subtype of an encoding (`#print DList`),
@@ -42,13 +42,13 @@ inductive LList (α : Type u)
   | nil
   | cons (head : α) (tail : LList α)
 
-/-- The same declaration as `data`. -/
-data DList (α : Type u)
+/-- The same declaration as `datatype`. -/
+datatype DList (α : Type u)
   | nil
   | cons (head : α) (tail : DList α)
 
-/-- And as `codata`: possibly infinite lists. -/
-codata CoList (α : Type u)
+/-- And as `codatatype`: possibly infinite lists. -/
+codatatype CoList (α : Type u)
   | nil
   | cons (head : α) (tail : CoList α)
 
@@ -64,8 +64,8 @@ Lean: `LList.rec : motive nil → (∀ head tail, motive tail → motive (cons h
 motive t`, computing by `rfl` (iota reduction).
 
 Colean: `DList.rec`, the same statement, an `induction_eliminator`; its computation rules are
-the theorems `DList.rec_nil`, `DList.rec_cons` (`simp`), not `rfl`. `codata` has no recursor, and
-should not: its eliminator is `casesOn`, its principle is `bisim`. -/
+the theorems `DList.rec_nil`, `DList.rec_cons` (`simp`), not `rfl`. `codatatype` has no recursor,
+and should not: its eliminator is `casesOn`, its principle is `bisim`. -/
 
 #check @LList.rec
 #check @DList.rec
@@ -128,7 +128,7 @@ own recursor. Nothing to add. -/
 inductive LRose
   | node (a : Nat) (cs : List LRose)
 
-data DRose
+datatype DRose
   | node (a : Nat) (cs : List DRose)
 
 #check @LRose.rec
@@ -151,10 +151,10 @@ inductive LOdd
 end
 
 mutual
-data Even
+datatype Even
   | zero
   | succ (o : Odd)
-data Odd
+datatype Odd
   | succ (e : Even)
 end
 
@@ -185,7 +185,7 @@ on `dtor` but would not make the tactics of section 11 work: they look for kerne
 #check @DList.cons_ne_nil
 #check @CoList.cons_inj
 
-data Dep
+datatype Dep
   | mk (n : Nat) (v : Fin n) (rest : Dep)
   | stop
 
@@ -248,7 +248,7 @@ example (l : DList Nat) : DList.fold (fun _ => 0) l = 0 := by
   | nil => simp
   | cons _ _ _ => simp
 
-data Vec (α : Type u) : Nat → Type u
+datatype Vec (α : Type u) : Nat → Type u
   | nil : Vec α 0
   | cons {n : Nat} (a : α) (v : Vec α n) : Vec α (n + 1)
 
@@ -333,13 +333,13 @@ sizeOf (cons a t) = 1 + sizeOf a + sizeOf t` (`simp`), so that `termination_by` 
 `decreasing_tactic` work.
 
 Colean: missing. Every type then has Lean's default instance, `sizeOf t = 0`, and any
-well-founded definition by `sizeOf` fails. Proposed for `data`: the instance by `fold` and the
+well-founded definition by `sizeOf` fails. Proposed for `datatype`: the instance by `fold` and the
 rules `T.cᵢ.sizeOf_spec`, as Lean's; with the equation `T.dtor_eq_cᵢ_iff : t.dtor = F.cᵢ xs ↔ t =
 cᵢ xs` (generated, `simp`), a recursion through `match h : t.dtor with` terminates by
 `decreasing_by simp_all`.
 Through a nested argument the rule needs `sizeOf` of the leaf at the mapped contents (`List`: a
 lemma `sizeOf (l.map f) = sizeOf l` when `sizeOf ∘ f = sizeOf`). Medium effort; important for
-`data`. An alternative is a `WellFoundedRelation` instance by the immediate-child relation, the
+`datatype`. An alternative is a `WellFoundedRelation` instance by the immediate-child relation, the
 one `T.rec` is built on. -/
 
 #check @LList.cons.sizeOf_spec
@@ -383,8 +383,8 @@ decreasing_by simp_all
 /-! ### 14. `partial`, `partial_fixpoint`, and what stands for `rfl`
 
 Lean's `partial def` needs compiled code and an `Inhabited` or `Nonempty` result: with
-noncomputable types it is refused. `partial_fixpoint` works for a `codata` type with
-`with_ccpo` (`CCPOTour.lean`), and for `data` only into a type with an order (`Option`). The
+noncomputable types it is refused. `partial_fixpoint` works for a `codatatype` with
+`with_ccpo` (`CCPOTour.lean`), and for `datatype` only into a type with an order (`Option`). The
 equation lemmas of a function by `fold` are the user's: `simp [f]` and the generated `fold_cᵢ`. -/
 
 /-- error: 'noncomputable partial' is not allowed -/
@@ -397,9 +397,9 @@ noncomputable partial def loop (n : Nat) : DList Nat := loop n
 
 Lean derives neither by itself: `deriving Nonempty, Inhabited`. Colean rejects `deriving`, and
 generates neither. Proposed: generate `Nonempty` (a `Prop`, no computation involved) and a
-noncomputable `Inhabited` when a constructor can be built from inhabited data. For `data` the
+noncomputable `Inhabited` when a constructor can be built from inhabited data. For `datatype` the
 constructor needs no recursive argument (or only through a leaf with an empty value, `[]`); for
-`codata` any constructor does, the recursive arguments by `corec`: `Str α` is inhabited when `α`
+`codatatype` any constructor does, the recursive arguments by `corec`: `Str α` is inhabited when `α`
 is, unlike Lean's inductive streams. Low effort, medium importance (Mathlib-style `[Nonempty T]`
 assumptions, `Classical.arbitrary`). -/
 
@@ -410,9 +410,9 @@ inductive LList₂ (α : Type u)
 
 #check (inferInstance : Nonempty (LList₂ Nat))
 
-/-- error: `deriving` is not supported by `data` -/
+/-- error: `deriving` is not supported by `datatype` -/
 #guard_msgs in
-data DList₂ (α : Type u)
+datatype DList₂ (α : Type u)
   | nil
   | cons (head : α) (tail : DList₂ α)
   deriving Nonempty
@@ -442,12 +442,13 @@ example : (DList.nil : DList Nat) ≠ .cons 1 .nil := by
 /-! ### 17. Sorts and universes
 
 Lean's `inductive` may be a `Prop`, and a family may live in any universe large enough for its
-constructors. Colean defines types only (`data P : Prop` is an error) and a family lives at least
-in the universe of its indices (`contract.md`). Both come from the encoding; low importance. -/
+constructors. Colean defines types only (`datatype P : Prop` is an error) and a family lives at
+least in the universe of its indices (`contract.md`). Both come from the encoding; low
+importance. -/
 
 /-- error: `P` is declared with sort `Prop` but defined with sort `Type` -/
 #guard_msgs (substring := true) in
-data P : Prop
+datatype P : Prop
   | intro
 
 /-! ## Part VI: structures, and types with one constructor -/
@@ -459,10 +460,11 @@ so `p.1`, `p.2` too), the anonymous constructor and the structure instance notat
 `{ p with x := 0 }`, `Pt.mk.injEq`, with `@[ext]` the lemmas `Pt.ext` and `Pt.ext_iff`, and eta by
 definition (`⟨p.x, p.y⟩ = p` is `rfl`).
 
-Colean, for a `data` or `codata` with one constructor: none of these. The owner plans projections
-for such types; Part VII sketches them for `codata`, and the same works for `data`. The notations
-`⟨⟩`, `{ … }`, `.1` and `with` are Lean's, for kernel inductive types with one constructor, and
-cannot be had for a definition; `⟨⟩` and `{ … }` today even see the subtype of the encoding. -/
+Colean, for a `datatype` or `codatatype` with one constructor: none of these. The owner plans
+projections for such types; Part VII sketches them for `codatatype`, and the same works for
+`datatype`. The notations `⟨⟩`, `{ … }`, `.1` and `with` are Lean's, for kernel inductive types with
+one constructor, and cannot be had for a definition; `⟨⟩` and `{ … }` today even see the subtype of
+the encoding. -/
 
 @[ext] structure Pt where
   x : Nat
@@ -471,7 +473,7 @@ cannot be had for a definition; `⟨⟩` and `{ … }` today even see the subtyp
 #check @Pt.ext_iff
 example (p : Pt) : (⟨p.x, p.y⟩ : Pt) = p := rfl
 
-data DPt
+datatype DPt
   | mk (x : Nat) (y : Nat)
 
 example : DPt := by
@@ -479,7 +481,7 @@ example : DPt := by
   fail_if_success exact { x := 1, y := 2 }
   exact .mk 1 2
 
-/-! ## Part VII: `codata` beyond Lean -/
+/-! ## Part VII: `codatatype` beyond Lean -/
 
 /-! ### 19. What is there
 
@@ -503,14 +505,14 @@ to equality (`coinduct`, with `F.Rel.mono` and `F.rel_refl`). -/
 
 * `T.Poly.rel_cᵢ_cⱼ`, the relation of a declared type as a leaf on its constructors
   (`RelHelp.lean`, section 11); the rest of `RelHelp.lean` is implemented (section 19).
-* No `@[ext]` lemma for `codata`: `ext` applies extensionality lemmas again to the new goals, so a
-  lemma whose premise is an equation of the same type unfolds a stream a hundred levels deep
+* No `@[ext]` lemma for `codatatype`: `ext` applies extensionality lemmas again to the new goals, so
+  a lemma whose premise is an equation of the same type unfolds a stream a hundred levels deep
   (its default depth). `T.ext_iff` without the attribute, and `ext1` where needed (section 21).
 * Projections for a type with one constructor, below. -/
 
-/-! ### 21. Projections for `codata` with one constructor: a sketch
+/-! ### 21. Projections for `codatatype` with one constructor: a sketch
 
-For `codata Str | cons (head : α) (tail : Str α)`, the command would generate:
+For `codatatype Str | cons (head : α) (tail : Str α)`, the command would generate:
 
 * the projections `Str.head`, `Str.tail`, a match on `dtor` (`casesOn` works as well);
 * `Str.head_cons`, `Str.tail_cons` (`simp`), and `Str.dtor_eq : s.dtor = .cons s.head s.tail`;
@@ -527,7 +529,7 @@ generated declaration collides, as constructors already can (left alone by the o
 
 namespace Costructure
 
-codata Str (α : Type u)
+codatatype Str (α : Type u)
   | cons (head : α) (tail : Str α)
 
 def Str.head {α : Type u} (s : Str α) : α := match s.dtor with | .cons a _ => a
@@ -606,7 +608,7 @@ end Costructure
 
 ### Overview
 
-| Item | `inductive` / `structure` | `data` | `codata` | Note |
+| Item | `inductive` / `structure` | `datatype` | `codatatype` | Note |
 |---|---|---|---|---|
 | recursor | `T.rec`, iota by `rfl` | `T.rec`, rules `T.rec_cᵢ` (`simp`) | none (`corec`, `bisim`) | rules are theorems |
 | `recOn` | `T.recOn` | missing | missing | trivial |
@@ -627,7 +629,7 @@ end Costructure
 | `decide`, `rfl` on eliminators, `#eval` | yes | no | no | classical encoding |
 | `termination_by` | by `sizeOf` | fails | n/a | needs `SizeOf` |
 | `partial def` | yes | refused (noncomputable) | refused | `partial_fixpoint` instead |
-| `partial_fixpoint` | into an order | into an order | `with_ccpo` | present for `codata` |
+| `partial_fixpoint` | into an order | into an order | `with_ccpo` | present for `codatatype` |
 | `deriving` | yes | refused | refused | |
 | `Nonempty`, `Inhabited` | by `deriving` | missing | missing | easy |
 | `DecidableEq`, `Repr`, `BEq`, `Hashable`, `Ord` | by `deriving` | missing | missing | computation |
@@ -648,7 +650,7 @@ end Costructure
 | 1 | One step of `F.Rel` by `simp`: `T.F.rel_cᵢ_cⱼ`, `Occ.rel_*` (done); `T.Poly.rel_cᵢ_cⱼ` (`RelHelp.lean`, not yet) | high | low | none |
 | 2 | `T.dtor_injective`, `T.dtor_inj`, `T.dtor_eq_cᵢ_iff` (done) | high | low | none |
 | 3 | Projections for a type with one constructor, with `cᵢ_head_tail` eta, `ext_iff`, coinduction and corecursion by the projections (Part VII) | high (planned) | low to medium | none; names may collide with generated ones, as constructors already can |
-| 4 | `SizeOf` instance and `T.cᵢ.sizeOf_spec` for `data`, so that `termination_by` works | high for `data` | medium (nested arguments need a rule per leaf) | none |
+| 4 | `SizeOf` instance and `T.cᵢ.sizeOf_spec` for `datatype`, so that `termination_by` works | high for `datatype` | medium (nested arguments need a rule per leaf) | none |
 | 5 | `Nonempty` and noncomputable `Inhabited` instances | medium | low | none |
 | 6 | Messages that do not show the encoding (`match`, `rcases`, `⟨…⟩`, `injection`) | medium | medium: make the types opaque to elaboration, then check the generated proofs | the generated proofs may rely on unfolding |
 | 7 | `T.coinduct` (up to equality), `T.F.Rel.mono`, `T.F.rel_refl` (done) | medium | low | none |
@@ -656,7 +658,7 @@ end Costructure
 | 9 | `match`, `rcases` patterns, `injection`, `cases` on constructor equations and on predicates at constructor indices, structural recursion, `below`, `brecOn` | high | none possible here | Lean: kernel inductives only (lean4#2716); `simp at h`, `match t.dtor`, `rec`, `generalize` meanwhile |
 | 10 | `#eval`, `decide`, `rfl` on eliminators, `deriving DecidableEq`/`Repr`/`BEq`/`Hashable`/`Ord`, `partial def` | medium | high | the classical encoding; out of scope for now |
 | 11 | `T.ctorElim`, `T.cᵢ.elim`, `T.noConfusion` | low | low | none, but little use |
-| 12 | `data … : Prop`; a family below the universe of its indices | low | high | the encoding |
+| 12 | `datatype … : Prop`; a family below the universe of its indices | low | high | the encoding |
 -/
 
 end

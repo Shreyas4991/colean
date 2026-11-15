@@ -27,7 +27,7 @@ noncomputable section
 
 /-! ### A sum inside a named type constructor -/
 
-data LS (α : Type u)
+datatype LS (α : Type u)
   | nil
   | mk (p : List (α ⊕ LS α))
 
@@ -88,7 +88,7 @@ example : (LS.mk [.inl 2, .inr (.mk [.inl 3])]).total = 5 := by
   simp [LS.total]
 
 -- Nesting through it.
-data ThroughLS
+datatype ThroughLS
   | leaf
   | mk (s : LS ThroughLS)
 
@@ -107,7 +107,7 @@ example : (ThroughLS.mk (.mk [.inl .leaf, .inr (.mk [.inl .leaf])])).size = 3 :=
 
 -- Several occurrences in one element: the members with a property are eliminated at each one
 -- (`Occ₂.exists_memY_prod`, …).
-data L2 (α : Type u)
+datatype L2 (α : Type u)
   | nil
   | mk (p : List (α ⊕ L2 α × L2 α))
 
@@ -125,9 +125,9 @@ parameter for the trees and the forests' own recursion on the two sides of a sum
 namespace ListSum
 
 mixed_mutual
-codata Tree (α : Type u)
+codatatype Tree (α : Type u)
   | node (a : α) (children : Forest α)
-data Forest (α : Type u)
+datatype Forest (α : Type u)
   | nil
   | cons (p : List (Tree α ⊕ Forest α))
 end
@@ -154,7 +154,7 @@ end ListSum
 
 /-! ### A parameter with the recursion of a family -/
 
-data LF (α : Type u) : Nat → Type u
+datatype LF (α : Type u) : Nat → Type u
   | nil {n : Nat} : LF α n
   | mk {n : Nat} (p : List (α × LF α n)) : LF α (n + 1)
 
@@ -214,7 +214,7 @@ example : (LF.mk [((), LF.nil), ((), .nil)] : LF Unit 1).leaves = 2 := by
   simp [LF.leaves]
 
 -- Nesting through it at an index.
-data ThroughLF
+datatype ThroughLF
   | leaf
   | mk (t : LF ThroughLF 2)
 
@@ -224,10 +224,10 @@ example (t : ThroughLF) : PolyIso.Mem (fun X => LF X 2) t (LF.mk [(t, .nil)]) :=
 /-! ### A type of a block reached through a container -/
 
 mutual
-data RA (α : Type u)
+datatype RA (α : Type u)
   | nil
   | mk (a : α) (p : List (RA α × Nat))
-data RB (α : Type u)
+datatype RB (α : Type u)
   | mk (a : RA α)
 end
 
@@ -267,7 +267,7 @@ example : (RA.mk 0 [(.mk 1 [], 2), (.nil, 3)]).size = 3 := by
   simp [RA.size, RA.rec_mk, RA.rec_nil]
 
 -- Nesting through it.
-data ThroughRA
+datatype ThroughRA
   | leaf
   | mk (r : RA ThroughRA)
 
@@ -276,7 +276,7 @@ example (t : ThroughRA) : PolyIso.Mem RA t (RA.mk t []) := by
 
 /-! ### A field of a family at several indices -/
 
-data Ch (α : Type u) : Nat → Type u
+datatype Ch (α : Type u) : Nat → Type u
   | leaf {n : Nat} : Ch α n
   | mk {n : Nat} (p : List (α × Ch α n × Ch α (n + 1))) : Ch α (n + 2)
 
@@ -314,7 +314,7 @@ example (x : Nat) {n : Nat} (p : List (Nat × Ch Nat n × Ch Nat (n + 1))) :
 
 /-! ### A hypothesis by membership in a pair of a container and an occurrence -/
 
-data LP
+datatype LP
   | leaf
   | mk (p : List LP × LP)
 

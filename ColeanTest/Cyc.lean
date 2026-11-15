@@ -8,7 +8,7 @@ namespace CodataTest
 
 noncomputable section
 
-codata Cyc : (n : Nat) → Fin (n + 1) → Type
+codatatype Cyc : (n : Nat) → Fin (n + 1) → Type
   | next {n : Nat} {i : Fin (n + 1)} (c : Cyc n (i + 1)) : Cyc n i
   | prev {n : Nat} {i : Fin (n + 1)} (c : Cyc n (i - 1)) : Cyc n i
 

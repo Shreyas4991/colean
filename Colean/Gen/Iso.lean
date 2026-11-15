@@ -8,7 +8,7 @@ signature's layers, for a family `X` on the packed index:
 
 * `T.toC : T.F params X' idx → (T.sig params).Obj X ⟨idx⟩` and `T.ofC` back, where `X'` is `X`
   curried (`curryFam`);
-* their laws `T.ofC_toC`, `T.toC_ofC`, `T.ofC_map`, and for `codata` `T.rel_ofC` (stated with
+* their laws `T.ofC_toC`, `T.toC_ofC`, `T.ofC_map`, and for `codatatype` `T.rel_ofC` (stated with
   `T.F.Rel`, `Gen/Rel.lean`).
 
 `toC` is by cases on `F`; the children of a layer are by cases on the position (`casesPos`), at

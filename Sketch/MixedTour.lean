@@ -3,10 +3,10 @@ import Colean.MutualCmd
 /-!
 # A tour of mixed blocks
 
-What the `mixed_mutual` command does with a block of `data` and `codata` declarations, and what it
-does not do yet. Read it top to bottom. Part I (sections 1 to 11) is what works, Part II (section
-12) what does not work yet but could, and Part III (sections 13 and 14) what looks like a bug of
-the command rather than a limit.
+What the `mixed_mutual` command does with a block of `datatype` and `codatatype` declarations, and
+what it does not do yet. Read it top to bottom. Part I (sections 1 to 11) is what works, Part II
+(section 12) what does not work yet but could, and Part III (sections 13 and 14) what looks like a
+bug of the command rather than a limit.
 
 How the file is checked:
 
@@ -15,9 +15,9 @@ How the file is checked:
 * a failed block declares nothing, not even the open types of its runs inside, and every example
   has a namespace of its own, so names do not clash.
 
-Uniform blocks, all `data` or all `codata`, are in `Sketch/MutualTour.lean`, and nesting through
-other types in `Sketch/NestingTour.lean`. A mixed block uses both: its runs are uniform blocks or
-single types, and they nest through each other.
+Uniform blocks, all `datatype` or all `codatatype`, are in `Sketch/MutualTour.lean`, and nesting
+through other types in `Sketch/NestingTour.lean`. A mixed block uses both: its runs are uniform
+blocks or single types, and they nest through each other.
 -/
 
 universe u v
@@ -57,9 +57,9 @@ children. This is the classic type of finitely branching infinite trees. -/
 namespace Classic
 
 mixed_mutual
-codata Tree (α : Type u)
+codatatype Tree (α : Type u)
   | node (a : α) (children : Forest α)
-data Forest (α : Type u)
+datatype Forest (α : Type u)
   | nil
   | cons (t : Tree α) (f : Forest α)
 end
@@ -150,9 +150,9 @@ forever. The recursor of the trees has its hypothesis at the members of the fore
 namespace Other
 
 mixed_mutual
-data Tree (α : Type u)
+datatype Tree (α : Type u)
   | node (a : α) (cs : Forest α)
-codata Forest (α : Type u)
+codatatype Forest (α : Type u)
   | nil
   | cons (t : Tree α) (f : Forest α)
 end
@@ -231,12 +231,12 @@ through both. Then `Menu α := Menu.Open α (Proc α)` and `Trace α := Trace.Op
 namespace Runs
 
 mixed_mutual
-codata Proc (α : Type u)
+codatatype Proc (α : Type u)
   | step (a : α) (menu : Menu α) (t : Trace α)
-data Menu (α : Type u)
+datatype Menu (α : Type u)
   | nil
   | cons (p : Proc α) (t : Trace α) (rest : Menu α)
-codata Trace (α : Type u)
+codatatype Trace (α : Type u)
   | tick (m : Menu α) (next : Trace α)
 end
 
@@ -269,18 +269,18 @@ end Runs
 
 /-! ### 6. An inner run of two types
 
-Two adjacent `data` declarations form one run, declared as one open block `Rose_Forest.Open` over
-the index `Rose_Forest.Ix`. Closed, `Rose_Forest`, `Rose` and `Forest` have the interface of a
+Two adjacent `datatype` declarations form one run, declared as one open block `Rose_Forest.Open`
+over the index `Rose_Forest.Ix`. Closed, `Rose_Forest`, `Rose` and `Forest` have the interface of a
 `mutual` block: per-type constructors, `casesOn`, and recursors with a motive per type. -/
 
 namespace InnerBlock
 
 mixed_mutual
-codata T (α : Type u)
+codatatype T (α : Type u)
   | node (a : α) (r : Rose α)
-data Rose (α : Type u)
+datatype Rose (α : Type u)
   | node (t : T α) (f : Forest α)
-data Forest (α : Type u)
+datatype Forest (α : Type u)
   | nil
   | cons (r : Rose α) (f : Forest α)
 end
@@ -310,18 +310,18 @@ theorem T.twice_eq {α : Type u} (a : α) :
 
 end InnerBlock
 
-/-! In the other order an inner block of `codata`: the recursor of the outer `data` has its
+/-! In the other order an inner block of `codatatype`: the recursor of the outer `datatype` has its
 hypothesis by membership in the closed types of the block. -/
 
 namespace InnerCoBlock
 
 mixed_mutual
-data D (α : Type u)
+datatype D (α : Type u)
   | leaf (a : α)
   | node (s : S α)
-codata S (α : Type u)
+codatatype S (α : Type u)
   | cons (d : D α) (s : S α) (o : O α)
-codata O (α : Type u)
+codatatype O (α : Type u)
   | none
   | some (d : D α)
 end
@@ -340,9 +340,9 @@ length the node says. -/
 namespace InnerIdx
 
 mixed_mutual
-codata Tree (α : Type u)
+codatatype Tree (α : Type u)
   | node (a : α) (n : Nat) (cs : Vec α n)
-data Vec (α : Type u) : Nat → Type u
+datatype Vec (α : Type u) : Nat → Type u
   | nil : Vec α 0
   | cons {n : Nat} (t : Tree α) (f : Vec α n) : Vec α (n + 1)
 end
@@ -371,9 +371,9 @@ end InnerIdx
 namespace InnerCoIdx
 
 mixed_mutual
-data Tree (α : Type u)
+datatype Tree (α : Type u)
   | node (a : α) (n : Nat) (cs : Vec α n)
-codata Vec (α : Type u) : Nat → Type u
+codatatype Vec (α : Type u) : Nat → Type u
   | nil : Vec α 0
   | cons {n : Nat} (t : Tree α) (f : Vec α n) : Vec α (n + 1)
 end
@@ -391,9 +391,9 @@ one run only. The open types take one more, for the outer types, at a universe o
 namespace Params
 
 mixed_mutual
-codata Tree (α : Type u) (β : Type v)
+codatatype Tree (α : Type u) (β : Type v)
   | node (a : α) (children : Forest α β)
-data Forest (α : Type u) (β : Type v)
+datatype Forest (α : Type u) (β : Type v)
   | nil (b : β)
   | cons (t : Tree α β) (f : Forest α β)
 end
@@ -409,9 +409,9 @@ section
 variable {γ : Type u}
 
 mixed_mutual
-data Box
+datatype Box
   | mk (c : Stream)
-codata Stream
+codatatype Stream
   | cons (g : γ) (b : Box) (s : Stream)
 end
 
@@ -420,13 +420,13 @@ end
 #check @Box.mk
 #check @Box.rec
 
-/-! Implicit binders, in the constructors and among the parameters. As with `data`, an implicit
+/-! Implicit binders, in the constructors and among the parameters. As with `datatype`, an implicit
 parameter is explicit in the types: `LabList ι f`. -/
 
 mixed_mutual
-codata Lab {ι : Type} (f : ι → Nat)
+codatatype Lab {ι : Type} (f : ι → Nat)
   | node {i : ι} (n : Fin (f i)) (cs : LabList f)
-data LabList {ι : Type} (f : ι → Nat)
+datatype LabList {ι : Type} (f : ι → Nat)
   | nil
   | cons (t : Lab f) (rest : LabList f)
 end
@@ -479,9 +479,9 @@ membership of the trees is that of the components. -/
 namespace Pair
 
 mixed_mutual
-codata Tree (α : Type u)
+codatatype Tree (α : Type u)
   | node (a : α) (children : Forest α)
-data Forest (α : Type u)
+datatype Forest (α : Type u)
   | nil
   | cons (p : Tree α × Forest α)
 end
@@ -509,9 +509,9 @@ and the membership of the trees is that of the pairs in the list. -/
 namespace ListPair
 
 mixed_mutual
-codata Tree (α : Type u)
+codatatype Tree (α : Type u)
   | node (a : α) (children : Forest α)
-data Forest (α : Type u)
+datatype Forest (α : Type u)
   | nil
   | cons (p : List (Tree α × Forest α))
 end
@@ -537,9 +537,9 @@ end ListPair
 namespace ListSum
 
 mixed_mutual
-codata Tree (α : Type u)
+codatatype Tree (α : Type u)
   | node (a : α) (children : Forest α)
-data Forest (α : Type u)
+datatype Forest (α : Type u)
   | nil
   | cons (p : List (Tree α ⊕ Forest α))
 end
@@ -561,12 +561,12 @@ instances of such a block are not the right ones, though (section 14). -/
 namespace Distant
 
 mixed_mutual
-codata A (α : Type u)
+codatatype A (α : Type u)
   | mk (b : B α)
-data B (α : Type u)
+datatype B (α : Type u)
   | nil
   | cons (c : C α) (b : B α)
-codata C (α : Type u)
+codatatype C (α : Type u)
   | mk (a : A α) (c : C α)
 end
 
@@ -579,12 +579,12 @@ end Distant
 namespace DistantDomain
 
 mixed_mutual
-codata A (α : Type)
+codatatype A (α : Type)
   | mk (b : B α)
-data B (α : Type)
+datatype B (α : Type)
   | nil
   | cons (c : C α) (b : B α)
-codata C (α : Type)
+codatatype C (α : Type)
   | mk (a : α → A α) (c : C α)
 end
 
@@ -610,9 +610,9 @@ generated yet; generating them, as `PolyIso` is generated, would make both block
 namespace OuterIdx
 
 mixed_mutual
-codata VTree (α : Type u) : Nat → Type u
+codatatype VTree (α : Type u) : Nat → Type u
   | node {n : Nat} (a : α) (children : VForest α n) : VTree α n
-data VForest (α : Type u) : Nat → Type u
+datatype VForest (α : Type u) : Nat → Type u
   | nil : VForest α 0
   | cons {n : Nat} (t : VTree α n) (f : VForest α n) : VForest α (n + 1)
 end
@@ -622,11 +622,11 @@ end OuterIdx
 namespace OuterBlock
 
 mixed_mutual
-codata Tree (α : Type u)
+codatatype Tree (α : Type u)
   | node (a : α) (children : Forest α)
-codata Str (α : Type u)
+codatatype Str (α : Type u)
   | cons (hd : Tree α) (tl : Str α)
-data Forest (α : Type u)
+datatype Forest (α : Type u)
   | nil
   | cons (t : Tree α) (s : Str α) (f : Forest α)
 end
@@ -648,9 +648,9 @@ wrote. The command should refuse the name, or pick another one for the open type
 namespace CtorOpen
 
 mixed_mutual
-codata Tree
+codatatype Tree
   | node (cs : Ival)
-data Ival
+datatype Ival
   | Open (t : Tree)
   | Closed
 end
@@ -671,12 +671,12 @@ falls back to `PolyIso.Mem C.Open`. -/
 namespace DistantMem
 
 mixed_mutual
-codata A
+codatatype A
   | mk (b : B)
-data B
+datatype B
   | nil
   | cons (c : C) (b : B)
-codata C
+codatatype C
   | mk (a : A) (c : C)
 end
 

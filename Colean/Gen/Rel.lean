@@ -3,7 +3,7 @@ import Colean.Gen.Iso
 /-!
 # Generators on `Expr`: the lifting to relations
 
-*Spec.* Input: the context, `T.F` and (for `rel_ofC`) the isomorphism. Output, for `codata`:
+*Spec.* Input: the context, `T.F` and (for `rel_ofC`) the isomorphism. Output, for `codatatype`:
 
 * `T.F.Rel R : T.F params X idx → T.F params Y idx → Prop`, the inductive lifting of a relation:
   the same constructor, the same data, related recursive arguments (`R` at their index, pointwise

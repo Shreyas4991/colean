@@ -11,7 +11,7 @@ namespace CodataTest
 
 noncomputable section
 
-codata Alt (α : Type u) (β : Type v) : Bool → Type (max u v)
+codatatype Alt (α : Type u) (β : Type v) : Bool → Type (max u v)
   | left (a : α) (s : Alt α β false) : Alt α β true
   | right (b : β) (s : Alt α β true) : Alt α β false
 

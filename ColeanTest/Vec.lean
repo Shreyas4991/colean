@@ -8,7 +8,7 @@ namespace CodataTest
 
 noncomputable section
 
-codata Vec (α : Type u) : Nat → Type u
+codatatype Vec (α : Type u) : Nat → Type u
   | nil : Vec α 0
   | cons {n : Nat} (a : α) (v : Vec α n) : Vec α (n + 1)
 

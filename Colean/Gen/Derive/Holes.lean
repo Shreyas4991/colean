@@ -17,7 +17,7 @@ open Lean Meta Elab Term
 register_option codata.deriveDetails : Bool := {
   defValue := false
   descr := "show the error itself when the instances of a declared type are not generated \
-    (step 5 of the `codata` and `data` commands)"
+    (step 5 of the `codatatype` and `datatype` commands)"
 }
 
 namespace Codata.Gen
@@ -276,11 +276,11 @@ They are the fresh ones named `fresh`, unless a field fixes the universe of the 
 `NDet : Type → Type`). Then `T.F`, `T.corec` and `T.fold` take their families in `Type l`, so the
 layer's `Y` and `Y'` are at `l`, and so must be the states of `corec` or `fold` by which the
 fixpoint is built (`coFix`, `inFix`, `Model/Poly.lean`): the trees of shapes, made of the
-premises' shapes among others, and for `codata` the contents at their paths, made of their
-positions and of `X`. So the premises' shapes, and for `codata` their positions, are in `Type`,
-the one universe at most any `l`, and for `codata` `X` is at `l` (`X'` at `prime l`, at the
+premises' shapes among others, and for `codatatype` the contents at their paths, made of their
+positions and of `X`. So the premises' shapes, and for `codatatype` their positions, are in `Type`,
+the one universe at most any `l`, and for `codatatype` `X` is at `l` (`X'` at `prime l`, at the
 primed universes of the holes); the others stay fresh. At `l = 0`, the common case, the instances
-are as general as the type allows; above, those of `data` need trees of shapes at `l`
+are as general as the type allows; above, those of `datatype` need trees of shapes at `l`
 (`checkStateLevel`). -/
 def stepLevels (fresh : List Name) (nh : Nat) (prime : Level → Level) : Array Level :=
   let w (i : Nat) : Level := .param fresh[i]!

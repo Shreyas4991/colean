@@ -2,8 +2,8 @@ import Colean.MutualCmd
 
 /-! # Test: `simp` through the instances of declared types
 
-A type declared with `data` or `codata` gets, with its instances, `simp` lemmas for the map and
-for membership on each constructor (`T.Poly.map_c`, `T.Poly.mem_c`). So another type's rules,
+A type declared with `datatype` or `codatatype` gets, with its instances, `simp` lemmas for the map
+and for membership on each constructor (`T.Poly.map_c`, `T.Poly.mem_c`). So another type's rules,
 which go through the map of the instance, compute on constructors, and the induction hypotheses
 of its recursor, by membership, become hypotheses on the arguments. -/
 
@@ -17,11 +17,11 @@ noncomputable section
 
 /-! ### Trees with a forest of children -/
 
-data Forest (X : Type u)
+datatype Forest (X : Type u)
   | nil
   | cons (t : X) (f : Forest X)
 
-data Tree
+datatype Tree
   | node (n : Nat) (cs : Forest Tree)
 
 /--
@@ -93,12 +93,12 @@ theorem Tree.size_eq_size' (t : Tree) : t.size = t.size' := by
     simp only [Tree.size, Tree.size', Tree.fold_node] at ih ⊢
     rw [Forest.map_congr cs ih, Forest.sum_eq_sum']
 
-/-! ### Through `codata` -/
+/-! ### Through `codatatype` -/
 
-codata CStr (α : Type u)
+codatatype CStr (α : Type u)
   | cons (a : α) (t : CStr α)
 
-codata CTree
+codatatype CTree
   | node (n : Nat) (cs : CStr CTree)
 
 -- The map through `CStr`'s instance on a constructor.
@@ -123,8 +123,8 @@ example (s₀ : CStr Unit) :
   simp only [CTree.two, CTree.dtor_corec, CTree.F.map_node, CStr.Poly.map_cons,
     Occ.map_ofIso_id]
 
--- `data` through `codata`.
-data Bush
+-- `datatype` through `codatatype`.
+datatype Bush
   | leaf
   | node (c : CStr Bush)
 
@@ -146,7 +146,7 @@ theorem Bush.ind_head (P : Bush → Prop) (hl : P .leaf) (hn : ∀ a s, P a → 
 
 /-! ### Through an indexed family -/
 
-data Vec (α : Type u) : Nat → Type u
+datatype Vec (α : Type u) : Nat → Type u
   | nil : Vec α 0
   | cons {n : Nat} (a : α) (t : Vec α n) : Vec α (n + 1)
 
@@ -169,7 +169,7 @@ info: @Vec.Poly.mem_cons : ∀ {H : Type u_2 → Type u_1} {S : Type u_3} {R : S
 #guard_msgs(whitespace := lax) in
 #check @Vec.Poly.mem_cons
 
-data Tri
+datatype Tri
   | leaf (n : Nat)
   | node (cs : Vec Tri 3)
 
@@ -199,7 +199,7 @@ theorem Tri.ind_three (t : Tri) (P : Tri → Prop) (hl : ∀ n, P (.leaf n))
 
 -- A family through a family, at its own index: the leaf is at a fixed index of the family
 -- (`IOcc.ofOcc`), which `IOcc.map_ofOcc` takes off.
-data VTree : Nat → Type
+datatype VTree : Nat → Type
   | leaf : VTree 0
   | node {n : Nat} (cs : Vec (VTree n) n) : VTree (n + 1)
 
@@ -218,10 +218,10 @@ example (t a : VTree 1) : PolyIso.Mem (fun X => Vec X 1) t (.cons a .nil) ↔ t 
 /-! ### Through a type of a block -/
 
 mutual
-data Ping (α : Type u)
+datatype Ping (α : Type u)
   | nil
   | cons (a : α) (b : Pong α)
-data Pong (α : Type u)
+datatype Pong (α : Type u)
   | cons (a : α) (b : Ping α)
 end
 
@@ -243,7 +243,7 @@ info: @Ping.Poly.mem_cons : ∀ {H : Type u_2 → Type u_1} {S : Type u_3} {R : 
 #guard_msgs(whitespace := lax) in
 #check @Ping.Poly.mem_cons
 
-data Chain
+datatype Chain
   | leaf
   | mk (p : Ping Chain)
 
@@ -263,11 +263,11 @@ example (t a b : Chain) :
 
 /-! ### Two holes -/
 
-data E (α β : Type u)
+datatype E (α β : Type u)
   | l (a : α)
   | r (b : β)
 
-data T₃
+datatype T₃
   | leaf
   | mk (p : E (List T₃) T₃)
 
@@ -304,7 +304,7 @@ theorem T₃.ind_mem (P : T₃ → Prop) (hl : P .leaf) (hL : ∀ l, (∀ a ∈ 
 
 /-! ### Fields with a structure in the parameter -/
 
-data Pair (α : Type u)
+datatype Pair (α : Type u)
   | mk (p : α × α) (l : List α)
 
 example (f : Nat → Nat) (a b : Nat) (l : List Nat) :
@@ -317,7 +317,7 @@ example (x a b : Nat) (l : List Nat) :
 
 /-! ### A recursive argument under a telescope -/
 
-data Fan (α : Type u)
+datatype Fan (α : Type u)
   | leaf (a : α)
   | node (k : Nat → Fan α)
 

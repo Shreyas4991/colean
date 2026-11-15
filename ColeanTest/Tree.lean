@@ -6,7 +6,7 @@ namespace CodataTest
 
 noncomputable section
 
-codata Tree
+codatatype Tree
   | leaf
   | node (a : Nat) (l r : Tree)
 

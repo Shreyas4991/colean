@@ -67,7 +67,7 @@ def sigConst (n : Name) (extra : List Level := []) : MetaM Expr := do
   let (w, u, v) ← ctx.sigLvls
   return .const n ([w, u, v] ++ extra)
 
-/-- `Cotype (T.sig params)`, or `Intype` for `data`: the model's family on the packed index. -/
+/-- `Cotype (T.sig params)`, or `Intype` for `datatype`: the model's family on the packed index. -/
 def modelFam : MetaM Expr := do
   return mkApp (← ctx.sigConst (if ctx.co then ``Codata.Signature.Cotype
     else ``Codata.Signature.Intype)) (← ctx.sigE)
@@ -353,7 +353,7 @@ def modelLevel : TermElabM Level := do
 
 /-- Step 2, the signature. The model's universe, `tLvl` once `T.sig` is declared, must be the
 one the constructors fixed, if they did: checked before the signature is declared. What is
-declared before it (`T.F`, `T.F.map`, and for `codata` `T.F.Rel`) is rolled back with the rest
+declared before it (`T.F`, `T.F.map`, and for `codatatype` `T.F.Rel`) is rolled back with the rest
 when the command fails (`allOrNothing`). -/
 def genSignature : TermElabM Unit := do
   let rShape ← ctx.shapeLevel

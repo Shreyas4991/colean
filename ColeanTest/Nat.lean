@@ -1,13 +1,13 @@
 import Mathlib.Logic.Equiv.Defs
 import Colean.DataCmd
 
-/-! # Test: `data` with no parameters, the naturals -/
+/-! # Test: `datatype` with no parameters, the naturals -/
 
 namespace DataTest
 
 noncomputable section
 
-data Nat'
+datatype Nat'
   | zero
   | succ (n : Nat')
 

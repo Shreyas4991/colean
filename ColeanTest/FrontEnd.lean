@@ -10,7 +10,7 @@ motive's universe first, as does every declaration with a motive or a state, nam
 stated as `injEq` is, with `HEq` where the two sides' types differ. Types with dotted names may
 form a block. A single index that is a proposition is reported at the index. A constructor has
 the declaration ranges of its own syntax. The internals are `protected`. `induction` on a
-`codata` type is its case analysis, and on a type of a `data` block it is refused, as on a mutual
+`codatatype` is its case analysis, and on a type of a `datatype` block it is refused, as on a mutual
 inductive. -/
 
 namespace FrontEndTest
@@ -19,26 +19,26 @@ noncomputable section
 
 /-! ### Universes left to the command -/
 
-data AB3 (α : Type _)
+datatype AB3 (α : Type _)
   | mk (a : α) (t : AB3 α)
   | nil
 
 /-- info: FrontEndTest.AB3.{u_1} (α : Type u_1) : Type u_1 -/
 #guard_msgs in #check AB3
 
-data AB5 {α} (a : α)
+datatype AB5 {α} (a : α)
   | nil
 
 /-- info: @AB5 : {α : Sort u_1} → α → Type -/
 #guard_msgs in #check @AB5
 
-data AB2 (xs : List α)
+datatype AB2 (xs : List α)
   | mk (a : α) (t : AB2 xs)
 
 /-- info: @AB2 : {α : Type u_1} → List α → Type u_1 -/
 #guard_msgs in #check @AB2
 
-codata CS (α : Sort _) (β : Type _)
+codatatype CS (α : Sort _) (β : Type _)
   | mk (b : β) (f : α → CS α β)
 
 /-- info: FrontEndTest.CS.{u_1, u_2} (α : Sort u_1) (β : Type u_2) : Type (max u_1 u_2) -/
@@ -48,7 +48,7 @@ section
 
 variable {α : Type _}
 
-data SA
+datatype SA
   | mk (a : α) (t : SA)
   | nil
 
@@ -59,14 +59,14 @@ end
 
 -- The universe of an index, fixed by a constructor; the family is in the universe of its
 -- encoding, one up.
-data A2 : (α : Type _) → Type _
+datatype A2 : (α : Type _) → Type _
   | mk (a : Nat) : A2 Nat
 
 /-- info: A2 : Type → Type 1 -/
 #guard_msgs in #check @A2
 
 -- Mathlib's `Type*`.
-data TS (α : Type*) (β : Type*)
+datatype TS (α : Type*) (β : Type*)
   | mk (a : α) (b : β) (t : TS α β)
   | nil
 
@@ -109,7 +109,7 @@ info: FrontEndTest.CS.corec.{u, u_1, u_2} {α : Sort u_1} {β : Type u_2} {S : T
 #guard_msgs in #check CS.corec
 
 -- With a universe `u` of its own, the motive's is `u_1`; with `u` and `u_1`, `u_2`.
-data UU (α : Type u)
+datatype UU (α : Type u)
   | mk (a : α)
 
 /--
@@ -118,7 +118,7 @@ info: FrontEndTest.UU.rec.{u_1, u} {α : Type u} {motive : UU α → Sort u_1} (
 -/
 #guard_msgs in #check UU.rec
 
-data UU₁ (α : Type u_1) (β : Type u)
+datatype UU₁ (α : Type u_1) (β : Type u)
   | mk (a : α) (b : β)
 
 /--
@@ -129,13 +129,13 @@ info: FrontEndTest.UU₁.casesOn_mk.{u_2, u_1, u} {α : Type u_1} {β : Type u} 
 
 /-! ### Binder annotations of the parameters -/
 
-data DA {α : Type} (xs : List α)
+datatype DA {α : Type} (xs : List α)
   | mk
 
 /-- info: @DA : {α : Type} → List α → Type -/
 #guard_msgs in #check @DA
 
-data TV (v : Fin n)
+datatype TV (v : Fin n)
   | mk (t : TV v)
   | nil
 
@@ -145,7 +145,7 @@ data TV (v : Fin n)
 example : TV (3 : Fin 5) := .mk .nil
 
 -- Right of the colon, as in `inductive`, the parameters left implicit are the parameters.
-data DB {α : Type} : Nat → Type
+datatype DB {α : Type} : Nat → Type
   | mk (a : α) : DB 1 → DB 0
   | nil : DB 1
 
@@ -159,9 +159,9 @@ data DB {α : Type} : Nat → Type
 annotations, and `α` is bound differently -/
 #guard_msgs in
 mutual
-data BA {α : Type}
+datatype BA {α : Type}
   | mk (b : BB α)
-data BB (α : Type)
+datatype BB (α : Type)
   | mk (a : BA (α := α))
   | nil
 end
@@ -172,7 +172,7 @@ section
 
 variable {α : Type} [Inhabited α] {n : Nat}
 
-data SV
+datatype SV
   | mk (a : α) (h : a = default) (v : Fin n) (t : SV)
   | nil
 
@@ -185,7 +185,7 @@ info: @SV.mk_inj : ∀ {α : Type} [inst : Inhabited α] {n : ℕ} (a : α) (h :
 -/
 #guard_msgs in #check @SV.mk_inj
 
-data IB (α) [Inhabited α]
+datatype IB (α) [Inhabited α]
   | mk [DecidableEq α] (a : α) (t : IB α)
   | nil
 
@@ -203,7 +203,7 @@ example (a b : Nat) (h : IB.mk a .nil = IB.mk b .nil) : a = b := by
 
 -- An implicit and a strict-implicit argument that the result does not determine: `HEq` where the
 -- two sides' types differ.
-data IM
+datatype IM
   | mk {n : Nat} (v : Fin n) (h : n > 0)
   | mk₂ ⦃n : Nat⦄ (v : Fin n)
 
@@ -222,7 +222,7 @@ example (v w : Fin 3) (h : IM.mk₂ v = IM.mk₂ w) : v = w := by
   simpa using h
 
 -- A proof argument that depends on data.
-data PD
+datatype PD
   | mk (n : Nat) (h : n % 2 = 0) (t : PD)
   | nil
 
@@ -234,7 +234,7 @@ info: PD.mk_inj : ∀ (n : ℕ) (h : n % 2 = 0) (t : PD) (n' : ℕ) (h' : n' % 2
 
 /-! ### Default values and tactics: on the constructor only -/
 
-data DT
+datatype DT
   | nil
   | mk (n : Nat := 3) (t : DT) (m : Nat := by exact 2)
 
@@ -255,7 +255,7 @@ info: DT.mk_inj : ∀ (n : ℕ) (t : DT) (m n' : ℕ) (t' : DT) (m' : ℕ), DT.m
 -- The constructor keeps them.
 example : DT.mk (t := .nil) = DT.mk 3 .nil 2 := rfl
 
-data DO
+datatype DO
   | mk (n : Nat := 3)
 
 /-- info: @DO.mk : optParam ℕ 3 → DO -/
@@ -264,10 +264,10 @@ data DO
 /-! ### Dotted names in a block -/
 
 mutual
-data Foo.A
+datatype Foo.A
   | a (b : Foo.B)
   | z
-data Foo.B
+datatype Foo.B
   | b (a : Foo.A)
 end
 
@@ -280,10 +280,10 @@ end
 example : Foo.A := .a (.b .z)
 
 mutual
-data Qa.X
+datatype Qa.X
   | mk (y : Qb.X)
   | nil
-data Qb.X
+datatype Qb.X
   | mk (x : Qa.X)
 end
 
@@ -302,18 +302,18 @@ the components of a type's name by `_`; rename one of them
 -/
 #guard_msgs in
 mutual
-data Qc_X
+datatype Qc_X
   | mk (y : Qc.X)
   | nil
-data Qc.X
+datatype Qc.X
   | mk (x : Qc_X)
 end
 
 -- In a mixed block, the names generated from a type's name join its components by `_`.
 mixed_mutual
-codata Foo.Tree (α : Type)
+codatatype Foo.Tree (α : Type)
   | node (a : α) (cs : Foo.Forest α)
-data Foo.Forest (α : Type)
+datatype Foo.Forest (α : Type)
   | nil
   | cons (t : Foo.Tree α) (f : Foo.Forest α)
 end
@@ -327,26 +327,26 @@ end
 error: the index of `P1` is a proposition, and a single index must be a type: the encoding indexes the family by a type (a proposition next to another index is fine); a parameter, or an argument of the constructors, does the same, proofs being irrelevant
 -/
 #guard_msgs in
-codata P1 : (0 < 5) → Type
+codatatype P1 : (0 < 5) → Type
   | mk (h : 0 < 5) (t : P1 h) : P1 h
 
 -- Next to another index, it is fine.
-codata P2 : (n : Nat) → (0 < n) → Type
+codatatype P2 : (n : Nat) → (0 < n) → Type
   | mk {n : Nat} (h : 0 < n) (t : P2 n h) : P2 n h
 
 /--
 error: the index of `P3` may be a proposition, its type being in a universe that may be `Prop`, and a single index must be a type: the encoding indexes the family by a type; give its type a universe `Type _`
 -/
 #guard_msgs in
-data P3 (α : Sort _) : α → Type _
+datatype P3 (α : Sort _) : α → Type _
   | mk (a : α) : P3 α a
 
 /-! ### Universes left to the command in blocks -/
 
 mutual
-data MA (α : Type _)
+datatype MA (α : Type _)
   | mk (a : α) (b : MB α)
-data MB (α : Type _)
+datatype MB (α : Type _)
   | nil
   | mk (a : MA α)
 end
@@ -358,9 +358,9 @@ end
 #guard_msgs in #check @MA_MB.Ix
 
 mixed_mutual
-codata MT (α : Type _)
+codatatype MT (α : Type _)
   | node (a : α) (cs : MF α)
-data MF (α : Type _)
+datatype MF (α : Type _)
   | nil
   | cons (t : MT α) (f : MF α)
 end
@@ -370,12 +370,12 @@ end
 
 -- An inner run of two types, whose index is declared before the runs.
 mixed_mutual
-codata NT (α : Type _)
+codatatype NT (α : Type _)
   | node (a : α) (cs : NF α)
-data NF (α : Type _)
+datatype NF (α : Type _)
   | nil
   | cons (t : NT α) (g : NG α)
-data NG (α : Type _)
+datatype NG (α : Type _)
   | nil
   | cons (f : NF α)
 end
@@ -392,7 +392,7 @@ The internals are `protected`, as `inductive` protects its auxiliary constructio
 their short names do not resolve, while the full names and dot notation do. The eliminators `rec`,
 `casesOn` (as Lean leaves them), `fold`, `corec` and `dtor` are not protected. -/
 
-data PT
+datatype PT
   | leaf
   | node (l r : PT)
 
@@ -433,7 +433,7 @@ def rangeOf (T n : Name) : MetaM (Nat × Nat × Nat) := do
   return (r.range.pos.line - t.range.pos.line, r.range.endPos.line - t.range.pos.line,
     r.selectionRange.pos.column)
 
-data RG
+datatype RG
   | nil
   | cons (n : Nat)
       (t : RG)
@@ -445,13 +445,13 @@ end
 
 /-! ### `induction` on the types
 
-`induction` on a `codata` type is its case analysis, `T.casesOn` being the `induction`
-eliminator as well as the `cases` one: `codata` has no induction, and the type is not shown as
-its encoding. On a type of a `data` block, plain `induction` is refused, as Lean refuses a mutual
-inductive, with the recursor per type as the hint; `induction t using Tm.rec (motive_2 := …)`
+`induction` on a `codatatype` is its case analysis, `T.casesOn` being the `induction`
+eliminator as well as the `cases` one: `codatatype` has no induction, and the type is not shown as
+its encoding. On a type of a `datatype` block, plain `induction` is refused, as Lean refuses a
+mutual inductive, with the recursor per type as the hint; `induction t using Tm.rec (motive_2 := …)`
 is the induction. -/
 
-codata ICo (α : Type)
+codatatype ICo (α : Type)
   | nil
   | cons (head : α) (tail : ICo α)
 
@@ -474,9 +474,9 @@ example (s : ICo Nat) : True := by
   | cons h t => trivial
 
 mutual
-codata ICA
+codatatype ICA
   | a (x : ICB)
-codata ICB
+codatatype ICB
   | b (y : ICA)
   | e
 end
@@ -494,9 +494,9 @@ case e
 example (t : ICB) : True := by induction t
 
 mixed_mutual
-data IOut
+datatype IOut
   | node (a : Nat) (children : IIn)
-codata IIn
+codatatype IIn
   | nil
   | cons (t : IOut) (f : IIn)
 end
@@ -515,16 +515,16 @@ f✝ : IIn
 example (t : IIn) : True := by induction t
 
 mutual
-data ITm
+datatype ITm
   | var (n : Nat)
   | app (f : ITm) (args : IArgs)
-data IArgs
+datatype IArgs
   | nil
   | cons (t : ITm) (rest : IArgs)
 end
 
 /--
-error: The `induction` tactic does not support the type `ITm` because it is a type of a mutual `data` block
+error: The `induction` tactic does not support the type `ITm` because it is a type of a mutual `datatype` block
 
 Hint: Use its recursor, with the other motives given by name: `induction t using ITm.rec (motive_2 := …)`, or the `cases` tactic
 -/
@@ -543,24 +543,33 @@ example (t : ITm) : True := by
   | var n => trivial
   | app f a => trivial
 
--- The closed types of a `data` block inside a `mixed_mutual` block are refused too.
+-- The closed types of a `datatype` block inside a `mixed_mutual` block are refused too.
 mixed_mutual
-codata IMOut
+codatatype IMOut
   | node (a : Nat) (children : IMTm)
-data IMTm
+datatype IMTm
   | nil
   | cons (t : IMOut) (f : IMArgs)
-data IMArgs
+datatype IMArgs
   | nil
   | cons (t : IMTm) (f : IMArgs)
 end
 
 /--
-error: The `induction` tactic does not support the type `IMArgs` because it is a type of a mutual `data` block
+error: The `induction` tactic does not support the type `IMArgs` because it is a type of a mutual `datatype` block
 
 Hint: Use its recursor, with the other motives given by name: `induction t using IMArgs.rec (motive_1 := …)`, or the `cases` tactic
 -/
 #guard_msgs in
 example (t : IMArgs) : True := by induction t
+
+/-! ### `data` and `codata` are not keywords
+
+The commands are `datatype` and `codatatype`; `data` and `codata` stay free for identifiers. -/
+
+def foo (data : Nat) := data
+def bar (codata : Nat) := codata
+
+example : foo 1 + bar 2 = 3 := rfl
 
 end FrontEndTest

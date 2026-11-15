@@ -6,7 +6,7 @@
 ## The family's universe should not depend on the index universe
 
 Today `Signature.Cotype σ : I → Type (max w u v)` with `I : Type w`: the index enters the
-universe of the family, so `codata Foo : Type 1 → Type` is refused (the family is in `Type 1`,
+universe of the family, so `codatatype Foo : Type 1 → Type` is refused (the family is in `Type 1`,
 and the command says so at the sort), whereas `inductive Foo : Type 1 → Type` is fine. The data
 universes `u`, `v` are necessary (as for `inductive`); `w` is not.
 
@@ -23,7 +23,7 @@ root, `IsWf i t` says the root label unlabels to a shape at `i` with well-formed
 `Cotype σ i : Type (max u' v')`. The present layer is the case `L := Σ i, Shape i`,
 `label := id`.
 
-For a `codata` declaration the small alphabet is the unindexed "constructor plus data" type and
+For a `codatatype` declaration the small alphabet is the unindexed "constructor plus data" type and
 its positions (this is how Lean represents inductive families: data stored, index computed);
 the command generates `Shape₀`, `B₀`, `label`, `unlabel` by pattern matching and the law by
 `cases` then `rfl`, and keeps the indexed `Shape`, `B`, `toC`, `ofC` and their lemmas as they
@@ -37,8 +37,8 @@ index is usually stored as data too, which forces the universe anyway.
 
 ## A single proposition as index
 
-`Signature.I : Type w`, so `codata T : (h : 0 < 5) → Type` is rejected (an error at the index, in
-`Gen/Front.lean`), while proofs among several indices are fine through the `PSigma` packing.
+`Signature.I : Type w`, so `codatatype T : (h : 0 < 5) → Type` is rejected (an error at the index,
+in `Gen/Front.lean`), while proofs among several indices are fine through the `PSigma` packing.
 Switching to `I : Sort w` is not the one-line change it looks like: `Σ' i, Shape i` then lives in
 `Sort (max 1 w (u + 1))`, which Lean cannot unify with the `Type _` that the alphabet of `Raw`
 must be (no level subtraction).
@@ -49,7 +49,7 @@ only.
 
 ## Generate `PolyIso` on demand
 
-Today instances are generated only for `data` and `codata`, when they are declared. A plain
+Today instances are generated only for `datatype` and `codatatype`, when they are declared. A plain
 `structure` or `inductive` used as a leaf gets the missing-instance error, even when it is
 obviously polynomial:
 
@@ -57,7 +57,7 @@ obviously polynomial:
 structure Box (X : Type u) where
   val : X
 
-codata T
+codatatype T
   | mk (x : Box T)
 ```
 

@@ -8,14 +8,14 @@ universe u
 
 namespace NamesTest
 
-codata B (α : Type u)
+codatatype B (α : Type u)
   | cons (a : α) (tail : B α)
 
 #check @B.cons
 #check @B.corec
 #check @B.B'.cons_tail
 
-data F
+datatype F
   | leaf
   | node (l r : F)
 
@@ -23,7 +23,7 @@ data F
 #check @F.rec
 #check @F.F'.map
 
-codata Shape : Nat → Type
+codatatype Shape : Nat → Type
   | mk {n : Nat} (s : Shape (n + 1)) : Shape n
 
 #check @Shape.mk
@@ -46,9 +46,9 @@ example : F → Nat := F.fold (S := Nat) fun
   | .node a b => a + b + 1
 
 mutual
-codata Ev
+codatatype Ev
   | ev (o : Od)
-codata Od
+codatatype Od
   | od (e : Ev)
 end
 
@@ -58,7 +58,7 @@ example : Ev_Od Ev_Od.Ix.Ev := Ev_Od.corec (S := fun _ => Unit) (m := .Ev)
   (fun | .Ev, _ => .ev () | .Od, _ => .od ()) ()
 
 -- A parameter named `S`: the state's binder does not shadow it.
-codata SS (S : Type)
+codatatype SS (S : Type)
   | cons (a : S) (t : SS S)
 
 example : SS Nat := SS.corec (S := Nat) (fun n => .cons n (n + 1)) 0

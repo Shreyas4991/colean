@@ -26,7 +26,7 @@ def priv (id : Ident) : MetaM Bool := do
 /-! ### Doc comments -/
 
 /-- A stream that may stop. -/
-codata DS (α : Type)
+codatatype DS (α : Type)
   /-- The end. -/
   | nil
   | /-- One more. -/ cons (a : α) (t : DS α)
@@ -39,7 +39,7 @@ codata DS (α : Type)
 -- the `|`.
 /-- error: Duplicate doc string -/
 #guard_msgs in
-data DD
+datatype DD
   /-- One. -/
   | /-- Two. -/ mk
 
@@ -48,12 +48,12 @@ data DD
 
 mutual
 /-- Even numbers. -/
-data DE
+datatype DE
   | z
   /-- The successor of an odd number. -/
   | s (o : DO)
 /-- Odd numbers. -/
-data DO
+datatype DO
   | s (e : DE)
 end
 
@@ -64,10 +64,10 @@ info: (some "Even numbers.", some "Odd numbers.", some "The successor of an odd 
 
 mixed_mutual
 /-- Finitely branching trees. -/
-codata DT (α : Type u)
+codatatype DT (α : Type u)
   | node (a : α) (children : DF α)
 /-- Finite forests. -/
-data DF (α : Type u)
+datatype DF (α : Type u)
   | nil
   /-- A tree and a forest. -/
   | cons (t : DT α) (f : DF α)
@@ -81,7 +81,7 @@ info: (some "Finitely branching trees.", some "Finite forests.", some "A tree an
 /-! ### Attributes -/
 
 @[deprecated "use `DS`" (since := "2026-11-13")]
-codata Old
+codatatype Old
   | a
   | @[deprecated "use `b`" (since := "2026-11-13")] c
   | b
@@ -101,14 +101,14 @@ info: Old : Type
 namespace P
 
 /-- A protected type, referred to by its qualified name, as with `inductive`. -/
-protected codata PT
+protected codatatype PT
   | stop
   | go (t : P.PT)
 
 end P
 
 /-- A protected constructor. -/
-codata PC
+codatatype PC
   | protected stop
   | go (t : PC)
 
@@ -116,10 +116,10 @@ namespace Q
 
 mutual
 /-- Protected types of a block. -/
-protected data QE
+protected datatype QE
   | z
   | s (o : Q.QO)
-protected data QO
+protected datatype QO
   | s (e : Q.QE)
 end
 
@@ -150,7 +150,7 @@ end
 
 /-! ### `private` -/
 
-private codata PS (α : Type)
+private codatatype PS (α : Type)
   | nil
   | cons (a : α) (t : PS α)
 
@@ -161,7 +161,7 @@ private codata PS (α : Type)
 
 theorem PS.cons_ne (a : α) (t : PS α) : PS.cons a t ≠ .nil := by simp
 
-private data PV (α : Type) : Nat → Type
+private datatype PV (α : Type) : Nat → Type
   | nil : PV α 0
   | cons {n : Nat} (a : α) (v : PV α n) : PV α (n + 1)
 
@@ -171,10 +171,10 @@ private data PV (α : Type) : Nat → Type
 example (v : PV α n) : True := by induction v <;> trivial
 
 mutual
-private data PE
+private datatype PE
   | z
   | s (o : PO)
-private data PO
+private datatype PO
   | s (e : PE)
 end
 
@@ -186,9 +186,9 @@ end
 example : PE.s (PO.s PE.z) ≠ PE.z := by simp
 
 mixed_mutual
-private codata PTr (α : Type u)
+private codatatype PTr (α : Type u)
   | node (a : α) (children : PFo α)
-private data PFo (α : Type u)
+private datatype PFo (α : Type u)
   | nil
   | cons (t : PTr α) (f : PFo α)
 end
@@ -203,11 +203,11 @@ end
 
 -- A private block of two types inside a mixed block: its name and open name private too.
 mixed_mutual
-private codata QT (α : Type u)
+private codatatype QT (α : Type u)
   | node (a : α) (r : QR α)
-private data QR (α : Type u)
+private datatype QR (α : Type u)
   | node (t : QT α) (f : QF α)
-private data QF (α : Type u)
+private datatype QF (α : Type u)
   | nil
   | cons (r : QR α) (f : QF α)
 end
@@ -217,7 +217,7 @@ end
 #eval [mkIdent `QR_QF, mkIdent `QR_QF.Open, mkIdent `QR_QF.Ix, mkIdent `QF.rec].mapM priv
 
 @[with_ccpo]
-private codata PR (α : Type)
+private codatatype PR (α : Type)
   | stop
   | cons (a : α) (t : PR α)
 
@@ -227,7 +227,7 @@ private codata PR (α : Type)
 noncomputable def PR.const (a : Nat) : PR Nat := .cons a (const a)
 partial_fixpoint
 
-private codata PR2
+private codatatype PR2
   | stop
   | next (t : PR2)
 
@@ -235,7 +235,7 @@ attribute [with_ccpo] PR2
 
 /-! ### Universe names, `where`, `noncomputable` -/
 
-codata UT.{v} (α : Type v)
+codatatype UT.{v} (α : Type v)
   | nil
   | cons (a : α) (t : UT α)
 
@@ -243,71 +243,71 @@ codata UT.{v} (α : Type v)
 #guard_msgs in #check UT
 
 mutual
-data UE.{v} (α : Type v)
+datatype UE.{v} (α : Type v)
   | z (a : α)
   | s (o : UO α)
-data UO.{v} (α : Type v)
+datatype UO.{v} (α : Type v)
   | s (e : UE α)
 end
 
 /-- info: ModTest.UO.{v} (α : Type v) : Type v -/
 #guard_msgs in #check UO
 
-data WL (α : Type) where
+datatype WL (α : Type) where
   | nil
   | cons (a : α) (t : WL α)
 
 /-- info: @WL.cons : {α : Type} → α → WL α → WL α -/
 #guard_msgs in #check @WL.cons
 
-noncomputable codata NC
+noncomputable codatatype NC
   | a
 
 /-! ### Rejected -/
 
-/-- error: `unsafe` is not supported by `codata` -/
+/-- error: `unsafe` is not supported by `codatatype` -/
 #guard_msgs in
-unsafe codata EU
+unsafe codatatype EU
   | a
 
-/-- error: `partial` is not supported by `data` -/
+/-- error: `partial` is not supported by `datatype` -/
 #guard_msgs in
-partial data EP
+partial datatype EP
   | a
 
-/-- error: `meta` is not supported by `data` -/
+/-- error: `meta` is not supported by `datatype` -/
 #guard_msgs in
-meta data EM
+meta datatype EM
   | a
 
-/-- error: `deriving` is not supported by `codata` -/
+/-- error: `deriving` is not supported by `codatatype` -/
 #guard_msgs in
-codata ED
+codatatype ED
   | a
   deriving Inhabited
 
-/-- error: `unsafe` is not supported by `codata` -/
+/-- error: `unsafe` is not supported by `codatatype` -/
 #guard_msgs in
-codata ECU
+codatatype ECU
   | unsafe a
 
 /--
 error: Constructor cannot be marked `private` because it is already in a `private` inductive datatype
 -/
 #guard_msgs in
-private codata EPP
+private codatatype EPP
   | private a
 
 /-- error: Constructor cannot be `protected` because it is in a `private` inductive datatype -/
 #guard_msgs in
-private codata EPQ
+private codatatype EPQ
   | protected a
 
 /--
-error: a `private` constructor of a public type is not supported by `codata`: the declarations about the constructor are named after the type, and would be public; make the type `private`
+error: a `private` constructor of a public type is not supported by `codatatype`: the declarations about the constructor are named after the type, and would be public; make the type `private`
 -/
 #guard_msgs in
-codata EPC
+codatatype EPC
   | private a
 
 /--
@@ -315,33 +315,33 @@ error: the types of a block must be all `private` or all public, and `EMB` is no
 -/
 #guard_msgs in
 mutual
-private data EMA
+private datatype EMA
   | z
   | s (o : EMB)
-data EMB
+datatype EMB
   | s (e : EMA)
 end
 
 /-- error: the types of a block must have the same universe names as `EUA` -/
 #guard_msgs in
 mutual
-data EUA.{v} (α : Type v)
+datatype EUA.{v} (α : Type v)
   | z
   | s (o : EUB α)
-data EUB.{w} (α : Type w)
+datatype EUB.{w} (α : Type w)
   | s (e : EUA α)
 end
 
 -- A binder without a type, as in `inductive`.
 /-- error: Failed to infer type of binder `x` -/
 #guard_msgs in
-data EB
+datatype EB
   | mk x
 
-/-- error: a `mixed_mutual` block must consist of `codata` and `data` declarations only -/
+/-- error: a `mixed_mutual` block must consist of `codatatype` and `datatype` declarations only -/
 #guard_msgs in
 mixed_mutual
-codata EX
+codatatype EX
   | a
 def ex := 1
 end

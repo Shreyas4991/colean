@@ -1,7 +1,7 @@
-# Contract for `codata`
+# Contract for `codatatype`
 
 ```
-codata T
+codatatype T
   | ctor₁ …
   | ctor₂ …
 ```
@@ -35,7 +35,7 @@ will be provided later, derived from `dtor` and `dtor_corec` (`ctor := corec (F.
 # Indexed families
 
 ```
-codata T : I → Type u
+codatatype T : I → Type u
   | ctor₁ … : T idx₁
   | ctor₂ … : T idx₂
 ```
@@ -79,7 +79,7 @@ sort that gives the right universe (a declared `Prop` too, since the commands de
 # Inductive types
 
 ```
-data T
+datatype T
   | ctor₁ …
   | ctor₂ …
 ```
@@ -161,11 +161,11 @@ the parameter is the structural one (`PolyFix.d_map`). A family gets them at eve
 # Corecursion by `partial_fixpoint`
 
 ```
-codata CoList (α : Type u)
+codatatype CoList (α : Type u)
   | nil
   | cons (a : α) (t : CoList α)
 
-attribute [with_ccpo] CoList     -- or `@[with_ccpo] codata CoList …`, or `with_ccpo (bot := nil)`
+attribute [with_ccpo] CoList     -- or `@[with_ccpo] codatatype CoList …`, or `with_ccpo (bot := nil)`
 
 def map (f : α → β) (s : CoList α) : CoList β :=
   match s.dtor with
@@ -175,7 +175,7 @@ partial_fixpoint
 ```
 
 Off by default. The attribute `with_ccpo`, optionally naming a constructor without arguments,
-`with_ccpo (bot := c)` (by default the first one; an error if there is none), orders a `codata` type by *approximation*, the
+`with_ccpo (bot := c)` (by default the first one; an error if there is none), orders a `codatatype` by *approximation*, the
 named constructor at the bottom, `⊥ := ctor e` for its layer `e`:
 
 ```
@@ -204,26 +204,27 @@ fixpoint of its equation, which it gets as `f.eq_1`, with the induction principl
 The theory is one proof for all types (`Model/CCPO.lean`), from the contract and the presentation
 of `F` as a container that every generated type has. For a family the bottom is a constructor at
 every index, `| stop {n : Nat} : T n`, and the order is at every index. Not supported: several
-indices, the types of `mutual` and `mixed_mutual` blocks (but the outer `codata` of a mixed block).
+indices, the types of `mutual` and `mixed_mutual` blocks (but the outer `codatatype` of a mixed
+block).
 
 
 # Mutual blocks
 
 ```
 mutual
-data Even : Nat → Type
+datatype Even : Nat → Type
   | zero : Even 0
   | succ {n : Nat} (o : Odd n) : Even (n + 1)
-data Odd : Nat → Type
+datatype Odd : Nat → Type
   | succ {n : Nat} (e : Even n) : Odd (n + 1)
 end
 ```
 
-A block of `data` declarations, or of `codata` declarations, is one family `Even_Odd` over the
-inductive `Even_Odd.Ix`, with a constructor per type whose arguments are the indices of that type
-(`Ix.Even n`, `Ix.Odd n`), so the contract is the one of indexed families, over `I = Ix`. The types
-are `Even n := Even_Odd (.Even n)`. All types of a block have the same parameters, on which `Ix`
-may depend. Their indices may differ, and a type may have none. As for any family, the family
+A block of `datatype` declarations, or of `codatatype` declarations, is one family `Even_Odd` over
+the inductive `Even_Odd.Ix`, with a constructor per type whose arguments are the indices of that
+type (`Ix.Even n`, `Ix.Odd n`), so the contract is the one of indexed families, over `I = Ix`. The
+types are `Even n := Even_Odd (.Even n)`. All types of a block have the same parameters, on which
+`Ix` may depend. Their indices may differ, and a type may have none. As for any family, the family
 lives in a universe at least that of `Ix`, so the largest index of the block counts for every type,
 and a universe written in a type's sort must be the block's. The block declares its name and
 `Even_Odd.Ix`, made of the types' names: these must be free, as the types' own names, and no type
@@ -234,15 +235,15 @@ may occur twice; the command checks this before declaring anything.
 
 ```
 mixed_mutual
-codata Tree (α : Type u)
+codatatype Tree (α : Type u)
   | node (a : α) (children : Forest α)
-data Forest (α : Type u)
+datatype Forest (α : Type u)
   | nil
   | cons (t : Tree α) (f : Forest α)
 end
 ```
 
-A block with `data` and `codata` declarations is a nested fixpoint, and a cyclic system has
+A block with `datatype` and `codatatype` declarations is a nested fixpoint, and a cyclic system has
 several nested solutions (the trees outside the forests are the finitely branching infinite
 trees, the forests outside the trees the finite ones), so the block states the order: the
 textual order is the nesting order, the first declaration outermost. A plain `mutual` block may
@@ -256,12 +257,12 @@ parameters. For runs `R₁ ⊃ R₂ ⊃ … ⊃ Rₖ`:
 1. Each run `Rᵢ` with `i > 1` is declared *open*: with one more parameter `X` for each run
    outside it that it needs (a type `X` for a run of one type without indices, a family over the
    run's index otherwise), every occurrence of a type of that run replaced by `X`. Its contract
-   is that of a `data` or `codata` declaration (or block) with these parameters:
+   is that of a `datatype` or `codatatype` declaration (or block) with these parameters:
    `Forest.Open α X` with `Forest.Open.fold`, `Forest.Open.rec`, … for any `X`. A run further
    inside occurs as its open type at the families of the runs it needs, a nested occurrence.
 2. The outer types nest through the open types of the runs inside at their own types:
-   `Tree` is the `codata` declaration whose children are `Forest.Open α (Tree α)`. This needs the
-   open types to be polynomial in their extra parameters, `PolyIso (fun X => Forest.Open α X)`,
+   `Tree` is the `codatatype` declaration whose children are `Forest.Open α (Tree α)`. This needs
+   the open types to be polynomial in their extra parameters, `PolyIso (fun X => Forest.Open α X)`,
    which the command generates as for any declared type (step 5).
 3. The closed types are the open ones at the outer types, `Forest α := Forest.Open α (Tree α)`,
    from the outermost run in: each run's types at the closed types of the runs it needs. Each
@@ -301,7 +302,7 @@ one minor premise per constructor carrying an induction hypothesis for each recu
 one by membership,
 
 ```
-data Rose
+datatype Rose
   | node (n : Nat) (cs : List Rose)
 
 Rose.rec : {motive : Rose → Sort u} →

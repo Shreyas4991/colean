@@ -13,9 +13,9 @@ namespace IndexedInjTest
 
 noncomputable section
 
-/-! ### `data` and `codata`: an index of two arguments -/
+/-! ### `datatype` and `codatatype`: an index of two arguments -/
 
-data Z : Nat → Type
+datatype Z : Nat → Type
   | leaf : Z 0
   | join (n m : Nat) (l : Z n) (r : Z m) : Z (max n m + 1)
   | node {n : Nat} (l r : Z n) : Z (n + 1)
@@ -53,7 +53,7 @@ example {n m : Nat} (l : Z n) (r : Z m) (l' r' : Z (max n m))
     (h : Z.join n m l r = Z.node l' r') : False := by
   simp at h
 
-codata CZ : Nat → Type
+codatatype CZ : Nat → Type
   | leaf : CZ 0
   | join (n m : Nat) (l : CZ n) (r : CZ m) : CZ (max n m + 1)
   | node {n : Nat} (l r : CZ n) : CZ (n + 1)
@@ -88,7 +88,7 @@ example {n m : Nat} (l : CZ n) (r : CZ m) (l' r' : CZ (max n m)) :
 
 /-! ### `Vec` -/
 
-data Vec (α : Type) : Nat → Type
+datatype Vec (α : Type) : Nat → Type
   | nil : Vec α 0
   | cons {n : Nat} (a : α) (v : Vec α n) : Vec α (n + 1)
 
@@ -109,7 +109,7 @@ example {α : Type} {n : Nat} (a a' : α) (v v' : Vec α n) (h : Vec.cons a v = 
 
 Nothing is left of `base` once its index is shared: no injectivity, as for `inductive`. -/
 
-data M : Nat → Bool → Type
+datatype M : Nat → Bool → Type
   | base (b : Bool) : M 0 b
   | step {n : Nat} {b : Bool} (t : M n b) : M (n + 1) b
   | flip {n : Nat} (t : M n true) (u : M n false) : M (n + 1) false
@@ -138,7 +138,7 @@ example {n : Nat} (t : M n true) (u u' : M n false) : M.flip t u ≠ M.step u' :
 
 /-! ### A result index that is not a pattern -/
 
-data P : Nat → Type
+datatype P : Nat → Type
   | zero : P 0
   | dbl (n : Nat) (t : P n) : P (n * 2)
   | dbl' (n : Nat) (t u : P n) : P (n * 2)
@@ -163,10 +163,10 @@ example (n : Nat) (t u u' : P n) : P.dbl' n t u ≠ P.dbl n u' := by
 /-! ### A block with indices -/
 
 mutual
-data Ev : Nat → Type
+datatype Ev : Nat → Type
   | zero : Ev 0
   | succ {n : Nat} (o : Od n) : Ev (n + 1)
-data Od : Nat → Type
+datatype Od : Nat → Type
   | succ {n : Nat} (e : Ev n) : Od (n + 1)
   | twice {n : Nat} (o : Od n) : Od (n + 2)
 end
@@ -188,7 +188,7 @@ example {n : Nat} (o : Od n) (e : Ev (n + 1)) : Od.twice o ≠ Od.succ e := by
 
 The equations of `v` and `t` are heterogeneous, as in `injEq`. -/
 
-data H : Nat → Type
+datatype H : Nat → Type
   | mk (k : Nat) (v : Fin k) (t : H k) : H 0
   | nil : H 0
 

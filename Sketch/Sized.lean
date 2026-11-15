@@ -8,13 +8,13 @@ set_option backward.isDefEq.respectTransparency.types false
 /-! # Scratch: inductive types as coinductive families with sizes
 
 The observation from `ColeanTest/FinVec.lean`: when every recursive argument has a strictly smaller
-index, a `codata` family is finite, and `corec`/`bisim` are recursion and induction on the
+index, a `codatatype` family is finite, and `corec`/`bisim` are recursion and induction on the
 index in disguise. So an inductive type could be presented as a coinductive family indexed by
 a *size bound*: each constructor at `n + 1` with its recursive arguments at `n` (sized types).
 Then
 
 * `fold`, `rec`, `induction` are recursion on the size;
-* a mixed inductive/coinductive block becomes one uniform `codata` block, where the order of
+* a mixed inductive/coinductive block becomes one uniform `codatatype` block, where the order of
   the nested fixpoints is expressed by which occurrences decrease the size;
 * the inductive type itself is `Σ n, T n` modulo weakening, a quotient.
 
@@ -36,7 +36,7 @@ noncomputable section
 
 /-! ## Lists, sized: every `cons` decreases the bound, `nil` lives at every size -/
 
-codata SList (α : Type u) : ℕ → Type u
+codatatype SList (α : Type u) : ℕ → Type u
   | nil {n : ℕ} : SList α n
   | cons {n : ℕ} (a : α) (l : SList α n) : SList α (n + 1)
 
@@ -290,7 +290,7 @@ def inf : NatTree :=
   .node (fun i => ofDepth i)
 
 -- The sized version: every element of `SNatTree n` has depth at most `n`.
-codata SNatTree : ℕ → Type
+codatatype SNatTree : ℕ → Type
   | leaf {n : ℕ} : SNatTree n
   | node {n : ℕ} (children : ℕ → SNatTree n) : SNatTree (n + 1)
 
@@ -339,7 +339,7 @@ index, and a limit ordinal bounds an infinitely branching node whose children ha
 ranks (`inf` at `ω`). The index lives in `Type 1`, so the family does too. -/
 
 -- Every child at a strictly smaller ordinal.
-codata ONatTree : Ordinal.{0} → Type 1
+codatatype ONatTree : Ordinal.{0} → Type 1
   | leaf {o : Ordinal.{0}} : ONatTree o
   | node {o : Ordinal.{0}} (children : ℕ → (p : Set.Iio o) × ONatTree p.1) : ONatTree o
 

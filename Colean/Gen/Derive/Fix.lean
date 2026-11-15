@@ -19,7 +19,7 @@ variable (ctx : Ctx)
 
 /-- With the universe of the occurrences fixed by a field (`stepLevels`), `T.corec` and `T.fold`
 take their states in that universe only, and the states of the fixpoint, in `Type w`, must be
-there: a limit otherwise, for `data` when its trees of shapes are in a lower universe. -/
+there: a limit otherwise, for `datatype` when its trees of shapes are in a lower universe. -/
 def checkStateLevel (w : Level) : MetaM Unit := do
   let some l := ctx.fixedLvl? | return
   unless ← isLevelDefEq w l do
@@ -136,7 +136,7 @@ def genIPolyFix (P : Poly) : TermElabM Unit := do
   ctx.addPolyDef P "fix" (P.premises.push X) (← inferType value) value
 
 /-- `T.Poly.fix (X) : PolyFix P tree X (T (H X))`, from the public declarations of the type:
-`coFix` (`inFix` for `data`), its proof arguments by `rw` on goal metavariables, and the
+`coFix` (`inFix` for `datatype`), its proof arguments by `rw` on goal metavariables, and the
 bisimulation (induction) principle from the contract (`co_bisim`, `in_ind`). -/
 def genPolyFix (P : Poly) : TermElabM Unit := do
   if ctx.idxed then return ← ctx.genIPolyFix P

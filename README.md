@@ -3,11 +3,11 @@
 (Co)inductive types for Lean 4.
 
 Lean has coinductive predicates (`coinductive`, in `Prop`), but no coinductive data types.
-Colean adds the `codata` command that declares them, with `inductive`-like syntax.
+Colean adds the `codatatype` command that declares them, with `inductive`-like syntax.
 
 ```lean
 /-- Potentially infinite lists -/
-codata CoList (α : Type)
+codatatype CoList (α : Type)
   | nil
   | cons (head : α) (tail : CoList α)
 ```
@@ -31,7 +31,7 @@ Then `import Colean`.
 
 ```lean
 /-- Infinite lists -/
-codata Stream (α : Type)
+codatatype Stream (α : Type)
   | cons (head : α) (tail : Stream α)
 
 def Stream.map {α β : Type} (f : α → β) : Stream α → Stream β :=
@@ -48,7 +48,7 @@ theorem Stream.map_comp {α β γ : Type} (f : α → β) (g : β → γ) (s : S
     ?_ ⟨s, rfl, rfl⟩
   rintro _ _ ⟨s, rfl, rfl⟩
   -- coinductive step
-  cases s with | cons h t => -- `cases` works with `codata`
+  cases s with | cons h t => -- `cases` works with `codatatype`
   simp [map]
   use t
 ```
@@ -61,7 +61,7 @@ An easier way to define corecursive functions is Lean's `partial_fixpoint`:
 /-- Potentially infinite lists -/
 -- `with_ccpo` creates a CCPO structure, which `partial_fixpoint` uses
 @[with_ccpo (bot := nil)] -- `bot` chooses the bottom `⊥` of the CCPO; it can be omitted here
-codata CoList (α : Type)
+codatatype CoList (α : Type)
   | nil
   | cons (head : α) (tail : CoList α)
 
@@ -84,7 +84,7 @@ example : (nats 0).filter (· % 2 == 0) = .cons 0 ((nats 2).filter (· % 2 == 0)
 
 ```lean
 /-- Infinite walk starting from `n` -/
-codata Walk : Int → Type
+codatatype Walk : Int → Type
   | up {n : Int} (tail : Walk (n + 1)) : Walk n
   | down {n : Int} (tail : Walk (n - 1)) : Walk n
 
@@ -110,10 +110,10 @@ def Walk.mirror {n : Int} (w : Walk n) : Walk (-n) :=
 ```lean
 mutual
 /-- Trees of any depth and any breadth. -/
-codata Tree (α : Type)
+codatatype Tree (α : Type)
   | node (a : α) (children : Forest α)
 /-- Sequences of trees, possibly infinite. -/
-codata Forest (α : Type)
+codatatype Forest (α : Type)
   | nil
   | cons (t : Tree α) (f : Forest α)
 end
@@ -135,7 +135,7 @@ theorem Tree.binary_eq {α : Type} (a : α) :
 
 ```lean
 /-- Nondeterministic computations: a result, or a finite choice of ways to continue. -/
-codata NDet (α : Type)
+codatatype NDet (α : Type)
   | ret (a : α)
   | choose (next : List (NDet α)) -- nesting through `List`
 
@@ -148,15 +148,16 @@ def NDet.flips : NDet Nat :=
     | .inr n => .choose [.inl (n + 1), .inr (n + 1)]) 
 
 -- One can nest through a predefined set of standard Lean types (`Prod`, `Sum`, `List`, `Option`,
--- etc.) and through types defined with `codata` and `data` (see below).
+-- etc.) and through types defined with `codatatype` and `datatype` (see below).
 ```
 
 ### Inductive types
 
-Inductive types are declared with `data`. They can also be in a `mutual` block and used in nesting.
+Inductive types are declared with `datatype`. They can also be in a `mutual` block and used in
+nesting.
 
 ```lean
-data LogicalFormula
+datatype LogicalFormula
   | const (b : Bool)
   | and (x y : LogicalFormula)
   | or (x y : LogicalFormula)
@@ -165,15 +166,15 @@ data LogicalFormula
 
 ### Mixed blocks
 
-Finally, `data` and `codata` can be mixed in a `mixed_mutual` block:
+Finally, `datatype` and `codatatype` can be mixed in a `mixed_mutual` block:
 
 ```lean
 mixed_mutual
 /-- Stream processors: they keep producing outputs forever... -/
-codata SP (I O : Type)
+codatatype SP (I O : Type)
   | step (s : Step I O)
 /-- ...and read finitely many inputs before each output. -/
-data Step (I O : Type)
+datatype Step (I O : Type)
   | get (k : I → Step I O)
   | put (o : O) (next : SP I O)
 end
@@ -185,7 +186,7 @@ def SP.pairSums : SP Nat Nat :=
 
 It is important to note that `mixed_mutual`, unlike a uniform `mutual`, depends on the order of
 the types. Types are defined bottom-up, each treating the types above it as placeholders. So
-`data Step` only makes the reads up to the next `put` finite, while `codata SP` lets the
+`datatype Step` only makes the reads up to the next `put` finite, while `codatatype SP` lets the
 processor as a whole run forever. In the reverse order, `SP I O` would be empty: the whole
 processor would have to be finite, but nothing ever ends it.
 
@@ -214,8 +215,8 @@ A declaration of a type `T` is processed in four steps.
    because of the next step.
 
 3. **The contract.** Colean proves `T.contract : Codata.Contract T T.F` (or
-   `Data.Contract` for `data`), defined in [`Colean/Framework.lean`](Colean/Framework.lean).
-   For `codata`, the contract asks for a destructor `dtor : T → T.F T`, a corecursor with its
+   `Data.Contract` for `datatype`), defined in [`Colean/Framework.lean`](Colean/Framework.lean).
+   For `codatatype`, the contract asks for a destructor `dtor : T → T.F T`, a corecursor with its
    computation rule `dtor (corec c s) = T.F.map (corec c) (c s)`, and the coinduction principle
    for the relation lifting `Rel`. `Rel` is defined once in the same file from `map` alone: it
    is not something the generator can choose. This says exactly that `T` is the final
@@ -234,7 +235,7 @@ A declaration of a type `T` is processed in four steps.
      constructor (`#print Stream.cons` shows `Stream.ctor (Stream.F.cons head tail)`), and
      `casesOn` is case analysis on `dtor`.
 
-   The dependent recursor `T.rec` of a `data` type is built on the encoding, but its type and
+   The dependent recursor `T.rec` of a `datatype` is built on the encoding, but its type and
    its computation rules `T.rec_cᵢ`, which are theorems, say what it is.
 
 So the TCB consists of three pieces: the functor extraction, the definition of the

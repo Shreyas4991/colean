@@ -4,7 +4,7 @@ import Colean.Framework
 /-!
 # The model, coinductive part: signatures and the greatest fixpoint on `Raw`
 
-A `codata` declaration is a *signature*, an indexed polynomial functor: an index type `I`, the
+A `codatatype` declaration is a *signature*, an indexed polynomial functor: an index type `I`, the
 non-recursive data of the constructors producing each index (the *shapes*, `Shape : I → Type`),
 for each shape its positions for recursive arguments (`B : (i : I) → Shape i → Type`), and the
 index of the argument at each position (`idx : B i s → I`). A plain type is a family over `Unit`.

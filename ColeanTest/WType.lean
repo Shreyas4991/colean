@@ -1,7 +1,7 @@
 import Mathlib.Data.W.Basic
 import Colean.DataCmd
 
-/-! # Test: `data` with a recursive argument under a dependent arrow, against Mathlib's `WType`
+/-! # Test: `datatype` with a recursive argument under a dependent arrow, against Mathlib's `WType`
 
 `W α β` is the W-type of the container `(α, β)`; `WType β` is Mathlib's. -/
 
@@ -11,7 +11,7 @@ namespace DataTest
 
 noncomputable section
 
-data W (α : Type u) (β : α → Type v)
+datatype W (α : Type u) (β : α → Type v)
   | sup (a : α) (f : β a → W α β)
 
 #check @W.sup
@@ -28,7 +28,7 @@ theorem W.toW_ofW {α : Type u} {β : α → Type v} (t : WType β) : (W.ofW t).
   induction t with
   | mk a f ih => simp [W.ofW, W.toW] at *; simp [ih]
 
-/-- Induction on the `data` type: the hypothesis for `f` is `∀ b, motive (f b)`. -/
+/-- Induction on the `datatype`: the hypothesis for `f` is `∀ b, motive (f b)`. -/
 theorem W.ofW_toW {α : Type u} {β : α → Type v} (t : W α β) : W.ofW t.toW = t := by
   induction t with
   | sup a f ih => simp [W.toW] at *; simp [W.ofW, ih]

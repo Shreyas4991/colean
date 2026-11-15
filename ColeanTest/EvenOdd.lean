@@ -1,16 +1,16 @@
 import Colean.MutualCmd
 
-/-! # Test: a mutual indexed `data` block with a constructor name shared by both types -/
+/-! # Test: a mutual indexed `datatype` block with a constructor name shared by both types -/
 
 namespace DataTest
 
 noncomputable section
 
 mutual
-data Even : Nat → Type
+datatype Even : Nat → Type
   | zero : Even 0
   | succ {n : Nat} (o : Odd n) : Even (n + 1)
-data Odd : Nat → Type
+datatype Odd : Nat → Type
   | succ {n : Nat} (e : Even n) : Odd (n + 1)
 end
 

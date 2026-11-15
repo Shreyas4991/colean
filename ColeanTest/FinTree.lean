@@ -1,7 +1,7 @@
 import Mathlib.Logic.Equiv.Defs
 import Colean.DataCmd
 
-/-! # Test: `data` with two recursive arguments, and the native inductive type -/
+/-! # Test: `datatype` with two recursive arguments, and the native inductive type -/
 
 universe u
 
@@ -9,7 +9,7 @@ namespace DataTest
 
 noncomputable section
 
-data FinTree (α : Type u)
+datatype FinTree (α : Type u)
   | leaf
   | node (a : α) (l r : FinTree α)
 

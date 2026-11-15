@@ -7,7 +7,7 @@ namespace CodataTest
 
 noncomputable section
 
-codata CoNat
+codatatype CoNat
   | zero
   | succ (n : CoNat)
 

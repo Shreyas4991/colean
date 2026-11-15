@@ -22,7 +22,7 @@ The proposal, in order of importance:
 1. Per type, generated with `T.F.Rel` (`Gen/Rel.lean`): `T.F.rel_cᵢ_cᵢ`, an iff from one step of
    the lifting at two values of one constructor to the equations of their data and the premises
    of `F.Rel.cᵢ` at their recursive arguments, and `T.F.rel_cᵢ_cⱼ`, `False` for two constructors.
-   Both `simp`. The same for each type of a `mutual` block and for the `codata` types of a mixed
+   Both `simp`. The same for each type of a `mutual` block and for the `codatatype`s of a mixed
    block.
 2. Once, in `Model/Occ.lean`: `Occ.Rel` through every combinator and leaf of the library (a
    product componentwise, a sum by sides, a function pointwise, a composite as the relation of
@@ -64,7 +64,7 @@ open Codata
 Unfolding a corecursive definition needs `conv`, since `rw [CoList.map, CoList.corec_eq]` would
 also rewrite the right-hand side, and a final `rfl`. -/
 
-codata CoList (α : Type u)
+codatatype CoList (α : Type u)
   | nil
   | cons (head : α) (tail : CoList α)
 
@@ -119,7 +119,7 @@ example {α : Type u} {X Y : Type v} (R : X → Y → Prop) (b : α) (y : Y)
 
 A type with one constructor is no different. -/
 
-codata Str (α : Type u)
+codatatype Str (α : Type u)
   | cons (head : α) (tail : Str α)
 
 def Str.iterate {α : Type u} (f : α → α) (a : α) : Str α :=
@@ -158,7 +158,7 @@ The premise of `F.Rel.node` relates the two lists of children by the relation of
 structure, `(Occ.ofIso List).Rel (Occ.ofIso List) R`. There is no lemma about it: the route is
 `Occ.rel_map`, with both lists written as maps of one list. -/
 
-codata Rose (α : Type u)
+codatatype Rose (α : Type u)
   | node (a : α) (cs : List (Rose α))
 
 def Rose.map {α : Type u} {β : Type v} (f : α → β) : Rose α → Rose β :=
@@ -192,7 +192,7 @@ theorem Rose.map_map {α β γ : Type u} (f : α → β) (g : β → γ) (t : Ro
 The same, with a constructor of `Option` or a pair: nothing applies but `Occ.rel_intro` at the
 layers of the structure, or `Occ.rel_prod_intro` and `Occ.rel_hole_intro`. -/
 
-codata OStr (α : Type u)
+codatatype OStr (α : Type u)
   | cons (a : α) (t : Option (OStr α))
 
 example {α : Type u} {X Y : Type v} (R : X → Y → Prop) (a : α) (x : X) (y : Y) (h : R x y) :
@@ -200,7 +200,7 @@ example {α : Type u} {X Y : Type v} (R : X → Y → Prop) (a : α) (x : X) (y 
   fail_if_success simp [-OStr.F.rel_cons_cons]
   exact .cons _ _ _ ⟨true, _, _, rfl, rfl, fun _ => h⟩
 
-codata Bin (α : Type u)
+codatatype Bin (α : Type u)
   | leaf
   | node (a : α) (p : Bin α × Bin α)
 
@@ -217,7 +217,7 @@ example {α : Type u} {X Y : Type v} (R : X → Y → Prop) (a : α) (x₁ x₂ 
 computes the relation, even on constructors. Here two definitions of one tree, with different
 states; the colists of children are made maps of one colist by hand. -/
 
-codata NRose (α : Type u)
+codatatype NRose (α : Type u)
   | node (a : α) (cs : CoList (NRose α))
 
 /-- The tree with label `a` whose only child is itself. -/
@@ -255,9 +255,9 @@ relation of the argument's type. -/
 namespace Mutual
 
 mutual
-codata Tree (α : Type u)
+codatatype Tree (α : Type u)
   | node (a : α) (children : Forest α)
-codata Forest (α : Type u)
+codatatype Forest (α : Type u)
   | nil
   | cons (t : Tree α) (f : Forest α)
 end
@@ -297,9 +297,9 @@ identity, and the match of the step has to be removed by hand first. -/
 namespace Mixed
 
 mixed_mutual
-codata Tree (α : Type u)
+codatatype Tree (α : Type u)
   | node (a : α) (children : Forest α)
-data Forest (α : Type u)
+datatype Forest (α : Type u)
   | nil
   | cons (t : Tree α) (f : Forest α)
 end
@@ -381,12 +381,13 @@ at the open forests. -/
 
 /-! ### 10. Per type: equality by the destructor
 
-`dtor` is injective, by Lambek's lemma, for `codata` and `data` alike: `Contract.dtor_injective`
-in `Framework.lean` for any contract (and `Data.Contract.dtor_injective`), instantiated per type
-with the other derived lemmas (step 3), and per type of a block from `Tₘ.ctor_dtor`. The point
-for users: an equation between values of a coinductive type is an equation between their layers,
-so the unfolding equation of a corecursive definition is `T.dtor_injective` and `simp`, with no
-`conv` and no final `rfl`. `T.dtor_inj` is `simp`, and so is `T.dtor_eq_cᵢ_iff`. -/
+`dtor` is injective, by Lambek's lemma, for `codatatype` and `datatype` alike:
+`Contract.dtor_injective` in `Framework.lean` for any contract (and `Data.Contract.dtor_injective`),
+instantiated per type with the other derived lemmas (step 3), and per type of a block from
+`Tₘ.ctor_dtor`. The point for users: an equation between values of a coinductive type is an
+equation between their layers, so the unfolding equation of a corecursive definition is
+`T.dtor_injective` and `simp`, with no `conv` and no final `rfl`. `T.dtor_inj` is `simp`, and so is
+`T.dtor_eq_cᵢ_iff`. -/
 
 #check @Codata.Contract.dtor_injective
 #check @CoList.dtor_injective
@@ -682,10 +683,10 @@ theorem about existing definitions. What the generators need:
 
 Two limits remain, both rare in practice:
 
-* Relating two different infinite values of a nested `codata` leaf (`Occ.Rel (Occ.ofIso CoList) R
-  s s'` for colists built by different `corec`s) is a coinduction of its own: the route is
-  `rel_iff_exists_map` with a witness built by `corec`. A coinduction principle for the
-  relation of a leaf would be a theorem on `PolyFix` in `Model/Poly.lean`.
+* Relating two different infinite values of a nested `codatatype` leaf
+  (`Occ.Rel (Occ.ofIso CoList) R s s'` for colists built by different `corec`s) is a coinduction of
+  its own: the route is `rel_iff_exists_map` with a witness built by `corec`. A coinduction
+  principle for the relation of a leaf would be a theorem on `PolyFix` in `Model/Poly.lean`.
 * `simp` cannot choose the witness of a relation `∃ s, x = f s ∧ y = g s`: the step ends with
   `exact ⟨_, rfl, rfl⟩` unless the relation is stated so that `simp` closes it (section 18). -/
 

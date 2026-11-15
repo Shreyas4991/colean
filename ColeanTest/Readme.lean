@@ -9,7 +9,7 @@ namespace ReadmeCorec
 -- Coinductive types
 
 /-- Infinite lists -/
-codata Stream (α : Type)
+codatatype Stream (α : Type)
   | cons (head : α) (tail : Stream α)
 
 def Stream.map {α β : Type} (f : α → β) : Stream α → Stream β :=
@@ -26,7 +26,7 @@ theorem Stream.map_comp {α β γ : Type} (f : α → β) (g : β → γ) (s : S
     ?_ ⟨s, rfl, rfl⟩
   rintro _ _ ⟨s, rfl, rfl⟩
   -- coinductive step
-  cases s with | cons h t => -- `cases` works with `codata`
+  cases s with | cons h t => -- `cases` works with `codatatype`
   simp [map]
   use t
 
@@ -35,7 +35,7 @@ theorem Stream.map_comp {α β γ : Type} (f : α → β) (g : β → γ) (s : S
 /-- Potentially infinite lists -/
 -- `with_ccpo` creates a CCPO structure, which `partial_fixpoint` uses
 @[with_ccpo (bot := nil)] -- `bot` chooses the bottom `⊥` of the CCPO; it can be omitted here
-codata CoList (α : Type)
+codatatype CoList (α : Type)
   | nil
   | cons (head : α) (tail : CoList α)
 
@@ -56,7 +56,7 @@ example : (nats 0).filter (· % 2 == 0) = .cons 0 ((nats 2).filter (· % 2 == 0)
 -- One can define indexed families:
 
 /-- Infinite walk starting from `n` -/
-codata Walk : Int → Type
+codatatype Walk : Int → Type
   | up {n : Int} (tail : Walk (n + 1)) : Walk n
   | down {n : Int} (tail : Walk (n - 1)) : Walk n
 
@@ -79,10 +79,10 @@ def Walk.mirror {n : Int} (w : Walk n) : Walk (-n) :=
 -- Mutually dependent types:
 mutual
 /-- Trees of any depth and any breadth. -/
-codata Tree (α : Type)
+codatatype Tree (α : Type)
   | node (a : α) (children : Forest α)
 /-- Sequences of trees, possibly infinite. -/
-codata Forest (α : Type)
+codatatype Forest (α : Type)
   | nil
   | cons (t : Tree α) (f : Forest α)
 end
@@ -102,7 +102,7 @@ theorem Tree.binary_eq {α : Type} (a : α) :
 -- And nest through other types:
 
 /-- Nondeterministic computations: a result, or a finite choice of ways to continue. -/
-codata NDet (α : Type)
+codatatype NDet (α : Type)
   | ret (a : α)
   | choose (next : List (NDet α)) -- nesting through `List`
 
@@ -115,25 +115,25 @@ def NDet.flips : NDet Nat :=
     | .inr n => .choose [.inl (n + 1), .inr (n + 1)]) 
 
 -- One can nest through a predefined set of standard Lean types (`Prod`, `Sum`, `List`, `Option`,
--- etc.) and through types defined with `codata` and `data` (see below).
+-- etc.) and through types defined with `codatatype` and `datatype` (see below).
 
--- Inductive types can be defined with `data`:
+-- Inductive types can be defined with `datatype`:
 
-data LogicalFormula
+datatype LogicalFormula
   | const (b : Bool)
   | and (x y : LogicalFormula)
   | or (x y : LogicalFormula)
   | not (x : LogicalFormula)
 
 -- They can also be in a `mutual` block and used in nesting. 
--- Finally, we can mix `data` and `codata` in a `mixed_mutual` block:
+-- Finally, we can mix `datatype` and `codatatype` in a `mixed_mutual` block:
 
 mixed_mutual
 /-- Stream processors: they keep producing outputs forever... -/
-codata SP (I O : Type)
+codatatype SP (I O : Type)
   | step (s : Step I O)
 /-- ...and read finitely many inputs before each output. -/
-data Step (I O : Type)
+datatype Step (I O : Type)
   | get (k : I → Step I O)
   | put (o : O) (next : SP I O)
 end
@@ -144,7 +144,7 @@ def SP.pairSums : SP Nat Nat :=
 
 -- It is important to note that `mixed_mutual`, unlike a uniform `mutual`, depends on the order of
 -- the types. Types are defined bottom-up, each treating the types above it as placeholders. So
--- `data Step` only makes the reads up to the next `put` finite, while `codata SP` lets the
+-- `datatype Step` only makes the reads up to the next `put` finite, while `codatatype SP` lets the
 -- processor as a whole run forever. In the reverse order, `SP I O` would be empty: the whole
 -- processor would have to be finite, but nothing ever ends it.
 

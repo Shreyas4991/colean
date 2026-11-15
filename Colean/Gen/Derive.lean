@@ -39,7 +39,7 @@ with both under a named type constructor or a function that have a structure in 
 
 The variables of the step are at universes of their own, unless a field fixes the universe of
 the occurrences (`NDet (T α)` with `NDet : Type → Type`, `fixedLvl?`): then the layer's `Y` is at
-it, and so must be the states of the fixpoint, made of the premises' shapes, and for `codata` of
+it, and so must be the states of the fixpoint, made of the premises' shapes, and for `codatatype` of
 their positions and of `X`, which are at fixed universes too (`stepLevels`).
 
 With the holes fixed, the constructors of the presentation are those of `T` with such nested

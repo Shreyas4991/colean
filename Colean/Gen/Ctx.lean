@@ -388,7 +388,7 @@ structure WrittenSort where
 
 /-- Everything the generators need: see the header. -/
 structure Ctx extends Block where
-  /-- `codata` (`true`) or `data`. -/
+  /-- `codatatype` (`true`) or `datatype`. -/
   co : Bool
   /-- The family being defined: the type, or the block. -/
   name : Name
@@ -521,7 +521,7 @@ def nestAt (n : Nest) (lvl : Level) (σ : Expr → Expr) : Expr :=
 /-! ### Names -/
 
 /-- The generated declaration `T.s`. Inside its own namespace `T.T` would shadow the type `T`,
-so a generated name equal to the type's name is primed (`B.B'` for `codata B`). Which of these
+so a generated name equal to the type's name is primed (`B.B'` for `codatatype B`). Which of these
 names are `protected` is `protectedGen` (`Gen/Decl.lean`). -/
 def gen (s : String) : Name :=
   let last := match ctx.name with
@@ -601,7 +601,7 @@ def tName' (c : Ctor) (pre post : String) : Name :=
   ctx.tyName c.owner ++ Name.mkSimple (pre ++ c.name.toString ++ post)
 def tyGen (m : Nat) (s : String) : Name := .str (ctx.tyName m) s
 /-- `Tₘ.s`, primed when `s` is the type's own name (`F.F'` for a type `F`), as `gen` does; for
-the declarations of a `codata` block per type (`Tₘ.F`, `Tₘ.corec`, …). -/
+the declarations of a `codatatype` block per type (`Tₘ.F`, `Tₘ.corec`, …). -/
 def tyGenP (m : Nat) (s : String) : Name :=
   let n := ctx.tyName m
   let own := if ctx.isOpen then n.getPrefix else n

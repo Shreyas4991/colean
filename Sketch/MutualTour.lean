@@ -3,9 +3,9 @@ import Colean.MutualCmd
 /-!
 # A walk through mutual blocks
 
-A uniform block is a `mutual … end` of `data` declarations, or of `codata` declarations, with the
-same parameters. It is one family over an inductive `Ix`, with a constructor per type whose
-arguments are the indices of that type, so nothing new is involved: `Even`/`Odd` is one `data`
+A uniform block is a `mutual … end` of `datatype` declarations, or of `codatatype` declarations,
+with the same parameters. It is one family over an inductive `Ix`, with a constructor per type whose
+arguments are the indices of that type, so nothing new is involved: `Even`/`Odd` is one `datatype`
 with one index. Blocks that mix both kinds, `mixed_mutual … end`, are in `Sketch/MixedTour.lean`.
 
 Read it top to bottom. Part I (sections 1 to 7) is what works, Part II what does not work yet but
@@ -41,10 +41,10 @@ of `Ix`, and keeps its own constructors. -/
 namespace Basic
 
 mutual
-data Even
+datatype Even
   | zero
   | succ (o : Odd)
-data Odd
+datatype Odd
   | succ (e : Even)
 end
 
@@ -80,7 +80,7 @@ end
 
 end Basic
 
-/-! ### 2. `data`: folds and induction
+/-! ### 2. `datatype`: folds and induction
 
 As Lean's mutual recursors have a motive per type, each type has a fold with a family and an
 algebra per type: `Rose.fold a₁ a₂ t` with `a₁ : Rose.F α S₁ S₂ → S₁`, `a₂ : Forest.F α S₁ S₂ → S₂`
@@ -94,9 +94,9 @@ what to do at every constructor of `Ix`. -/
 namespace Finite
 
 mutual
-data Rose (α : Type u)
+datatype Rose (α : Type u)
   | node (a : α) (children : Forest α)
-data Forest (α : Type u)
+datatype Forest (α : Type u)
   | nil
   | cons (t : Rose α) (f : Forest α)
 end
@@ -161,7 +161,7 @@ example {α : Type u} (f : Forest α) : f = .nil ∨ ∃ t g, f = .cons t g := b
 
 end Finite
 
-/-! ### 3. `codata`: corecursion and bisimulation
+/-! ### 3. `codatatype`: corecursion and bisimulation
 
 As Lean's mutual recursors have a motive per type, each type has a corecursor with a state and a
 step per type, and a bisimulation with a relation per type: `Tree.corec c₁ c₂ s` with
@@ -179,9 +179,9 @@ over `Ix` instead. -/
 namespace Infinite
 
 mutual
-codata Tree (α : Type u)
+codatatype Tree (α : Type u)
   | node (a : α) (children : Forest α)
-codata Forest (α : Type u)
+codatatype Forest (α : Type u)
   | nil
   | cons (t : Tree α) (f : Forest α)
 end
@@ -249,10 +249,10 @@ matches the type and its indices at once. -/
 namespace Indexed
 
 mutual
-data Even : Nat → Type
+datatype Even : Nat → Type
   | zero : Even 0
   | succ {n : Nat} (o : Odd n) : Even (n + 1)
-data Odd : Nat → Type
+datatype Odd : Nat → Type
   | succ {n : Nat} (e : Even n) : Odd (n + 1)
 end
 
@@ -275,13 +275,13 @@ theorem par (i : Even_Odd.Ix) (x : Even_Odd i) : Par i x := by
 
 end Indexed
 
--- `codata`, with the index growing along a field.
+-- `codatatype`, with the index growing along a field.
 namespace IndexedCo
 
 mutual
-codata Pa : Nat → Type
+codatatype Pa : Nat → Type
   | mk {n : Nat} (q : Qa (n + 1)) : Pa n
-codata Qa : Nat → Type
+codatatype Qa : Nat → Type
   | stop : Qa 0
   | mk {n : Nat} (p : Pa n) : Qa n
 end
@@ -299,10 +299,10 @@ end IndexedCo
 namespace ParamIndex
 
 mutual
-data Ev (α : Type u) : Nat → Type u
+datatype Ev (α : Type u) : Nat → Type u
   | zero : Ev α 0
   | succ {n : Nat} (a : α) (o : Od α n) : Ev α (n + 1)
-data Od (α : Type u) : Nat → Type u
+datatype Od (α : Type u) : Nat → Type u
   | succ {n : Nat} (a : α) (e : Ev α n) : Od α (n + 1)
 end
 
@@ -312,10 +312,10 @@ end ParamIndex
 namespace IndexOnParam
 
 mutual
-data Pa (α : Type) : List α → Type
+datatype Pa (α : Type) : List α → Type
   | nil : Pa α []
   | mk {a : α} {l : List α} (q : Qa α l) : Pa α (a :: l)
-data Qa (α : Type) : List α → Type
+datatype Qa (α : Type) : List α → Type
   | mk {l : List α} (p : Pa α l) : Qa α l
 end
 
@@ -325,9 +325,9 @@ end IndexOnParam
 namespace Telescope
 
 mutual
-data Pa : (n : Nat) → Fin n → Type
+datatype Pa : (n : Nat) → Fin n → Type
   | mk {n : Nat} (i : Fin n) (q : Qa n i) : Pa n i
-data Qa : (n : Nat) → Fin n → Type
+datatype Qa : (n : Nat) → Fin n → Type
   | stop {n : Nat} (i : Fin n) : Qa n i
   | mk {n : Nat} (i : Fin n) (p : Pa n i) : Qa n i
 end
@@ -338,10 +338,10 @@ end Telescope
 namespace TypeIndex
 
 mutual
-data Pa : Type → Type 1
+datatype Pa : Type → Type 1
   | nil {α : Type} : Pa α
   | mk {α : Type} (q : Qa (α × α)) : Pa α
-data Qa : Type → Type 1
+datatype Qa : Type → Type 1
   | mk {α : Type} (a : α) (p : Pa α) : Qa α
 end
 
@@ -351,10 +351,10 @@ end TypeIndex
 namespace ExplicitIndex
 
 mutual
-data Pa : Nat → Type
+datatype Pa : Nat → Type
   | mk (n : Nat) (q : Qa n) : Pa n
   | nil (n : Nat) : Pa n
-data Qa : Nat → Type
+datatype Qa : Nat → Type
   | mk (n : Nat) (p : Pa n) : Qa n
 end
 
@@ -366,10 +366,10 @@ end ExplicitIndex
 namespace Indices
 
 mutual
-data Pa : Nat → Type
+datatype Pa : Nat → Type
   | nil : Pa 0
   | mk {n : Nat} (q : Qa true) : Pa (n + 1)
-data Qa : Bool → Type
+datatype Qa : Bool → Type
   | mk (p : Pa 3) : Qa true
 end
 
@@ -384,10 +384,10 @@ end Indices
 namespace OneIndexed
 
 mutual
-data Pa : Nat → Type
+datatype Pa : Nat → Type
   | nil : Pa 0
   | mk {n : Nat} (q : Qa) : Pa (n + 1)
-data Qa
+datatype Qa
   | mk (p : Pa 3)
 end
 
@@ -397,11 +397,11 @@ end OneIndexed
 namespace ManyIndices
 
 mutual
-codata Pa (α : Type u) : List α → Type u
+codatatype Pa (α : Type u) : List α → Type u
   | nil (l : List α) (q : Qa α) : Pa α l
-codata Qa (α : Type u)
+codatatype Qa (α : Type u)
   | mk (r : Ra α 2 1)
-codata Ra (α : Type u) : (n : Nat) → Fin n → Type u
+codatatype Ra (α : Type u) : (n : Nat) → Fin n → Type u
   | go {n : Nat} {i : Fin n} (l : List α) (p : Pa α l) : Ra α n i
 end
 
@@ -416,10 +416,10 @@ end ManyIndices
 namespace ResultIndex
 
 mutual
-data Pa : Bool → Type
+datatype Pa : Bool → Type
   | nil : Pa true
   | mk {b : Bool} (q : Qa b) : Pa (!b)
-data Qa : Bool → Type
+datatype Qa : Bool → Type
   | mk {b : Bool} (p : Pa b) : Qa b
 end
 
@@ -441,18 +441,18 @@ end ResultIndex
 namespace Spelling
 
 mutual
-data Pa : Nat → Type
+datatype Pa : Nat → Type
   | nil : Pa 0
   | mk {n : Nat} (q : Qa n) : Pa (n + 1)
-data Qa : (k : ℕ) → Type
+datatype Qa : (k : ℕ) → Type
   | mk {n : Nat} (p : Pa n) : Qa n
 end
 
 mutual
-data Ra : Type
+datatype Ra : Type
   | nil
   | mk (s : Sa)
-data Sa
+datatype Sa
   | mk (r : Ra)
 end
 
@@ -460,11 +460,11 @@ end Spelling
 
 /-! ### 5. Shapes of blocks and of fields -/
 
--- One type: a block all the same, and it comes out as a plain `data`.
+-- One type: a block all the same, and it comes out as a plain `datatype`.
 namespace One
 
 mutual
-data Solo
+datatype Solo
   | nil
   | mk (s : Solo)
 end
@@ -477,17 +477,17 @@ end One
 namespace Loose
 
 mutual
-data Pa
+datatype Pa
   | nil
   | mk (p : Pa)
-data Qa
+datatype Qa
   | one
 end
 
 mutual
-data Ra
+datatype Ra
   | mk (s : Sa)
-data Sa
+datatype Sa
 end
 
 end Loose
@@ -496,20 +496,20 @@ end Loose
 namespace Cycle
 
 mutual
-codata X1
+codatatype X1
   | mk (y : X2)
-codata X2
+codatatype X2
   | mk (z : X3)
-codata X3
+codatatype X3
   | stop
   | mk (x : X1)
 end
 
 mutual
-data Pa
+datatype Pa
   | nil
   | self (a : Pa) (b : Qa)
-data Qa
+datatype Qa
   | mk (a : Pa) (b : Qa)
 end
 
@@ -519,18 +519,18 @@ end Cycle
 namespace Functions
 
 mutual
-data Pa
+datatype Pa
   | nil
   | fn (k : Nat → Pa)
   | dep (n : Nat) (h : 0 < n) (k : Fin n → Qa)
-data Qa
+datatype Qa
   | mk (p : Pa)
 end
 
 mutual
-codata Ra : Nat → Type
+codatatype Ra : Nat → Type
   | mk {n : Nat} (k : (m : Nat) → Sa (n + m)) : Ra n
-codata Sa : Nat → Type
+codatatype Sa : Nat → Type
   | mk {n : Nat} (r : Ra n) : Sa n
 end
 
@@ -540,10 +540,10 @@ end Functions
 namespace Binders
 
 mutual
-data Pa
+datatype Pa
   | nil
   | mk (m : Nat) (X : Nat) (i : Nat) (f : Qa)
-data Qa
+datatype Qa
   | mk (s : Pa) (y : Nat)
 end
 
@@ -553,10 +553,10 @@ end Binders
 namespace Dotted
 
 mutual
-data Foo.Pa
+datatype Foo.Pa
   | nil
   | mk (q : Foo.Qa)
-data Foo.Qa
+datatype Foo.Qa
   | mk (p : Foo.Pa)
 end
 
@@ -572,9 +572,9 @@ Each of these failed until the generators moved to `Expr`. -/
 namespace Arrow
 
 mutual
-data Pa
+datatype Pa
   | mk : Pa
-data Qa
+datatype Qa
   | mk : Pa → Qa
 end
 
@@ -587,10 +587,10 @@ end Arrow
 namespace NamedParam
 
 mutual
-data Pa {α : Type u} (β : Type v)
+datatype Pa {α : Type u} (β : Type v)
   | nil
   | mk (a : α) (b : β) (q : Qa (α := α) β)
-data Qa {α : Type u} (β : Type v)
+datatype Qa {α : Type u} (β : Type v)
   | mk (p : Pa (α := α) β)
 end
 
@@ -600,10 +600,10 @@ end NamedParam
 namespace InstParam
 
 mutual
-data Pa (α : Type u) [Inhabited α]
+datatype Pa (α : Type u) [Inhabited α]
   | nil
   | mk (q : Qa α)
-data Qa (α : Type u) [Inhabited α]
+datatype Qa (α : Type u) [Inhabited α]
   | mk (p : Pa α)
 end
 
@@ -613,10 +613,10 @@ end InstParam
 namespace NameB
 
 mutual
-data B
+datatype B
   | nil
   | mk (q : Qa)
-data Qa
+datatype Qa
   | mk (b : B)
 end
 
@@ -625,10 +625,10 @@ end NameB
 namespace NameF
 
 mutual
-data F
+datatype F
   | nil
   | mk (q : Qa)
-data Qa
+datatype Qa
   | mk (f : F)
 end
 
@@ -637,10 +637,10 @@ end NameF
 namespace NameShape
 
 mutual
-data Shape
+datatype Shape
   | nil
   | mk (q : Qa)
-data Qa
+datatype Qa
   | mk (s : Shape)
 end
 
@@ -649,10 +649,10 @@ end NameShape
 namespace NameIx
 
 mutual
-data Ix
+datatype Ix
   | nil
   | mk (q : Qa)
-data Qa
+datatype Qa
   | mk (w : Ix)
 end
 
@@ -661,10 +661,10 @@ end NameIx
 namespace NameS
 
 mutual
-data S
+datatype S
   | nil
   | mk (q : Qa)
-data Qa
+datatype Qa
   | mk (s : S)
 end
 
@@ -676,10 +676,10 @@ namespace CtorName
 
 set_option linter.dupNamespace false in
 mutual
-data Pa
+datatype Pa
   | Pa (q : Qa)
   | nil
-data Qa
+datatype Qa
   | Qa (p : Pa)
 end
 
@@ -689,7 +689,7 @@ end CtorName
 
 /-! ### 7. Recursors per type
 
-Each type of a `data` block has its recursor in the shape of Lean's mutual inductives: a motive
+Each type of a `datatype` block has its recursor in the shape of Lean's mutual inductives: a motive
 per type (`motive_1`, `motive_2` in block order), the minor premises of every constructor of the
 block, with the block's names for shared ones, and the type's own indices. `induction … using`
 takes it, the other motives given by name. As with Lean, plain `induction` on a value of one type
@@ -699,10 +699,10 @@ lemmas; those of the block-level recursor are `Blk.rec_cᵢ`. -/
 namespace PerType
 
 mutual
-data Pa
+datatype Pa
   | nil
   | mk (q : Qa)
-data Qa
+datatype Qa
   | mk (p : Pa)
 end
 
@@ -739,9 +739,9 @@ by `IPolyIso.Mem` at the block's index, one hypothesis per type of the argument.
 namespace NestedPerType
 
 mutual
-data Tr
+datatype Tr
   | node (n : Nat) (fs : List Fo)
-data Fo
+datatype Fo
   | mk (t : Tr) (next : Option Fo)
 end
 
@@ -771,14 +771,15 @@ example : (Tr.node 1 [.mk (.node 2 []) none]).sum = 3 := by
 
 end NestedPerType
 
-/-! Blocks that mix `data` and `codata`, `mixed_mutual … end`, are in `Sketch/MixedTour.lean`. -/
+/-! Blocks that mix `datatype` and `codatatype`, `mixed_mutual … end`, are in
+`Sketch/MixedTour.lean`. -/
 
 /-! ## Part II: what does not work yet
 
 Nothing at the moment. What should stay refused is not listed: the types of a block share their
 parameters, names included, and their universe, as in Lean, a universe written must be the one of
 the block's encoding (so not `Prop`), an implicit parameter cannot be left out at an occurrence,
-as in Lean, and a `mutual` block is all `data` or all `codata`. -/
+as in Lean, and a `mutual` block is all `datatype` or all `codatatype`. -/
 
 /-! ## Part III: what looks like a bug
 

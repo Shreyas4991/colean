@@ -8,7 +8,7 @@ namespace CodataTest
 
 noncomputable section
 
-codata PTree (α : Type u) (β : Type v)
+codatatype PTree (α : Type u) (β : Type v)
   | leaf (b : β)
   | node (a : α) (l r : PTree α β)
 

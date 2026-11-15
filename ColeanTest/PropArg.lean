@@ -7,19 +7,19 @@ is no injectivity lemma when nothing is left. -/
 
 namespace PropArgTest
 
-codata P (p : Prop)
+codatatype P (p : Prop)
   | mk (n : Nat) (h : p) (s : P p)
 
 example {p : Prop} (n n' : Nat) (h h' : p) (s s' : P p) :
     P.mk n h s = P.mk n' h' s' ↔ n = n' ∧ s = s' :=
   P.mk_inj n h s n' h' s'
 
-data Q
+datatype Q
   | mk (n : Nat) (h : True)
 
 example (n n' : Nat) (h h' : True) : Q.mk n h = Q.mk n' h' ↔ n = n' := Q.mk_inj n h n' h'
 
-data R
+datatype R
   | mk (h : True)
   | nil
 

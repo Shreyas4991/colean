@@ -4,18 +4,18 @@ import Colean.Gen.Derive
 /-!
 # Generators on `Expr`: the pipeline
 
-`codata` and `data`, single declarations, `mutual` blocks, and the runs of a `mixed_mutual`
+`codatatype` and `datatype`, single declarations, `mutual` blocks, and the runs of a `mixed_mutual`
 block (`Gen/Mixed.lean`): the declarations are analysed
 (`Gen/Front.lean`) and the steps of `architecture.md` run on their context in the order of their
 dependencies, all inside one `TermElabM` run (`runTermElabM`, for the section variables): the
-functor (step 1), for `codata` the lifting `T.F.Rel` with its lemmas (step 4, needed by the
+functor (step 1), for `codatatype` the lifting `T.F.Rel` with its lemmas (step 4, needed by the
 model), the signature, the isomorphism and the contract (step 2), in a block the types `Tₘ`, the
 framework (step 3), in a block the layer, the destructor and the constructor per type, and for
-`codata` the lemmas of the lifting per type (step 4), the constructors and `casesOn` (step 4), in
-a block Lambek's lemma and the rules of the destructor and the constructor per type, equality by
-the destructor, for `data` the recursor (step 2b, stated with the constructors) and the
-computation rules, and in a block the recursors and the folds per type (`data`), or corecursion
-and coinduction per type and coinduction up to equality (`codata`). Before them, the declared
+`codatatype` the lemmas of the lifting per type (step 4), the constructors and `casesOn` (step 4),
+in a block Lambek's lemma and the rules of the destructor and the constructor per type, equality by
+the destructor, for `datatype` the recursor (step 2b, stated with the constructors) and the
+computation rules, and in a block the recursors and the folds per type (`datatype`), or corecursion
+and coinduction per type and coinduction up to equality (`codatatype`). Before them, the declared
 sorts with a universe are checked against the types' (`checkSorts`). Each declaration is checked by the kernel as it is
 added, so a failure stops the command there, and the state is restored: a failed command
 declares nothing. Each step has its own heartbeat budget. Then, separately, the derived instances (step 5,
@@ -156,7 +156,7 @@ def elabDecls (decls : Array DeclStx) (ref : Syntax) : CommandElabM Unit :=
       return decls
     applyDeclAttrs decls
 
-/-- Elaborate a `codata` or `data` declaration. -/
+/-- Elaborate a `codatatype` or `datatype` declaration. -/
 def elabDecl (stx : Syntax) : CommandElabM Unit := do
   let some d := DeclStx.read? stx | throwUnsupportedSyntax
   elabDecls #[d] stx

@@ -5,7 +5,7 @@ import Colean.Model.Occ
 /-!
 # Generators on `Expr`: an order for `partial_fixpoint` (`with_ccpo`)
 
-*Spec.* Input: a type `T` declared by a single `codata` declaration, with parameters and at most
+*Spec.* Input: a type `T` declared by a single `codatatype` declaration, with parameters and at most
 one index, and the constructor without arguments chosen as the bottom (by name,
 `with_ccpo (bot := c)`, or the first one).
 Output, from the type's public declarations (`T.contract`, `T.F`, `T.F.Rel`, `T.F.rel_map`,
@@ -237,13 +237,13 @@ def genMonotone (c : Name) (ps : Array Expr) (plain : Bool)
 def genCCPO (bot? : Option Name) : TermElabM Unit := do
   let env ← getEnv
   let some kci := env.find? (T ++ `contract)
-    | fail m!"`{.ofConstName T}` is not a type declared by a single `codata` declaration (the \
+    | fail m!"`{.ofConstName T}` is not a type declared by a single `codatatype` declaration (the \
         types of `mutual` and `mixed_mutual` blocks are not supported)"
   let us := kci.levelParams.map mkLevelParam
   forallTelescope (← instantiateTypeLevelParams kci.toConstantVal us) fun ps body => do
   withBinderInfo ps .implicit do
   unless body.isAppOfArity ``Codata.Contract 3 do
-    fail m!"`{.ofConstName T}` is a `data` type: the order is for `codata` types"
+    fail m!"`{.ofConstName T}` is a `datatype`: the order is for `codatatype`s"
   let #[I, T', F'] := body.getAppArgs | unreachable!
   let K := mkAppN (.const (T ++ `contract) us) ps
   -- `T ps`, and whether there is an index.

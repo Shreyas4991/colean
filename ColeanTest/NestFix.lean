@@ -41,7 +41,7 @@ noncomputable section
 
 /-! ### 1. A parameter next to the type across a sum at one index -/
 
-data FL (α : Type u) : Nat → Type u
+datatype FL (α : Type u) : Nat → Type u
   | z : FL α 0
   | s {n : Nat} (p : List (α ⊕ FL α n)) : FL α (n + 1)
 
@@ -60,7 +60,7 @@ example (x a : Nat) (t : FL Nat 0) :
   simp
 
 -- A product inside the sum, and a function into it.
-data FLP (α : Type u) : Nat → Type u
+datatype FLP (α : Type u) : Nat → Type u
   | z : FLP α 0
   | s {n : Nat} (p : List (α × FLP α n ⊕ Nat)) : FLP α (n + 1)
 
@@ -68,7 +68,7 @@ data FLP (α : Type u) : Nat → Type u
 #guard_msgs in
 #synth PolyIso (fun X : Type => FLP X 1) _ _
 
-codata CFS (α : Type u) : Nat → Type u
+codatatype CFS (α : Type u) : Nat → Type u
   | mk {n : Nat} (p : Nat → (α ⊕ CFS α n)) : CFS α (n + 1)
 
 /-- info: CFS.Poly.instPolyIso 1 -/
@@ -77,10 +77,10 @@ codata CFS (α : Type u) : Nat → Type u
 
 -- In a block.
 mutual
-data SA (α : Type u)
+datatype SA (α : Type u)
   | nil
   | mk (p : List (α ⊕ SA α))
-data SB (α : Type u)
+datatype SB (α : Type u)
   | mk (a : SA α)
 end
 
@@ -100,7 +100,7 @@ structure NoMap (X : Type u) where
 instance : PolyIso NoMap.{u} Unit (fun _ => Unit) where
   equiv := ⟨fun b => ⟨(), fun _ => b.val⟩, fun z => ⟨z.2 ()⟩, fun _ => rfl, fun _ => rfl⟩
 
-data E (α β : Type u)
+datatype E (α β : Type u)
   | l (a : α)
   | r (b : β)
 
@@ -108,7 +108,7 @@ data E (α β : Type u)
 error: no `Codata.PolyMap` instance for `NoMap`: the `Codata.PolyIso` instance needs the intended action on functions, and its naturality
 -/
 #guard_msgs in
-data W0
+datatype W0
   | mk (x : NoMap W0)
 
 -- Through `E`'s instance at the premise `NoMap`, which has no `PolyMap`: refused as well.
@@ -116,7 +116,7 @@ data W0
 error: no `Codata.PolyMap` instance for `NoMap`: the `Codata.PolyIso` instance needs the intended action on functions, and its naturality
 -/
 #guard_msgs in
-data W1
+datatype W1
   | leaf
   | mk (x : E (NoMap W1) Nat)
 
@@ -136,7 +136,7 @@ Hint: Additional diagnostic information may be available using the `set_option d
 
 /-! ### 3. The recursor's hypothesis through a sum at one index -/
 
-data FS (α : Type) : Nat → Type
+datatype FS (α : Type) : Nat → Type
   | z : FS α 0
   | s {n : Nat} (p : FS α n ⊕ FS α n) : FS α (n + 1)
 
@@ -163,7 +163,7 @@ example : (FS.s (.inr FS.z) : FS Nat 1).depth = 1 := by
   simp [FS.depth]
 
 -- Through a product and through a dependent pair, the sum reached by cases on the value.
-data FS₂ (α : Type) : Nat → Type
+datatype FS₂ (α : Type) : Nat → Type
   | z : FS₂ α 0
   | s {n : Nat} (p : (FS₂ α n ⊕ FS₂ α n) × Nat) : FS₂ α (n + 1)
 
@@ -175,7 +175,7 @@ example {α : Type} (P : ∀ n, FS₂ α n → Prop) (h0 : P 0 .z)
   | z => exact h0
   | s p ih => exact hs _ p ih
 
-data FS₃ (α : Type) : Nat → Type
+datatype FS₃ (α : Type) : Nat → Type
   | z : FS₃ α 0
   | s {n : Nat} (p : (k : Nat) × (FS₃ α n ⊕ (Fin k → FS₃ α n))) : FS₃ α (n + 1)
 
@@ -190,7 +190,7 @@ example {α : Type} (P : ∀ n, FS₃ α n → Prop) (h0 : P 0 .z)
 -- Under a list the sum is not reached by cases on the value: by `IPolyIso.Mem`, which `simp`
 -- computes through the sum at any value, the index and the member taken away at the holes
 -- (`IPolyIso.forall_mem_compC`, `IPolyIso.forall_mem_sum`).
-data FS₄ (α : Type) : Nat → Type
+datatype FS₄ (α : Type) : Nat → Type
   | z : FS₄ α 0
   | s {n : Nat} (p : List (FS₄ α n ⊕ FS₄ α n)) : FS₄ α (n + 1)
 
@@ -207,7 +207,7 @@ example {α : Type} (P : ∀ n, FS₄ α n → Prop) (h0 : P 0 .z)
 
 -- The rules of step 5 for a nested argument at one index only after cases on its positions,
 -- under a list: by `IPolyIso.Mem`.
-data FP (α : Type u) : Nat → Type u
+datatype FP (α : Type u) : Nat → Type u
   | z : FP α 0
   | s {n : Nat} (a : α) (p : List (FP α n × FP α n)) : FP α (n + 1)
 
@@ -221,7 +221,7 @@ info: @FP.Poly.mem_s : ∀ {H : Type u_2 → Type u_1} {S : Type u_3} {R : S →
 #check @FP.Poly.mem_s
 
 -- Without indices.
-data PS
+datatype PS
   | leaf
   | mk (p : PS ⊕ Nat)
 
@@ -264,7 +264,7 @@ instance : IPolyMap Both.{u} Both.{v} where
     · exact ⟨false, e⟩
 
 -- Reindexed: `IPolyIso.mem_reidx`.
-data FlipD : Bool → Type
+datatype FlipD : Bool → Type
   | leaf {b : Bool} : FlipD b
   | mk {b : Bool} (children : Both (fun c => FlipD (!c))) : FlipD b
 
@@ -278,7 +278,7 @@ theorem FlipD.ind (P : ∀ b, FlipD b → Prop) (h0 : ∀ b, P b .leaf)
     exact hm _ c ih.1 ih.2
 
 -- At a constant family: `PolyIso.mem_ofI`.
-data AltPlain
+datatype AltPlain
   | leaf
   | mk (children : Both (fun _ => AltPlain))
 
@@ -291,7 +291,7 @@ theorem AltPlain.ind (P : AltPlain → Prop) (h0 : P .leaf)
     exact hm c (ih _ (.inr rfl)) (ih _ (.inl rfl))
 
 -- At a family of plain functors: `PolyIso.mem_compI`.
-data AltIn
+datatype AltIn
   | leaf
   | mk (children : Both (fun _ => List AltIn))
 
@@ -305,7 +305,7 @@ theorem AltIn.ind (P : AltIn → Prop) (h0 : P .leaf)
     exact hm c (fun t h => ih t (.inr h)) (fun t h => ih t (.inl h))
 
 -- At a family of functors on families: `IPolyIso.mem_compI`.
-data AltInF : Bool → Type
+datatype AltInF : Bool → Type
   | leaf {b : Bool} : AltInF b
   | mk {b : Bool} (children : Both (fun c => List (AltInF c))) : AltInF b
 
@@ -322,19 +322,19 @@ theorem AltInF.ind (P : ∀ b, AltInF b → Prop) (h0 : ∀ b, P b .leaf)
 /-! ### 5. Parameters that cannot vary together -/
 
 -- `α` and `β` are domains: kept constant, `γ` varies.
-data FnFn (α β γ : Type)
+datatype FnFn (α β γ : Type)
   | mk (x : α → β → γ)
 
 /-- info: FnFn.Poly.instPolyIsoEta -/
 #guard_msgs in
 #synth PolyIso (FnFn Nat Nat) _ _
 
-data Fn (A : Type) (α : Type)
+datatype Fn (A : Type) (α : Type)
   | leaf (a : α)
   | node (k : A → Fn A α)
 
 -- `β` is a domain of `Fn`: kept constant, the first `α` varies.
-data FnRev (α β : Type)
+datatype FnRev (α β : Type)
   | mk (x : Fn β α)
 
 /-- info: FnRev.Poly.instPolyIso -/
@@ -343,13 +343,13 @@ data FnRev (α β : Type)
 
 /-! ### 6. Many sums in one constructor -/
 
-data Many (α : Type u)
+datatype Many (α : Type u)
   | nil
   | cons (a : α) (t : Many α)
 
 -- Thirty-two ways through the sums: the argument is not split, it has a structure in two
 -- variables.
-data Big (α : Type u)
+datatype Big (α : Type u)
   | leaf
   | mk (p : (Many α ⊕ α) × (Big α ⊕ α) × (Big α ⊕ α) × (Big α ⊕ α) × (Big α ⊕ α))
 
@@ -364,7 +364,7 @@ example (x : Nat) (b : Big Nat) :
 /-! ### 7. Internal names unlike the user's -/
 
 -- A constructor named as a side of a sum of another.
-data Tm (α : Type u)
+datatype Tm (α : Type u)
   | var (a : α)
   | app (f : Tm α ⊕ α)
   | app_inl (x : α)
@@ -377,7 +377,7 @@ example (x : Nat) : PolyIso.Mem Tm x (.app (.inr x)) := by simp
 example (x : Nat) : PolyIso.Mem Tm x (.app_inl x) := by simp
 
 -- An argument named as a part of another.
-data PF (α : Type u)
+datatype PF (α : Type u)
   | leaf
   | mk (p : α × PF α) (p_fst : Nat)
 
@@ -387,7 +387,7 @@ data PF (α : Type u)
 
 /-! ### 8. Arrays -/
 
-data OT (α : Type u)
+datatype OT (α : Type u)
   | mk (o : Option α) (a : Array (OT α))
 
 example (f : Nat → Int) (t : OT Nat) :
@@ -401,7 +401,7 @@ example (f : Nat → Int) (t : OT Nat) :
 info: `UseNoMap` gets no `Codata.PolyIso` instance, and cannot be nested through: no parameter may vary (`α` occurs in the field `b` of `mk`, without an occurrence structure in it)
 -/
 #guard_msgs in
-data UseNoMap (α : Type)
+datatype UseNoMap (α : Type)
   | mk (b : NoMap α)
 
 namespace Short
@@ -413,7 +413,7 @@ warning: `Bad` cannot be nested through: no `Codata.PolyIso` instance was genera
 generating the fixpoint `NestFixTest.Short.Bad.Poly.fix` failed, an error of the generator (`set_option codata.deriveDetails true` shows it)
 -/
 #guard_msgs in
-data Bad (α : Type)
+datatype Bad (α : Type)
   | nil
   | cons (a : α) (t : Bad α)
 
@@ -430,7 +430,7 @@ generating the fixpoint `NestFixTest.Details.Bad.Poly.fix` failed:
 -/
 #guard_msgs in
 set_option codata.deriveDetails true in
-data Bad (α : Type)
+datatype Bad (α : Type)
   | nil
   | cons (a : α) (t : Bad α)
 
@@ -438,7 +438,7 @@ end Details
 
 /-! ### 10. The eta `PolyMap` across universes -/
 
-data BigH (α : Type (u + 1))
+datatype BigH (α : Type (u + 1))
   | nil
   | cons (a : α) (t : BigH α)
 
@@ -450,9 +450,9 @@ data BigH (α : Type (u + 1))
 
 -- A field with the block's type but no parameter: no disjunct for its members in the parameter.
 mutual
-codata CA (α : Type u)
+codatatype CA (α : Type u)
   | mk (a : α) (p : List (CA α × Nat))
-codata CB (α : Type u)
+codatatype CB (α : Type u)
   | mk (a : CA α)
 end
 
@@ -466,7 +466,7 @@ info: @CA.Poly.mem_mk : ∀ {H : Type u_2 → Type u_1} {S : Type u_3} {R : S �
 #check @CA.Poly.mem_mk
 
 -- Arguments named as the generated binders.
-data HX (α : Type u)
+datatype HX (α : Type u)
   | leaf
   | mk (H : α) (X : List (HX α)) (t : Nat)
 
@@ -486,7 +486,7 @@ holes, inside a named type constructor too (`IPolyIso.forall_mem_compC`, `exists
 then `IPolyIso.forall_eq_heq_imp`, `exists_eq_heq_and`, …). -/
 
 -- The recursor's hypothesis through a list of pairs at two indices.
-data FQ (α : Type u) : Nat → Type u
+datatype FQ (α : Type u) : Nat → Type u
   | z {n : Nat} (a : α) : FQ α n
   | s {n : Nat} (p : List (FQ α n × FQ α (n + 1))) : FQ α (n + 2)
 
@@ -548,16 +548,16 @@ end
 `NDet (Game α)` with `NDet : Type → Type` puts the occurrences of `Game` in `Type`: `Game.F`
 takes its variable there, and so do the layer of the instances and the states of their fixpoint,
 so the instances of `Game` are generated, in `Type`, and types nest through it in turn. The same
-for `data` and through a type of either kind. -/
+for `datatype` and through a type of either kind. -/
 
 namespace FixedUniverse
 
-codata NDet (α : Type)
+codatatype NDet (α : Type)
   | ret (a : α)
   | choose (next : List (NDet α))
 
 #guard_msgs in
-codata Game (α : Type)
+codatatype Game (α : Type)
   | move (label : α) (options : NDet (Game α))
 
 /-- info: Game.Poly.instPolyIsoEta -/
@@ -587,7 +587,7 @@ example (x a : Nat) (o : NDet (Game Nat)) :
 
 -- A third type nests through `Game`.
 #guard_msgs in
-codata Arena (α : Type)
+codatatype Arena (α : Type)
   | node (a : α) (g : Game (Arena α))
 
 /-- info: Arena.Poly.instPolyIsoEta -/
@@ -598,13 +598,13 @@ example {X Y : Type} (f : X → Y) (a : Nat) (g : Game X) :
     Arena.F.map f (.node a g) = .node a ((Occ.ofIso Game).map (Occ.ofIso Game) f g) := by
   simp
 
--- `data` through `data`.
-data MyList (α : Type)
+-- `datatype` through `datatype`.
+datatype MyList (α : Type)
   | nil
   | cons (a : α) (t : MyList α)
 
 #guard_msgs in
-data Rose2 (α : Type)
+datatype Rose2 (α : Type)
   | node (a : α) (kids : MyList (Rose2 α))
 
 /-- info: Rose2.Poly.instPolyIsoEta -/
@@ -618,13 +618,13 @@ example (f : Nat → Int) (a : Nat) (k : MyList (Rose2 Nat)) :
       := by
   simp
 
--- `codata` through `codata`.
-codata CoList (α : Type)
+-- `codatatype` through `codatatype`.
+codatatype CoList (α : Type)
   | nil
   | cons (a : α) (t : CoList α)
 
 #guard_msgs in
-codata CoRose (α : Type)
+codatatype CoRose (α : Type)
   | node (a : α) (kids : CoList (CoRose α))
 
 /-- info: CoRose.Poly.instPolyIsoEta -/
@@ -638,14 +638,14 @@ example (f : Nat → Int) (a : Nat) (k : CoList (CoRose Nat)) :
       := by
   simp
 
--- Above `Type`, `codata` gets its instances; `data` needs its trees of shapes at that universe,
--- here in `Type`.
-codata NDetU (α : Type u)
+-- Above `Type`, `codatatype` gets its instances; `datatype` needs its trees of shapes at that
+-- universe, here in `Type`.
+codatatype NDetU (α : Type u)
   | ret (a : α)
   | choose (next : List (NDetU α))
 
 #guard_msgs in
-codata GameU (α : Type u)
+codatatype GameU (α : Type u)
   | move (label : α) (options : NDetU.{u} (GameU α))
 
 /--
@@ -653,7 +653,7 @@ warning: `DGameU` cannot be nested through: no `Codata.PolyIso` instance was gen
 a field fixes the universe of the occurrences at `Type u`, and the fixpoint needs `fold` on states in `Type`, its trees of shapes
 -/
 #guard_msgs in
-data DGameU (α : Type u)
+datatype DGameU (α : Type u)
   | move (label : α) (options : NDetU.{u} (DGameU α))
 
 end FixedUniverse

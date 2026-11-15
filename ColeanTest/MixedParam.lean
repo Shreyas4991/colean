@@ -16,9 +16,9 @@ noncomputable section
 
 -- Two parameters, one used only in the inner run.
 mixed_mutual
-codata Tree (α : Type u) (β : Type v)
+codatatype Tree (α : Type u) (β : Type v)
   | node (a : α) (children : Forest α β)
-data Forest (α : Type u) (β : Type v)
+datatype Forest (α : Type u) (β : Type v)
   | nil (b : β)
   | cons (t : Tree α β) (f : Forest α β)
 end
@@ -56,9 +56,9 @@ section
 variable {γ : Type u}
 
 mixed_mutual
-data Box
+datatype Box
   | mk (c : Stream)
-codata Stream
+codatatype Stream
   | cons (g : γ) (b : Box) (s : Stream)
 end
 
@@ -77,9 +77,9 @@ info: @Box.rec : {γ : Type u_2} →
 -- Implicit binders in the constructors, and an implicit parameter, implicit in the types too, as
 -- with `inductive`.
 mixed_mutual
-codata Lab {ι : Type} (f : ι → Nat)
+codatatype Lab {ι : Type} (f : ι → Nat)
   | node {i : ι} (n : Fin (f i)) (cs : LabList f)
-data LabList {ι : Type} (f : ι → Nat)
+datatype LabList {ι : Type} (f : ι → Nat)
   | nil
   | cons (t : Lab f) (rest : LabList f)
 end
@@ -94,9 +94,9 @@ info: @Lab.node : {ι : Type} → {f : ι → ℕ} → {i : ι} → Fin (f i) �
 namespace NoParam
 
 mixed_mutual
-codata Tree
+codatatype Tree
   | node (cs : Forest)
-data Forest
+datatype Forest
   | nil
   | cons (n : Nat) (f : Forest)
 end

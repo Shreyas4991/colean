@@ -19,7 +19,7 @@ noncomputable section
 error: `P0` is declared with sort `Prop` but defined with sort `Type`: these commands define types, not propositions; write `Type`, or `Type _` to leave the universe to the command
 -/
 #guard_msgs in
-data P0 : Prop
+datatype P0 : Prop
   | mk
 
 /-- error: Unknown identifier `P0` -/
@@ -30,7 +30,7 @@ data P0 : Prop
 error: `C3` is declared with sort `Type 3` but defined with sort `Type`: these commands put a type in the universe of its encoding, the largest of those of its indices and of its constructors' data; write `Type`, or `Type _` to leave the universe to the command
 -/
 #guard_msgs in
-codata C3 : Type 3
+codatatype C3 : Type 3
   | mk (n : Nat)
 
 /-- error: Unknown identifier `C3.mk` -/
@@ -41,7 +41,7 @@ codata C3 : Type 3
 error: `I` is declared with sort `ℕ → Prop` but defined with sort `ℕ → Type`: these commands define types, not propositions; write `ℕ → Type`, or `Type _` to leave the universe to the command
 -/
 #guard_msgs in
-codata I : Nat → Prop
+codatatype I : Nat → Prop
   | mk {n : Nat} (i : I (n + 1)) : I n
 
 /-- error: Unknown identifier `I.F` -/
@@ -53,7 +53,7 @@ codata I : Nat → Prop
 error: `Big` is declared with sort `Type → Type` but defined with sort `Type → Type 1`: these commands put a type in the universe of its encoding, the largest of those of its indices and of its constructors' data; write `Type → Type 1`, or `Type _` to leave the universe to the command
 -/
 #guard_msgs in
-data Big : Type → Type
+datatype Big : Type → Type
   | mk {β : Type} (b : β) : Big β
 
 /-- error: Unknown identifier `Big` -/
@@ -64,7 +64,7 @@ data Big : Type → Type
 error: `S` is declared with sort `Type v` but defined with sort `Type u`: these commands put a type in the universe of its encoding, the largest of those of its indices and of its constructors' data; write `Type u`, or `Type _` to leave the universe to the command
 -/
 #guard_msgs in
-codata S (α : Type u) : Type v
+codatatype S (α : Type u) : Type v
   | mk (a : α) (s : S α)
 
 /-- error: Unknown identifier `S` -/
@@ -77,10 +77,10 @@ error: `Pa` is declared with sort `Type 1` but defined with sort `Type`: these c
 -/
 #guard_msgs in
 mutual
-data Pa : Type 1
+datatype Pa : Type 1
   | nil
   | mk (q : Qa)
-data Qa : Type 1
+datatype Qa : Type 1
   | mk (p : Pa)
 end
 
@@ -94,9 +94,9 @@ error: `Tree` is declared with sort `Type 2` but defined with sort `Type`: these
 -/
 #guard_msgs in
 mixed_mutual
-codata Tree : Type 2
+codatatype Tree : Type 2
   | node (children : Forest)
-data Forest : Type 2
+datatype Forest : Type 2
   | nil
   | cons (t : Tree) (f : Forest)
 end
@@ -110,9 +110,9 @@ error: `Forest₁` is declared with sort `Type 1` but defined with sort `Type`: 
 -/
 #guard_msgs in
 mixed_mutual
-codata Tree₁
+codatatype Tree₁
   | node (children : Forest₁)
-data Forest₁ : Type 1
+datatype Forest₁ : Type 1
   | nil
   | cons (t : Tree₁) (f : Forest₁)
 end
@@ -127,36 +127,36 @@ end
 
 /-! Matching sorts are accepted, up to the order in `max`. -/
 
-data A0 : Type
+datatype A0 : Type
   | mk
 
-codata S1 (α : Type u) : Type u
+codatatype S1 (α : Type u) : Type u
   | cons (a : α) (t : S1 α)
 
-data N1 : Nat → Type
+datatype N1 : Nat → Type
   | z : N1 0
 
-data Big1 : Type → Type 1
+datatype Big1 : Type → Type 1
   | mk {β : Type} (b : β) : Big1 β
 
-data W1 (α : Type u) : Type _
+datatype W1 (α : Type u) : Type _
   | mk (a : α)
 
-data Two (α : Type u) (β : Type v) : Type (max v u)
+datatype Two (α : Type u) (β : Type v) : Type (max v u)
   | mk (a : α) (b : β)
 
 mutual
-data Pa₁ : Nat → Type
+datatype Pa₁ : Nat → Type
   | nil : Pa₁ 0
   | mk {n : Nat} (q : Qa₁ n) : Pa₁ (n + 1)
-data Qa₁ : Nat → Type
+datatype Qa₁ : Nat → Type
   | mk {n : Nat} (p : Pa₁ n) : Qa₁ n
 end
 
 mixed_mutual
-codata Tree₂ (α : Type u) : Type u
+codatatype Tree₂ (α : Type u) : Type u
   | node (a : α) (children : Forest₂ α)
-data Forest₂ (α : Type u) : Type u
+datatype Forest₂ (α : Type u) : Type u
   | nil
   | cons (t : Tree₂ α) (f : Forest₂ α)
 end
@@ -177,9 +177,9 @@ example (α : Type u) : Type u := Forest₂ α
 /-- error: `Pc` is declared twice in this block -/
 #guard_msgs in
 mutual
-data Pc
+datatype Pc
   | nil
-data Pc
+datatype Pc
   | mk
 end
 
@@ -193,9 +193,9 @@ def Pd := Nat
 /-- error: `ErrorsTest.Pd` has already been declared -/
 #guard_msgs in
 mutual
-data Pd
+datatype Pd
   | nil
-data Qd
+datatype Qd
   | mk (p : Pd)
 end
 
@@ -215,10 +215,10 @@ error: `ErrorsTest.Pb_Qb` has already been declared, and this block declares it:
 -/
 #guard_msgs in
 mutual
-data Pb
+datatype Pb
   | nil
   | mk (q : Qb)
-data Qb
+datatype Qb
   | mk (p : Pb)
 end
 
@@ -237,9 +237,9 @@ error: `ErrorsTest.Pe_Qe.Ix` has already been declared, and this block declares 
 -/
 #guard_msgs in
 mutual
-codata Pe
+codatatype Pe
   | mk (q : Qe)
-codata Qe
+codatatype Qe
   | mk (p : Pe)
 end
 
@@ -250,7 +250,7 @@ end
 -- A single declaration whose name is taken.
 /-- error: `ErrorsTest.A0` has already been declared -/
 #guard_msgs in
-data A0
+datatype A0
   | other
 
 /-- error: Unknown constant `ErrorsTest.A0.other` -/
@@ -261,11 +261,11 @@ data A0
 /-- error: `Mf` is declared twice in this block -/
 #guard_msgs in
 mixed_mutual
-codata Mt
+codatatype Mt
   | node (f : Mf)
-data Mf
+datatype Mf
   | nil
-data Mf
+datatype Mf
   | cons (t : Mt)
 end
 
@@ -280,9 +280,9 @@ error: `ErrorsTest.Forest₃.Open` has already been declared, and this block dec
 -/
 #guard_msgs in
 mixed_mutual
-codata Tree₃
+codatatype Tree₃
   | node (children : Forest₃)
-data Forest₃
+datatype Forest₃
   | nil
   | cons (t : Tree₃) (f : Forest₃)
 end
@@ -298,11 +298,11 @@ error: `ErrorsTest.Rs_Fs` has already been declared, and this block declares it:
 -/
 #guard_msgs in
 mixed_mutual
-codata T₄
+codatatype T₄
   | node (r : Rs)
-data Rs
+datatype Rs
   | node (t : T₄) (f : Fs)
-data Fs
+datatype Fs
   | nil
   | cons (r : Rs) (f : Fs)
 end

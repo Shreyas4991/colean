@@ -4,9 +4,9 @@ import Mathlib.Data.List.OfFn
 # Nesting through a functor
 
 A constructor argument may mention the type being defined under a named type constructor `F`,
-as in `children : List (Tree α)`. The `codata` and `data` commands accept this exactly when `F`
-is isomorphic, as a functor, to a polynomial functor, which is what the classes of this file say.
-They are the interface for users: to nest through your own `F`, give two instances.
+as in `children : List (Tree α)`. The `codatatype` and `datatype` commands accept this exactly when
+`F` is isomorphic, as a functor, to a polynomial functor, which is what the classes of this file
+say. They are the interface for users: to nest through your own `F`, give two instances.
 
 ```
 structure Box (X : Type u) where
@@ -19,7 +19,7 @@ instance : PolyMap Box.{u} Box.{u'} where
   map f b := ⟨f b.val⟩
   equiv_map _ _ := rfl
 
-codata Stream' (α : Type u)
+codatatype Stream' (α : Type u)
   | cons (a : α) (tail : Box (Stream' α))
 ```
 
@@ -40,7 +40,7 @@ argument. `IPolyIso` and `IPolyMap` are the same classes for functors on familie
 `(J → Type u) → Type v`, where every position says at which index its child lives.
 
 A presentation says what the members of a value are: those at its positions (`PolyIso.Mem`,
-`IPolyIso.Mem` at an index). The recursor of a `data` type states the induction hypothesis of a
+`IPolyIso.Mem` at an index). The recursor of a `datatype` states the induction hypothesis of a
 nested argument `c : G T` with it, `∀ t, PolyIso.Mem (fun X => G X) t c → motive t`, and the
 `simp` lemmas of this file turn membership into the containers' own (`mem_list`, …) or into
 components (`mem_prod`, …).
@@ -51,7 +51,7 @@ presentations the command uses for these forms (`Model/Occ.lean`), and so the in
 recursor's hypotheses are stated with. Constants, the identity, `List`, `Option` and `Array`
 are the other instances here.
 
-A type declared by `codata` or `data` gets these instances when it can (`Gen/Derive.lean`):
+A type declared by `codatatype` or `datatype` gets these instances when it can (`Gen/Derive.lean`):
 in the arguments that may vary, for the functors `fun X => T (H X)` with `H` itself an instance
 (`PolyMap` from that of `H`, as for the forms here), and for a family or a type of a block at
 every index, `fun X => T (H X) idx`. With them come

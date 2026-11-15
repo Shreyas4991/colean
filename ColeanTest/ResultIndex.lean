@@ -13,7 +13,7 @@ noncomputable section
 
 /-! ### `n * 2` -/
 
-codata P : Nat → Type
+codatatype P : Nat → Type
   | mk (n : Nat) (t : P n) : P (n * 2)
 
 #check @P.mk
@@ -38,7 +38,7 @@ example {i : Nat} (p : P i) : p.arg * 2 = i := by
 
 /-! ### Several recursive arguments, a constructor without, and disjoint constructors -/
 
-data D : Nat → Type
+datatype D : Nat → Type
   | leaf (n : Nat) : D (n * 2)
   | mk (n : Nat) (l : D n) (r : D (n + 1)) : D (n * 3)
   | two (l : D 1) (r : D 2) : D 5
@@ -84,17 +84,17 @@ example (l r : D 1) (h : D.three l = D.three r) : l = r := (D.three_inj l r).1 h
 
 /-! ### Several indices -/
 
-codata Q : Nat → Bool → Type
+codatatype Q : Nat → Bool → Type
   | stop : Q 0 true
   | mk (n : Nat) (b : Bool) (t : Q n (!b)) : Q (n * 2) (!b)
 
 -- An index of dependent type.
-codata V : (n : Nat) → Fin (n + 1) → Type
+codatatype V : (n : Nat) → Fin (n + 1) → Type
   | mk (n : Nat) (t : V n 0) : V (n * 2) 0
 
 -- An index fixed by every constructor, promoted to a parameter, before one that is not a
 -- pattern.
-codata T2 : Nat → Nat → Type
+codatatype T2 : Nat → Nat → Type
   | mk (m n : Nat) (t : T2 m n) : T2 m (n * 2)
 
 example (q : Q 0 true) : Q 0 true := .mk 0 false q
@@ -112,7 +112,7 @@ theorem map_ofOcc_option {X Y : Nat → Type} (f : ∀ j, X j → Y j) (i : Nat)
       (Codata.IOcc.ofOcc (Codata.Occ.ofIso Option) i) f o = o.map (f i) :=
   Codata.Occ.map_option (f i) o
 
-codata R : Nat → Type
+codatatype R : Nat → Type
   | mk (n : Nat) (ts : List (R n)) : R (n * 2)
 
 /-- The tree at `0` whose children are itself, `k` times. -/
@@ -123,7 +123,7 @@ def R.fan (k : Nat) : R 0 :=
 theorem R.dtor_fan (k : Nat) : (R.fan k).dtor = .mk 0 (List.replicate k (R.fan k)) := by
   simp [R.fan, R.dtor_corec]
 
-data DR : Nat → Type
+datatype DR : Nat → Type
   | mk (n : Nat) (ts : List (DR n)) (o : Option (DR (n + 1))) : DR (n * 2)
 
 /-- The number of nodes, by the fold through both nested arguments. -/
@@ -138,10 +138,10 @@ def DR.size {i : Nat} (d : DR i) : Nat :=
 
 /-! ### Recursive arguments under a function -/
 
-codata Fn : Nat → Type
+codatatype Fn : Nat → Type
   | mk (n : Nat) (f : (k : Nat) → Fn (k * n)) : Fn (n * 2)
 
-data DFn : Nat → Type
+datatype DFn : Nat → Type
   | leaf : DFn 0
   | mk (n : Nat) (f : Fin n → DFn n) : DFn (n * 2)
 
@@ -155,7 +155,7 @@ example (n : Nat) (f : Fin n → DFn n) :
 
 /-! ### Indices depending on a parameter -/
 
-codata W (k : Nat) : Nat → Type
+codatatype W (k : Nat) : Nat → Type
   | mk (n : Nat) (t : W k n) : W k (n + k)
 
 /-- At `k = 0` every index is inhabited. -/
@@ -164,7 +164,7 @@ def W.loop (i : Nat) : W 0 i := W.corec (S := fun _ => Unit) (fun i _ => .mk i (
 theorem W.dtor_loop (i : Nat) : (W.loop i).dtor = .mk i (W.loop i) := by
   simp [W.loop, W.dtor_corec]
 
-data DW (k : Nat) : Nat → Type
+datatype DW (k : Nat) : Nat → Type
   | nil : DW k k
   | mk (n : Nat) (t : DW k n) : DW k (n + k)
 
@@ -185,7 +185,7 @@ theorem DW.index {k i : Nat} (d : DW k i) : i = k + d.steps * k := by
 
 /-! ### `!b` -/
 
-data Pa : Bool → Type
+datatype Pa : Bool → Type
   | nil : Pa true
   | mk {b : Bool} (q : Pa b) : Pa (!b)
 
@@ -206,7 +206,7 @@ theorem Pa.index {b : Bool} (p : Pa b) : p.len % 2 = if b then 0 else 1 := by
   | nil => simp
   | @mk b q ih => cases b <;> simp_all <;> omega
 
-codata CPa : Bool → Type
+codatatype CPa : Bool → Type
   | nil : CPa true
   | mk {b : Bool} (q : CPa b) : CPa (!b)
 
@@ -223,26 +223,26 @@ theorem CPa.dtor_alt_false : (CPa.alt false).dtor = .mk (CPa.alt true) := by
 
 Plain, nested and under a function, at two indices; a proof and a dependent field in the data. -/
 
-codata Big : Nat → Bool → Type
+codatatype Big : Nat → Bool → Type
   | mk (n : Nat) (b : Bool) (ts : List (Big n b)) (f : Nat → Big (n + 1) (!b))
       (t : Big n (!b)) : Big (n * 2) (b && true)
   | stop (n : Nat) : Big (n * 3) false
 
-codata Pos : Nat → Type
+codatatype Pos : Nat → Type
   | mk (n : Nat) (h : 0 < n) (k : Fin n) (t : Pos k.val) : Pos (n * 2)
 
-data DPos : Nat → Type
+datatype DPos : Nat → Type
   | nil : DPos 0
   | mk (n : Nat) (k : Fin n) (t : DPos k.val) (u : DPos n) : DPos (n * 2)
 
 /-! ### A mutual block: its index is `Blk.Ix`, a constructor per type -/
 
 mutual
-data Ma : Bool → Type
+datatype Ma : Bool → Type
   | nil : Ma true
   | mk {b : Bool} (q : Ma b) : Ma (!b)
   | of {n : Nat} (q : Mb n) : Ma (n == 0)
-data Mb : Nat → Type
+datatype Mb : Nat → Type
   | mk (n : Nat) {b : Bool} (p : Ma b) : Mb (n * 2)
 end
 
@@ -259,10 +259,10 @@ example {b : Bool} (q : Ma b) : (Ma.mk q).depth = q.depth + 1 := by
   rfl
 
 mutual
-codata Ca : Bool → Type
+codatatype Ca : Bool → Type
   | nil : Ca true
   | mk {b : Bool} (q : Cb b) : Ca (!b)
-codata Cb : Bool → Type
+codatatype Cb : Bool → Type
   | mk {b : Bool} (p : Ca b) : Cb (!b)
 end
 
