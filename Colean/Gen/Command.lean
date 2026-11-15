@@ -19,7 +19,8 @@ and coinduction per type and coinduction up to equality (`codatatype`). Before t
 sorts with a universe are checked against the types' (`checkSorts`). Each declaration is checked by the kernel as it is
 added, so a failure stops the command there, and the state is restored: a failed command
 declares nothing. Each step has its own heartbeat budget. Then, separately, the derived instances (step 5,
-`Gen/Derive.lean`), whose failure is only a warning. Last, the internals are made `protected`
+`Gen/Derive.lean`), whose failure leaves the type without instances, silently unless
+`codata.deriveDetails` is set. Last, the internals are made `protected`
 (`protectGenerated`, `Gen/Decl.lean`), as `inductive` protects its own.
 
 Around the pipeline, as `inductive` does around its declarations: before it, a declaration with

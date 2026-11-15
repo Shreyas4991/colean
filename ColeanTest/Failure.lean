@@ -3,8 +3,9 @@ import Colean.MutualCmd
 /-! # Test: failures and budgets
 
 A failed command declares nothing, as `inductive`; each step of the pipeline has its own
-heartbeat budget, as separate commands have; the derived instances (step 5) fail with a
-warning only, whatever the exception; and an error of instance search is reported as it is. -/
+heartbeat budget, as separate commands have; the derived instances (step 5) fail silently, or
+with a warning only under `set_option codata.deriveDetails true`, whatever the exception; and an
+error of instance search is reported as it is. -/
 
 namespace FailureTest
 
@@ -17,12 +18,19 @@ codatatype R (α : Type)
 
 #check @R.Colean.Poly.instPolyIso
 
--- A timeout in step 5 is a warning, and the type stays.
+-- A timeout in step 5 is silent, and the type stays.
+#guard_msgs in
+set_option maxHeartbeats 1000 in
+codatatype R₀ (α : Type)
+  | mk (a : α) (l : List (R₀ α)) (o : Option (R₀ α)) (f : Nat → R₀ α)
+
+-- Under `codata.deriveDetails` it is a warning.
 /--
 warning: `R₁` cannot be nested through: no `Codata.PolyIso` instance was generated. The type itself is not affected.
 (deterministic) timeout
 -/
 #guard_msgs (substring := true) in
+set_option codata.deriveDetails true in
 set_option maxHeartbeats 1000 in
 codatatype R₁ (α : Type)
   | mk (a : α) (l : List (R₁ α)) (o : Option (R₁ α)) (f : Nat → R₁ α)

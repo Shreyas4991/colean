@@ -121,7 +121,7 @@ example {X Y : Type} (f : X → Y) (a : Str X) :
 
 end
 
-/-! ### A failed generation is a warning, and the type is untouched -/
+/-! ### A failed generation is a warning under `codata.deriveDetails`, and the type is untouched -/
 
 section Failing
 
@@ -130,9 +130,11 @@ def Bad.Colean.Poly.fix : Nat := 0
 
 /--
 warning: `Bad` cannot be nested through: no `Codata.PolyIso` instance was generated. The type itself is not affected.
-generating the fixpoint `DeriveTest.Bad.Colean.Poly.fix` failed, an error of the generator (`set_option codata.deriveDetails true` shows it)
+generating the fixpoint `DeriveTest.Bad.Colean.Poly.fix` failed:
+(kernel) constant has already been declared 'DeriveTest.Bad.Colean.Poly.fix'
 -/
 #guard_msgs in
+set_option codata.deriveDetails true in
 datatype Bad (α : Type)
   | nil
   | cons (a : α) (t : Bad α)

@@ -14,12 +14,12 @@ lemmas" below), so that `simp` computes through the instances.
 
 This step is separate from the declaration of the type. It runs after it, nothing in the
 declaration depends on it, and it cannot affect it: on failure every declaration of this step is
-rolled back and a warning is logged, and the type is simply not available for nesting. The warning
-gives a short reason: a limit of the step or of the analysis as it is, an error of the generator by
-what it failed to generate (`stepPhase`), with the error itself under
-`set_option codata.deriveDetails true`. When no parameter may vary because of a field, an info
-says so and why. A failure of the `simp` lemmas alone rolls back only them, with a warning; the
-instances stay. In an open
+rolled back, and the type is simply not available for nesting. The step is silent unless
+`set_option codata.deriveDetails true` is set. Then a failure is a warning, with the reason: a
+limit of the step or of the analysis as it is, or an error of the generator by what it failed to
+generate (`stepPhase`), with the error itself; when no parameter may vary because of a field, an
+info says so and why. A failure of the `simp` lemmas alone rolls back only them, with a warning
+under the option too; the instances stay. In an open
 run of a `mixed_mutual` block that an outer run nests through, the outer run needs the
 instances in the run's extra parameters: a failure, or such a parameter that cannot vary, is an
 error, which stops the block.
@@ -229,9 +229,10 @@ def genPoly (holes : Array Expr) : TermElabM Unit := do
   withCurrHeartbeats <| stepPhase m!"the instances" <| ctx.genPolyInstances P
   ctx.genPolySimp P
 
-/-- Step 5: the instances of the types of a declaration that has holes. Failure is a warning,
-whatever the exception (a timeout too): the declarations of this step are rolled back, and the
-types stay as they are. In an open run of a `mixed_mutual` block that an outer run nests through,
+/-- Step 5: the instances of the types of a declaration that has holes. On failure, whatever the
+exception (a timeout too), the declarations of this step are rolled back, and the types stay as
+they are; the failure is a warning under `set_option codata.deriveDetails true`, and silent
+without it. In an open run of a `mixed_mutual` block that an outer run nests through,
 it is an error instead, and so is an extra parameter of such a run that cannot vary: the outer run
 needs the instances in it. -/
 def deriveInstances : TermElabM Unit := do
@@ -255,9 +256,10 @@ def deriveInstances : TermElabM Unit := do
               a field without an occurrence structure in it, or together with the type itself in a \
               field without a structure in both, as in two arguments of a type constructor"
       if holes.isEmpty then
-        -- Said when a parameter that is a type may not vary because of a field, outside a mixed
-        -- block (whose outer types are not nested through, and the open ones have their errors).
-        if byField && ctx.mix?.isNone then
+        -- Said under `codata.deriveDetails` when a parameter that is a type may not vary because
+        -- of a field, outside a mixed block (whose outer types are not nested through, and the
+        -- open ones have their errors).
+        if byField && ctx.mix?.isNone && codata.deriveDetails.get (← getOptions) then
           let reasons := why.map fun (p, r) => m!"`{p}` occurs in {r}"
           logInfo m!"{MessageData.joinSep shorts.toList ", "} \
             get{if ctx.isBlock then "" else "s"} no `Codata.PolyIso` instance, and cannot be \
@@ -275,6 +277,7 @@ def deriveInstances : TermElabM Unit := do
           {MessageData.joinSep outers.toList ", "} nest{if outers.size == 1 then "s" else ""} \
           through.\n{e.toMessageData}"
       s.restore (restoreInfo := true)
+      unless codata.deriveDetails.get (← getOptions) do return
       let types := if ctx.isBlock then "The types themselves are" else "The type itself is"
       logWarning m!"{MessageData.joinSep shorts.toList ", "} cannot be nested through: no \
         `Codata.PolyIso` instance was generated. {types} not affected.\n{e.toMessageData}"

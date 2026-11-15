@@ -232,8 +232,8 @@ DONE (2026-11-11, `ColeanTest/NestFix.lean`), after a review of nesting:
   (`α → β → γ` varies in `γ`);
 * at most `maxSplit` constructors of the presentation per constructor through sums; the internal
   names of the split constructors and parts unlike the user's;
-* step 5's messages: a short reason, the error under `set_option codata.deriveDetails true`, an
-  info when no parameter may vary because of a field;
+* step 5's messages, only under `set_option codata.deriveDetails true` (silent without it): a
+  short reason with the error itself, an info when no parameter may vary because of a field;
 * the eta `PolyMap` across universes for a parameter in `Type (u + 1)`;
 * rules without the vacuous disjunct of a field without a parameter, binders unlike the
   arguments.

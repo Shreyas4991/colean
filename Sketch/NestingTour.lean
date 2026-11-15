@@ -13,7 +13,8 @@ How the file is checked:
 * an example without an error on it works;
 * the failures of Parts II and III are left as they are, so they show as errors in the infoview;
 * in Part II a failed `datatype`/`codatatype` declares nothing, so the names of failed types do not
-  exist; a failed instance generation is only a warning, and the type itself is declared;
+  exist; a failed instance generation is silent (a warning under
+  `set_option codata.deriveDetails true`), and the type itself is declared;
 * the absence of an instance is shown by a failing `#synth`.
 
 A word used throughout. A *leaf* is a named type constructor applied in a nested argument, such
@@ -1087,7 +1088,8 @@ end
 
 In a block, a nested argument with positions at several types of the block inside a named type
 constructor, `p : List (SA α × SB α)`, has a structure in two variables over the block's index,
-so the types get their instances. Its `simp` rules are not generated, with a warning: they would
+so the types get their instances. Its `simp` rules are not generated (silently, a warning under
+`codata.deriveDetails`): they would
 state the members by the type of each, at an index that is a variable, which the rules cannot
 write in a form `simp` can use (the family of the block's types there is not reducible to them).
 -/

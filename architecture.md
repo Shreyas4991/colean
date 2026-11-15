@@ -343,11 +343,13 @@ The functor of a run at its state keeps the open types of the runs inside at tha
 Defining a type and presenting it as a polynomial functor are separate steps. Step 5,
 `deriveInstances` (`Gen/Derive.lean`), runs after the pipeline has finished, in the same run: it
 reads the declaration's context and the type's public declarations, and nothing in the pipeline
-depends on it. On failure it restores the state and logs a warning, so it can't affect the type;
-the warning gives a short reason, a limit of the step as it is and an error of the generator by
-what it failed to generate (`stepPhase`), the error itself under
-`set_option codata.deriveDetails true`. When no parameter may vary because of a field, an info
-says so and why.
+depends on it. On failure it restores the state, so it can't affect the type, which then simply
+has no instances. The step is silent unless `set_option codata.deriveDetails true` is set: then a
+failure is a warning with a short reason, a limit of the step as it is or an error of the
+generator by what it failed to generate (`stepPhase`), and the error itself; when no parameter may
+vary because of a field, an info says so and why; and a failure of the `simp` lemmas alone, which
+rolls back only them, is a warning too. The strict path of a `mixed_mutual` block, whose outer run
+needs the instances, fails with its error whatever the option.
 
 It generates one instance per type, `PolyIso (fun X => T (H₁ X) … (Hₙ X))` with premises on the
 `Hᵢ`, over the parameters that may vary, and the eta-reduced form `T A₁ … Aₙ₋₁`, with the `PolyMap`

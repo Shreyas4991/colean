@@ -5,7 +5,8 @@ import Colean.Model.IOcc2
 /-!
 # Generators on `Expr`, step 5: the holes
 
-The failures of step 5 (`stepPhase`, `throwLimit`), the structures of a field in the parameters
+The option `codata.deriveDetails`, under which step 5 reports its failures (it is silent by
+default), the failures of step 5 (`stepPhase`, `throwLimit`), the structures of a field in the parameters
 (`fieldOcc`) and of a nested argument with a parameter outside the occurrences in two variables
 (`mixOcc`, with indices `imixOcc`; at one index the plain structure, `flatOcc?`), helpers for
 terms built by unification (`fillArg`, `proveOn`, `rwSteps`), and the parameters that may vary,
@@ -16,8 +17,9 @@ open Lean Meta Elab Term
 
 register_option codata.deriveDetails : Bool := {
   defValue := false
-  descr := "show the error itself when the instances of a declared type are not generated \
-    (step 5 of the `codatatype` and `datatype` commands)"
+  descr := "report why a declared type gets no `Codata.PolyIso` instance or its instances no \
+    simp lemmas, with the error itself (step 5 of the `codatatype` and `datatype` commands); \
+    by default step 5 is silent, and such a type simply cannot be nested through"
 }
 
 namespace Codata.Gen
@@ -35,7 +37,8 @@ def isInternalError (e : Exception) : MetaM Bool := do
 /-- Run the part `k` of step 5, which generates `what`. A limit of the step (`throwLimit`), a
 timeout, and with `worded` any error but an internal one (those of the analysis are worded for the
 declaration), go through as they are; any other error, of the generator, is reported by what
-failed, with the error itself under `set_option codata.deriveDetails true`. -/
+failed, with the error itself under `set_option codata.deriveDetails true`, the option under
+which step 5 reports its failures at all. -/
 def stepPhase (what : MessageData) (k : TermElabM α) (worded := false) : TermElabM α := do
   try k catch e =>
     if e.toMessageData.hasTag (· == `Codata.Gen.limit) then throw e
