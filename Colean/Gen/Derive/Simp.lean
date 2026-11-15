@@ -737,7 +737,8 @@ def genPolyMemRule (P : Poly) (mi : Nat) : TermElabM Unit := do
   addSimp n
 
 /-- The simp lemmas of the instances, `Tₘ.Colean.Poly.map_c` and `Tₘ.Colean.Poly.mem_c` for every
-constructor. A failure is a warning: these are rolled back, and the instances stay. -/
+constructor. On failure these are rolled back, and the instances stay; the failure is a warning
+under `set_option codata.deriveDetails true`, and silent without it. -/
 def genPolySimp (P : Poly) : TermElabM Unit := do
   let s ← saveState
   tryCatchRuntimeEx
@@ -750,6 +751,7 @@ def genPolySimp (P : Poly) : TermElabM Unit := do
       withCurrHeartbeats <| stepPhase (rule "mem_") <| ctx.genPolyMemRule P mi)
     fun e => do
       s.restore (restoreInfo := true)
+      unless codata.deriveDetails.get (← getOptions) do return
       let ns ← getCurrNamespace
       let shorts := ctx.types.map fun t =>
         m!"`{(privateToUserName t.name).replacePrefix ns .anonymous}`"

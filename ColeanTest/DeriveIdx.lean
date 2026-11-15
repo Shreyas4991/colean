@@ -235,7 +235,7 @@ noncomputable example : QB Nat := .mk (.mk 0 (.nil, 1))
 #guard_msgs in
 #synth PolyIso QB.{0} _ _
 
-/-! ### What is not supported: a warning, and the types are untouched
+/-! ### What is not supported: a warning under `codata.deriveDetails`, and the types are untouched
 
 Inside a named type constructor the argument does not split. With its positions at one type of
 the block after cases on them (`List (RA α × Nat)`) it has a structure in two variables at that
@@ -247,6 +247,7 @@ warning: no simp lemmas were generated for the instances of `RA`, `RB`; the inst
 the positions of the nested argument `p` are at several types of the block
 -/
 #guard_msgs in
+set_option codata.deriveDetails true in
 mutual
 datatype RA (α : Type u)
   | nil

@@ -395,29 +395,33 @@ example (f : Nat → Int) (t : OT Nat) :
       .mk (some (f 1)) #[(Occ.ofIso OT).map (Occ.ofIso OT) f t] := by
   simp
 
-/-! ### 9. Messages -/
+/-! ### 9. Messages
+
+Step 5 is silent by default; under `set_option codata.deriveDetails true` it reports why a type
+gets no instances, with the error itself. -/
+
+#guard_msgs in
+datatype UseNoMapQuiet (α : Type)
+  | mk (b : NoMap α)
 
 /--
 info: `UseNoMap` gets no `Codata.PolyIso` instance, and cannot be nested through: no parameter may vary (`α` occurs in the field `b` of `mk`, without an occurrence structure in it)
 -/
 #guard_msgs in
+set_option codata.deriveDetails true in
 datatype UseNoMap (α : Type)
   | mk (b : NoMap α)
 
-namespace Short
+namespace Quiet
 
 def Bad.Colean.Poly.fix : Nat := 0
 
-/--
-warning: `Bad` cannot be nested through: no `Codata.PolyIso` instance was generated. The type itself is not affected.
-generating the fixpoint `NestFixTest.Short.Bad.Colean.Poly.fix` failed, an error of the generator (`set_option codata.deriveDetails true` shows it)
--/
 #guard_msgs in
 datatype Bad (α : Type)
   | nil
   | cons (a : α) (t : Bad α)
 
-end Short
+end Quiet
 
 namespace Details
 
@@ -653,6 +657,7 @@ warning: `DGameU` cannot be nested through: no `Codata.PolyIso` instance was gen
 a field fixes the universe of the occurrences at `Type u`, and the fixpoint needs `fold` on states in `Type`, its trees of shapes
 -/
 #guard_msgs in
+set_option codata.deriveDetails true in
 datatype DGameU (α : Type u)
   | move (label : α) (options : NDetU.{u} (DGameU α))
 
