@@ -140,7 +140,7 @@ end
 
 /-- Read two inputs, output their sum, forever. -/
 def SP.pairSums : SP Nat Nat :=
-  .corec (S := Unit) (s := ()) fun _ => .step (.get fun a => .get fun b => .put (a + b) ()) 
+  .corec (s := ()) fun _ => .step (.get fun a => .get fun b => .put (a + b) ()) 
 
 -- It is important to note that `mixed_mutual`, unlike a uniform `mutual`, depends on the order of
 -- the types. Types are defined bottom-up, each treating the types above it as placeholders. So

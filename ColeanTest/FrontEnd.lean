@@ -167,6 +167,28 @@ datatype BB (α : Type)
   | nil
 end
 
+/-! ### Generated binders named as a parameter: primed, so that they can still be named -/
+
+codatatype PS (S : Type)
+  | cons (head : S) (tail : PS S)
+
+/--
+info: @PS.corec : {S : Type} → {S' : Type u_1} → (S' → PS.F S S') → S' → PS S
+-/
+#guard_msgs in #check @PS.corec
+
+example : PS Nat := PS.corec (S' := Unit) (fun _ => .cons 1 ()) ()
+
+codatatype PS2 (S S' : Type)
+  | cons (head : S) (other : S') (tail : PS2 S S')
+
+/--
+info: @PS2.corec : {S S' : Type} → {S'' : Type u_1} → (S'' → PS2.F S S' S'') → S'' → PS2 S S'
+-/
+#guard_msgs in #check @PS2.corec
+
+example : PS2 Nat Bool := PS2.corec (S'' := Unit) (fun _ => .cons 1 true ()) ()
+
 /-! ### Constructors with instance and strict-implicit binders, and injectivity -/
 
 section
@@ -755,7 +777,8 @@ codatatype Cmd
   | mono (c : Cmd)
 
 -- In a block, a constructor of one type only keeps its name in the block's functor; one of
--- several types is qualified there (`CA_CB.F.CA_fmap`).
+-- several types is qualified there (`CA_CB.F.CA_recOn`). The layer per type has it under its own
+-- name (`CA.F.fmap`), which must not be a declaration of the layer either.
 /--
 error: constructor `fmap` clashes with the generated declaration `FrontEndTest.CA_CB.F.fmap`: the functor `FrontEndTest.CA_CB.F` has a constructor `FrontEndTest.CA_CB.F.fmap` for it; rename the constructor
 -/
@@ -767,6 +790,10 @@ datatype CB
   | stop
 end
 
+/--
+error: constructor `fmap` clashes with the generated declaration `FrontEndTest.CA.F.fmap`: the layer `FrontEndTest.CA.F` has a constructor `FrontEndTest.CA.F.fmap` for it; rename the constructor
+-/
+#guard_msgs in
 mutual
 datatype CA
   | fmap (b : CB)
@@ -776,7 +803,29 @@ datatype CB
   | contract
 end
 
-example : CB.fmap .stop ≠ CB.contract := by simp
+/--
+error: constructor `fmap_stop` clashes with the generated declaration `FrontEndTest.CA.F.fmap_stop`: the layer `FrontEndTest.CA.F` has a constructor `FrontEndTest.CA.F.fmap_stop` for it; rename the constructor
+-/
+#guard_msgs in
+mutual
+datatype CA
+  | fmap_stop (b : CB)
+  | stop
+datatype CB
+  | fmap_stop (a : CA)
+  | contract
+end
+
+mutual
+datatype CA
+  | recOn (b : CB)
+  | stop
+datatype CB
+  | recOn (a : CA)
+  | contract
+end
+
+example : CB.recOn .stop ≠ CB.contract := by simp
 
 -- A lemma generated from another constructor: injectivity, disjointness, a rule.
 /--

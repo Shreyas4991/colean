@@ -7,7 +7,9 @@ Lean's mutual recursors: a state, a step, a morphism and a relation per type, an
 the block's index `Blk.Ix` (`ctor`, `dtor`, Lambek's lemma, `corec`, `dtor_corec`, `corec_eq`,
 `corec_unique`, `bisim`, the laws of the layer). The layer of a type at a family per type is
 `Tₘ.F params S₁ … Sₖ idx`, the block's functor at the families packed by cases on `Blk.Ix`
-(`Blk.Colean.St`); dot notation finds the block functor's constructors through it. -/
+(`Blk.Colean.St`), with a constructor `Tₘ.F.c` per constructor of the type, the block functor's
+under the type's own name (`CEven.F.succ` for `CEven_COdd.F.CEven_succ`), for dot notation and
+patterns, and shown so. -/
 
 universe u
 
@@ -50,12 +52,12 @@ info: @Tree.bisim : ∀ {α : Type} (R₁ : Tree α → Tree α → Prop) (R₂ 
 
 /--
 info: @Tree.F.fmap_node : ∀ {α : Type} {X₁ X₂ : Type u_1} {Y₁ Y₂ : Type u_2} (f₁ : X₁ → Y₁) (f₂ : X₂ → Y₂) (a : α)
-  (children : X₂), Tree.F.fmap f₁ f₂ (Tree_Forest.F.node a children) = Tree_Forest.F.node a (f₂ children)
+  (children : X₂), Tree.F.fmap f₁ f₂ (Tree.F.node a children) = Tree.F.node a (f₂ children)
 -/
 #guard_msgs in #check @Tree.F.fmap_node
 
 /--
-info: @Forest.dtor_cons : ∀ {α : Type} (t : Tree α) (f : Forest α), (Forest.cons t f).dtor = Tree_Forest.F.cons t f
+info: @Forest.dtor_cons : ∀ {α : Type} (t : Tree α) (f : Forest α), (Forest.cons t f).dtor = Forest.F.cons t f
 -/
 #guard_msgs in #check @Forest.dtor_cons
 
@@ -156,8 +158,7 @@ single type, with one step and one morphism per type. -/
 #guard_msgs in #check @Tree.ctor_injective
 
 /--
-info: @Tree.ctor_node : ∀ {α : Type} (a : α) (children : Forest α),
-  Tree.ctor (Tree_Forest.F.node a children) = Tree.node a children
+info: @Tree.ctor_node : ∀ {α : Type} (a : α) (children : Forest α), Tree.ctor (Tree.F.node a children) = Tree.node a children
 -/
 #guard_msgs in #check @Tree.ctor_node
 
@@ -250,25 +251,27 @@ info: @Even.dtor_corec : ∀ {S₁ S₂ : ℕ → Type u_1} (c₁ : (i₁ : ℕ)
 -/
 #guard_msgs in #check @Even.dtor_corec
 
-/-- The label at depth `n` is `n`; the state is the index. -/
+/-- The label at depth `n` is `n`; the state is the index. The constructors of the layer per type
+are those of the type, `Even.F.succ` and `Odd.F.succ`, though the block functor qualifies the name
+the two types share (`Even_Odd.F.Even_succ`). -/
 def Even.nat (n : Nat) : Even n :=
   Even.corec (S₁ := fun _ => Unit) (S₂ := fun _ => Unit)
-    (fun n _ => .Even_succ n ()) (fun _ _ => .Odd_succ ()) ()
+    (fun n _ => .succ n ()) (fun _ _ => .succ ()) ()
 
-example (n : Nat) : (Even.nat n).dtor = .Even_succ n (Odd.corec (S₁ := fun _ => Unit)
-    (S₂ := fun _ => Unit) (fun n _ => .Even_succ n ()) (fun _ _ => .Odd_succ ()) ()) := by
+example (n : Nat) : (Even.nat n).dtor = .succ n (Odd.corec (S₁ := fun _ => Unit)
+    (S₂ := fun _ => Unit) (fun n _ => .succ n ()) (fun _ _ => .succ ()) ()) := by
   simp [Even.nat]
 
 -- Coinduction at every index: the relations are families over the indices.
 example (n : Nat) : Even.nat n = Even.corec (S₁ := fun _ => Nat) (S₂ := fun _ => Nat)
-    (fun n k => .Even_succ n (k + 1)) (fun _ k => .Odd_succ (k + 1)) 0 := by
+    (fun n k => .succ n (k + 1)) (fun _ k => .succ (k + 1)) 0 := by
   refine Even.bisim
     (fun n x y => x = Even.nat n ∧ ∃ k, y = Even.corec (S₁ := fun _ => Nat) (S₂ := fun _ => Nat)
-      (fun n k => .Even_succ n (k + 1)) (fun _ k => .Odd_succ (k + 1)) k)
+      (fun n k => .succ n (k + 1)) (fun _ k => .succ (k + 1)) k)
     (fun n x y => x = Odd.corec (S₁ := fun _ => Unit) (S₂ := fun _ => Unit)
-      (fun n _ => .Even_succ n ()) (fun _ _ => .Odd_succ ()) () ∧
+      (fun n _ => .succ n ()) (fun _ _ => .succ ()) () ∧
       ∃ k, y = Odd.corec (S₁ := fun _ => Nat) (S₂ := fun _ => Nat)
-        (fun n k => .Even_succ n (k + 1)) (fun _ k => .Odd_succ (k + 1)) k) ?_ ?_ ⟨rfl, 0, rfl⟩
+        (fun n k => .succ n (k + 1)) (fun _ k => .succ (k + 1)) k) ?_ ?_ ⟨rfl, 0, rfl⟩
   · rintro n _ _ ⟨rfl, k, rfl⟩
     simp only [Even.nat, Even.dtor_corec, Even.F.fmap_succ]
     exact .Even_succ _ _ _ ⟨rfl, _, rfl⟩
@@ -290,15 +293,73 @@ info: @Even.corec_unique : ∀ {S₁ S₂ : ℕ → Type u_1} (c₁ : (i₁ : �
 
 -- Uniqueness at every index: the morphisms are families over the indices.
 example (n : Nat) : Even.nat n = Even.corec (S₁ := fun _ => Nat) (S₂ := fun _ => Nat)
-    (fun n k => .Even_succ n (k + 1)) (fun _ k => .Odd_succ (k + 1)) 0 := by
+    (fun n k => .succ n (k + 1)) (fun _ k => .succ (k + 1)) 0 := by
   refine Even.corec_unique (S₁ := fun _ => Nat) (S₂ := fun _ => Nat)
-    (fun n k => .Even_succ n (k + 1)) (fun _ k => .Odd_succ (k + 1))
+    (fun n k => .succ n (k + 1)) (fun _ k => .succ (k + 1))
     (fun n _ => Even.nat n) (fun n _ => Odd.corec (S₁ := fun _ => Unit) (S₂ := fun _ => Unit)
-      (fun n _ => .Even_succ n ()) (fun _ _ => .Odd_succ ()) ()) ?_ ?_ 0
+      (fun n _ => .succ n ()) (fun _ _ => .succ ()) ()) ?_ ?_ 0
   · intro n k
     simp [Even.nat]
   · intro n k
     simp [Even.nat]
+
+-- A match on the destructor, by the constructors of the layer per type.
+def Even.head {n : Nat} (e : Even n) : Nat :=
+  match e.dtor with
+  | .succ a _ => a
+
+def Odd.next {n : Nat} (o : Odd n) : Even (n + 1) :=
+  match o.dtor with
+  | .succ e => e
+
+example (n : Nat) : (Even.nat n).head = n := by
+  simp [Even.head, Even.nat]
+
+-- The block functor's names still work.
+example (n : Nat) : (Even.nat n).dtor = .Even_succ n (Odd.corec (S₁ := fun _ => Unit)
+    (S₂ := fun _ => Unit) (fun n _ => .Even_succ n ()) (fun _ _ => .Odd_succ ()) ()) := by
+  simp [Even.nat]
+
+-- Goals show the constructors of the layer per type.
+/--
+trace: n : ℕ
+⊢ (Even.nat n).dtor = Even.F.succ n (Odd.corec (fun n x => Even.F.succ n ()) (fun x x_1 => Odd.F.succ ()) ())
+-/
+#guard_msgs in
+example (n : Nat) : (Even.nat n).dtor = .succ n (Odd.corec (S₁ := fun _ => Unit)
+    (S₂ := fun _ => Unit) (fun n _ => .succ n ()) (fun _ _ => .succ ()) ()) := by
+  trace_state
+  simp [Even.nat]
+
+/-! ### Constructors that two types share, without indices -/
+
+mutual
+codatatype CEven
+  | zero
+  | succ (o : COdd)
+codatatype COdd
+  | succ (e : CEven)
+end
+
+/-- info: @CEven.F.succ : {S₁ S₂ : Type u_1} → S₂ → CEven.F S₁ S₂ -/
+#guard_msgs in #check @CEven.F.succ
+
+def CEven.inf : CEven := CEven.corec (fun _ => .succ ()) (fun _ => .succ ()) ()
+
+def CEven.isZero (e : CEven) : Bool :=
+  match e.dtor with
+  | .zero => true
+  | .succ _ => false
+
+def COdd.pred (o : COdd) : CEven :=
+  match o.dtor with
+  | .succ e => e
+
+example : CEven.inf.isZero = false := by
+  simp [CEven.isZero, CEven.inf]
+
+/-- info: CEven.dtor_succ : ∀ (o : COdd), (CEven.succ o).dtor = CEven.F.succ o -/
+#guard_msgs in #check @CEven.dtor_succ
 
 /-! ### Three types, one without constructors of its own -/
 
@@ -324,11 +385,11 @@ example : X3.ctor .stop = X3.stop := by simp
 
 /-- Around the cycle `n` times, then stop. -/
 def X1.around (n : Nat) : X1 :=
-  X1.corec (fun k => .X1_mk k) (fun k => .X2_mk k)
-    (fun k => match k with | 0 => .stop | k + 1 => .X3_mk k) n
+  X1.corec (fun k => .mk k) (fun k => .mk k)
+    (fun k => match k with | 0 => .stop | k + 1 => .mk k) n
 
-example : (X1.around 0).dtor = .X1_mk (X2.corec (fun k => .X1_mk k) (fun k => .X2_mk k)
-    (fun k => match k with | 0 => .stop | k + 1 => .X3_mk k) 0) := by
+example : (X1.around 0).dtor = .mk (X2.corec (fun k => .mk k) (fun k => .mk k)
+    (fun k => match k with | 0 => .stop | k + 1 => .mk k) 0) := by
   simp [X1.around]
 
 /-! ### Nesting through a list -/

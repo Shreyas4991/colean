@@ -104,6 +104,42 @@ info: @S.mem_cons : ∀ {α : Type u_1} (d : D α) (s : S α) (o : O α) (x : D 
 -/
 #guard_msgs in #check @S.mem_cons
 
+/-! ### A constructor name that two types of the inner block share
+
+The closed layers per type have the constructors of the types (`EvenL.F.succ`), restated from the
+open ones (`EvenL.Open.F.succ`), for dot notation and patterns. -/
+
+mixed_mutual
+codatatype U
+  | mk (e : EvenL) (u : U)
+datatype EvenL
+  | zero
+  | succ (o : OddL)
+datatype OddL
+  | succ (e : EvenL)
+end
+
+/-- info: @EvenL.F.succ : {S₁ S₂ : Type u_1} → S₂ → EvenL.F S₁ S₂ -/
+#guard_msgs in #check @EvenL.F.succ
+
+def EvenL.toNat (e : EvenL) : Nat :=
+  EvenL.fold (S₁ := Nat) (S₂ := Nat) (fun | .zero => 0 | .succ k => k + 1)
+    (fun | .succ k => k + 1) e
+
+example : (EvenL.succ (.succ .zero)).toNat = 2 := by
+  simp [EvenL.toNat]
+
+def EvenL.isZero (e : EvenL) : Bool :=
+  match e.dtor with
+  | .zero => true
+  | .succ _ => false
+
+example : (EvenL.succ (.succ .zero)).isZero = false := by
+  simp [EvenL.isZero]
+
+/-- info: EvenL.dtor_succ : ∀ (o : OddL), (EvenL.succ o).dtor = EvenL.F.succ o -/
+#guard_msgs in #check @EvenL.dtor_succ
+
 end
 
 end MixedBlockTest

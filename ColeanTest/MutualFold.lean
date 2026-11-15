@@ -7,8 +7,10 @@ Lean's mutual recursors: a family, an algebra and a morphism per type, and nothi
 index `Blk.Ix` (`dtor`, `ctor`, Lambek's lemma, `fold`, `fold_ctor`, `fold_eq`, `fold_unique`, the
 rules `fold_cᵢ`, the laws of the layer). The layer of a type at a family per type is
 `Tₘ.F params S₁ … Sₖ idx`, the block's functor at the families packed by cases on `Blk.Ix`
-(`Blk.Colean.St`); patterns and dot notation find the block functor's constructors through it. The
-block-level `Blk.fold` takes one family and one algebra over `Blk.Ix`; its rules are `Blk.fold_cᵢ`.
+(`Blk.Colean.St`), with a constructor `Tₘ.F.c` per constructor of the type, the block functor's
+under the type's own name (`Even.F.succ` for `Even_Odd.F.Even_succ`), for patterns and dot notation,
+and shown so. The block-level `Blk.fold` takes one family and one algebra over `Blk.Ix`; its rules
+are `Blk.fold_cᵢ`.
 -/
 
 universe u
@@ -34,14 +36,13 @@ end
 
 /--
 info: @Tree.fold_node : ∀ {α : Type} {S₁ S₂ : Type u_1} (a₁ : Tree.F α S₁ S₂ → S₁) (a₂ : Forest.F α S₁ S₂ → S₂) (a : α)
-  (children : Forest α), Tree.fold a₁ a₂ (Tree.node a children) = a₁ (Tree_Forest.F.node a (Forest.fold a₁ a₂ children))
+  (children : Forest α), Tree.fold a₁ a₂ (Tree.node a children) = a₁ (Tree.F.node a (Forest.fold a₁ a₂ children))
 -/
 #guard_msgs in #check @Tree.fold_node
 
 /--
 info: @Forest.fold_cons : ∀ {α : Type} {S₁ S₂ : Type u_1} (a₁ : Tree.F α S₁ S₂ → S₁) (a₂ : Forest.F α S₁ S₂ → S₂) (t : Tree α)
-  (f : Forest α),
-  Forest.fold a₁ a₂ (Forest.cons t f) = a₂ (Tree_Forest.F.cons (Tree.fold a₁ a₂ t) (Forest.fold a₁ a₂ f))
+  (f : Forest α), Forest.fold a₁ a₂ (Forest.cons t f) = a₂ (Forest.F.cons (Tree.fold a₁ a₂ t) (Forest.fold a₁ a₂ f))
 -/
 #guard_msgs in #check @Forest.fold_cons
 
@@ -73,15 +74,15 @@ info: @Tree.fold_unique : ∀ {α : Type} {S₁ S₂ : Type u_1} (a₁ : Tree.F 
 /-- info: @Tree.ctor : {α : Type} → Tree.F α (Tree α) (Forest α) → Tree α -/
 #guard_msgs in #check @Tree.ctor
 
-/-- info: @Forest.dtor_cons : ∀ {α : Type} (t : Tree α) (f : Forest α), (Forest.cons t f).dtor = Tree_Forest.F.cons t f -/
+/-- info: @Forest.dtor_cons : ∀ {α : Type} (t : Tree α) (f : Forest α), (Forest.cons t f).dtor = Forest.F.cons t f -/
 #guard_msgs in #check @Forest.dtor_cons
 
-/-- info: @Forest.ctor_cons : ∀ {α : Type} (t : Tree α) (f : Forest α), Forest.ctor (Tree_Forest.F.cons t f) = Forest.cons t f -/
+/-- info: @Forest.ctor_cons : ∀ {α : Type} (t : Tree α) (f : Forest α), Forest.ctor (Forest.F.cons t f) = Forest.cons t f -/
 #guard_msgs in #check @Forest.ctor_cons
 
 /--
 info: @Tree.F.fmap_node : ∀ {α : Type} {X₁ X₂ : Type u_1} {Y₁ Y₂ : Type u_2} (f₁ : X₁ → Y₁) (f₂ : X₂ → Y₂) (a : α)
-  (children : X₂), Tree.F.fmap f₁ f₂ (Tree_Forest.F.node a children) = Tree_Forest.F.node a (f₂ children)
+  (children : X₂), Tree.F.fmap f₁ f₂ (Tree.F.node a children) = Tree.F.node a (f₂ children)
 -/
 #guard_msgs in #check @Tree.F.fmap_node
 
@@ -192,7 +193,7 @@ info: @Even.fold : {S₁ S₂ : ℕ → Type u_1} →
 /--
 info: @Even.fold_succ : ∀ {S₁ S₂ : ℕ → Type u_1} (a₁ : (i₁ : ℕ) → Even.F S₁ S₂ i₁ → S₁ i₁)
   (a₂ : (i₁ : ℕ) → Odd.F S₁ S₂ i₁ → S₂ i₁) {n : ℕ} (o : Odd n),
-  Even.fold a₁ a₂ (Even.succ o) = a₁ (n + 1) (Even_Odd.F.Even_succ (Odd.fold a₁ a₂ o))
+  Even.fold a₁ a₂ (Even.succ o) = a₁ (n + 1) (Even.F.succ (Odd.fold a₁ a₂ o))
 -/
 #guard_msgs in #check @Even.fold_succ
 
@@ -205,12 +206,18 @@ info: @Odd.fold_unique : ∀ {S₁ S₂ : ℕ → Type u_1} (a₁ : (i₁ : ℕ)
 -/
 #guard_msgs in #check @Odd.fold_unique
 
-/-- The number of `succ`s, by an algebra per type at the type's own index. -/
+/-- The number of `succ`s, by an algebra per type at the type's own index. The constructors of the
+layer per type are those of the type (`Even.F.succ`), though the block's functor qualifies a name
+that two types share (`Even_Odd.F.Even_succ`). -/
 def evenAlg : ∀ n, Even.F (fun _ => Nat) (fun _ => Nat) n → Nat
   | _, .zero => 0
-  | _, .Even_succ k => k + 1
+  | _, .succ k => k + 1
 
 def oddAlg : ∀ n, Odd.F (fun _ => Nat) (fun _ => Nat) n → Nat
+  | _, .succ k => k + 1
+
+-- The block's names still work.
+example : ∀ n, Odd.F (fun _ => Nat) (fun _ => Nat) n → Nat
   | _, .Odd_succ k => k + 1
 
 def Even.toNat {n : Nat} (e : Even n) : Nat := Even.fold evenAlg oddAlg e

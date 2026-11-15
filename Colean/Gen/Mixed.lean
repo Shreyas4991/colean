@@ -132,8 +132,9 @@ binders of `C` are the parameters, then come the extra parameters, at the closed
 (functions of the parameters) and at the universes `xVals` for theirs, `xLevels`. The statement is
 written with the closed declarations (`rules`), the value is `C` itself. An inductive type and its
 constructors (`T.F`) become reducible definitions, the constructors usable in patterns; so do
-reducible definitions, and those `reducible` asks for. Simp lemmas, eliminators and `elab_as_elim`
-keep their attributes. Returns the fold rule of `C`. -/
+reducible definitions, and those `reducible` asks for, and a definition usable in patterns (the
+constructors `Tₘ.Open.F.c` of the layers per type of a block) stays so. Simp lemmas, eliminators
+and `elab_as_elim` keep their attributes. Returns the fold rule of `C`. -/
 def restate (C C' : Name) (np : Nat) (args : Array Expr) (xLevels : Array Name)
     (xVals : Array Level) (rules : Closed) (ref : Syntax) (reducible : Bool := false) :
     TermElabM FoldRule := do
@@ -161,7 +162,8 @@ def restate (C C' : Name) (np : Nat) (args : Array Expr) (xLevels : Array Name)
   -- The attributes.
   let env ← getEnv
   let mut attrs : Array (TSyntax ``Parser.Term.attrInstance) := #[]
-  if ci.isCtor then attrs := attrs.push (← `(Parser.Term.attrInstance| match_pattern))
+  if ci.isCtor || hasMatchPatternAttribute env C then
+    attrs := attrs.push (← `(Parser.Term.attrInstance| match_pattern))
   if Lean.Elab.Term.elabAsElim.hasTag env C then
     attrs := attrs.push (← `(Parser.Term.attrInstance| elab_as_elim))
   for ((ind, _), n) in (← getCustomEliminators).map.toList do
@@ -326,6 +328,10 @@ def restateRun (decls : Array DeclStx) (run : MixRun) (np : Nat) (xLevels : Arra
     if (← getEnv).contains n' then continue
     let r ← restate n n' np args xLevels xVals rules ref (reducible := ctors.contains n)
     rules := { rules with rules := rules.rules.insert n r }
+    -- The display of the block functor's constructor as the layer's (`Gen/Pack.lean`).
+    if let some (A, xi) := layerCtorExt.find? (← getEnv) n then
+      if let some (o, c, _) := pairs.find? (·.1.isPrefixOf A) then
+        modifyEnv (layerCtorExt.insert · n' (A.replacePrefix o c, xi - args.size))
   return rules
 
 /-- For each membership instance of a closed type (`MemRule`), the `simp` lemmas `Tⱼ.mem_c` on the
