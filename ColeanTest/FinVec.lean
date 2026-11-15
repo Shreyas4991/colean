@@ -1,6 +1,6 @@
 import Colean.DataCmd
 
-/-! # Test: `data`, an indexed family; and the same family as `codata`, which is the same type -/
+/-! # Test: `datatype`, an indexed family; and the same family as `codatatype`, which is the same type -/
 
 universe u
 
@@ -8,7 +8,7 @@ namespace DataTest
 
 noncomputable section
 
-data FinVec (α : Type u) : Nat → Type u
+datatype FinVec (α : Type u) : Nat → Type u
   | nil : FinVec α 0
   | cons {n : Nat} (a : α) (v : FinVec α n) : FinVec α (n + 1)
 
@@ -57,14 +57,14 @@ example {α : Type u} (v : FinVec α 0) : v = FinVec.nil := by
   cases v with
   | nil => rfl
 
-/-! ### The same declaration as `codata`
+/-! ### The same declaration as `codatatype`
 
 The index decreases along every recursive argument, so a coinductive vector of length `n`
 unfolds exactly `n` times: `CoVec α n` and `FinVec α n` are the same type. The contract is the
 coinductive one: `corec` from a coalgebra over the index, `bisim` for relations over the index;
 here both are bounded by `n`, and the equivalence with `FinVec` is proved by induction on `n`. -/
 
-codata CoVec (α : Type u) : Nat → Type u
+codatatype CoVec (α : Type u) : Nat → Type u
   | nil : CoVec α 0
   | cons {n : Nat} (a : α) (v : CoVec α n) : CoVec α (n + 1)
 

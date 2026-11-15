@@ -11,7 +11,7 @@ namespace DataTest
 
 noncomputable section
 
-data Rose (α : Type u)
+datatype Rose (α : Type u)
   | node (a : α) (children : List (Rose α))
 
 #check @Rose.rec
@@ -20,7 +20,7 @@ data Rose (α : Type u)
 
 -- Through a composite: the induction hypothesis by membership in the composite, a member of
 -- an option in the list.
-data Rose₂ (α : Type u)
+datatype Rose₂ (α : Type u)
   | node (a : α) (children : List (Option (Rose₂ α)))
 
 #check @Rose₂.rec
@@ -57,7 +57,7 @@ theorem Rose.mirror_mirror {α : Type u} (t : Rose α) : t.mirror.mirror = t := 
     exact congrArg (Rose.node a) ((List.map_congr_left fun x hx => ih' x hx).trans (List.map_id cs))
 
 -- Binary trees with optional subtrees.
-data BinTree (α : Type u)
+datatype BinTree (α : Type u)
   | node (a : α) (l r : Option (BinTree α))
 
 #check @BinTree.rec

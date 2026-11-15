@@ -1,6 +1,6 @@
 import Colean.MutualCmd
 
-/-! # Test: a mutual `data` block, finite rose trees -/
+/-! # Test: a mutual `datatype` block, finite rose trees -/
 
 universe u
 
@@ -9,9 +9,9 @@ namespace DataTest.Mutual
 noncomputable section
 
 mutual
-data Rose (α : Type u)
+datatype Rose (α : Type u)
   | node (a : α) (children : Forest α)
-data Forest (α : Type u)
+datatype Forest (α : Type u)
   | nil
   | cons (t : Rose α) (f : Forest α)
 end

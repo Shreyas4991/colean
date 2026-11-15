@@ -12,7 +12,7 @@ namespace FailureTest
 
 -- Every step, the derived instances included, fits in the budget of one command.
 set_option maxHeartbeats 3000 in
-codata R (α : Type)
+codatatype R (α : Type)
   | mk (a : α) (l : List (R α)) (o : Option (R α)) (f : Nat → R α)
 
 #check @R.Poly.instPolyIso
@@ -24,7 +24,7 @@ warning: `R₁` cannot be nested through: no `Codata.PolyIso` instance was gener
 -/
 #guard_msgs (substring := true) in
 set_option maxHeartbeats 1000 in
-codata R₁ (α : Type)
+codatatype R₁ (α : Type)
   | mk (a : α) (l : List (R₁ α)) (o : Option (R₁ α)) (f : Nat → R₁ α)
 
 #check @R₁.mk_inj
@@ -39,7 +39,7 @@ codata R₁ (α : Type)
 /-- error: (deterministic) timeout -/
 #guard_msgs (substring := true) in
 set_option maxHeartbeats 300 in
-codata R₂ (α : Type)
+codatatype R₂ (α : Type)
   | mk (a : α) (l : List (R₂ α)) (o : Option (R₂ α)) (f : Nat → R₂ α)
 
 /-- error: Unknown identifier `R₂` -/
@@ -49,20 +49,20 @@ codata R₂ (α : Type)
 -- A constructor named like a generated declaration.
 /-- error: (kernel) constant has already been declared 'FailureTest.P.dtor' -/
 #guard_msgs in
-data P | dtor (n : Nat) | nil
+datatype P | dtor (n : Nat) | nil
 
 /-- error: Unknown identifier `P.F` -/
 #guard_msgs in
 #check P.F
 
-data P | mk
+datatype P | mk
 
 -- A block, whose index `Blk.Ix` is declared before the constructors are checked.
 /-- error: the result type must be `Q₁` applied to its parameters and indices -/
 #guard_msgs in
 mutual
-data Q₁ | a (x : Q₂) : Q₂
-data Q₂ | c (x : Q₁)
+datatype Q₁ | a (x : Q₂) : Q₂
+datatype Q₂ | c (x : Q₁)
 end
 
 /-- error: Unknown identifier `Q₁_Q₂.Ix` -/
@@ -84,7 +84,7 @@ instance : Codata.PolyMap MonoBox MonoBox where
 error: the constructors fix the universe of `FailureTest.U` to `0`, through a type constructor at one universe, but its model lives in `1`
 -/
 #guard_msgs in
-codata U | mk (x : Type) (b : MonoBox U)
+codatatype U | mk (x : Type) (b : MonoBox U)
 
 /-- error: Unknown identifier `U.F` -/
 #guard_msgs in
@@ -112,6 +112,6 @@ error: failed to synthesize
 -/
 #guard_msgs (substring := true) in
 set_option synthInstance.maxHeartbeats 200 in
-codata LS | mk (t : LBox LS)
+codatatype LS | mk (t : LBox LS)
 
 end FailureTest

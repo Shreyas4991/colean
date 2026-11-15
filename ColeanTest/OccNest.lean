@@ -17,7 +17,7 @@ noncomputable section
 
 /-! ### `T × T` -/
 
-data BinTree
+datatype BinTree
   | leaf
   | node (children : BinTree × BinTree)
 
@@ -49,7 +49,7 @@ theorem BinTree.size_pos (t : BinTree) : 0 < t.size := by
 
 /-! ### The same coinductively, with bisimulation through the product -/
 
-codata Bin (α : Type u)
+codatatype Bin (α : Type u)
   | node (a : α) (children : Bin α × Bin α)
 
 #check @Bin.node
@@ -76,7 +76,7 @@ example {α : Type u} (a : α) : Bin.const a = Bin.corec (S := Nat) (fun n => .n
 
 /-! ### A function into a list, an option of a pair, a sum, a dependent pair -/
 
-codata Proc (α : Type u)
+codatatype Proc (α : Type u)
   | act (k : α → List (Proc α))
   | choice (c : Option (Proc α × Proc α))
   | stop
@@ -94,7 +94,7 @@ theorem Proc.dtor_loop {α : Type u} :
   rw [Proc.loop, Proc.dtor_corec]
   simp only [Proc.F.map_act, Codata.Occ.map_pi, Codata.Occ.map_list, List.map_cons, List.map_nil]
 
-data Tm (α : Type u)
+datatype Tm (α : Type u)
   | var (a : α)
   | app (f : Tm α ⊕ α) (arg : Tm α)
 
@@ -102,7 +102,7 @@ data Tm (α : Type u)
 #check @Tm.B.app_f
 #check @Tm.rec
 
-data Rose
+datatype Rose
   | node (children : (n : Nat) × (Fin n → Rose))
 
 #check @Rose.node
@@ -111,7 +111,7 @@ data Rose
 
 /-! ### A function from a proposition -/
 
-data Guarded
+datatype Guarded
   | mk (n : Nat) (k : 0 < n → List Guarded)
 
 #check @Guarded.mk
@@ -119,7 +119,7 @@ data Guarded
 
 /-! ### Occurrences at two indices in one argument -/
 
-data Chain : Nat → Type
+datatype Chain : Nat → Type
   | zero : Chain 0
   | link {n : Nat} (p : Chain n × Chain (n + 1)) : Chain (n + 2)
 
@@ -130,7 +130,7 @@ data Chain : Nat → Type
 
 /-! ### Nesting through a declared type, with hand-written instances -/
 
-data Two (α : Type u)
+datatype Two (α : Type u)
   | mk (p : α × α)
 
 /-- The action on functions. -/
@@ -162,7 +162,7 @@ instance : Codata.PolyMap Two.{u} Two.{v} where
     cases t with
     | mk p => exact congrArg (Sigma.mk ()) (funext fun b => by cases b <;> simp [Equiv.coe_fn_mk, Codata.PolyIso.equiv])
 
-data Tree
+datatype Tree
   | leaf
   | node (c : Two Tree)
 
@@ -177,6 +177,47 @@ theorem Tree.size_node (l r : Tree) : (Tree.node (Two.mk (l, r))).size = l.size 
   rw [Tree.size, Tree.fold_node, Codata.Occ.map_ofIso]
   change (Two.map _ (Two.mk (l, r))).get true + (Two.map _ (Two.mk (l, r))).get false + 1 = _
   simp [Tree.size]
+
+/-! ### `simp` through a sum at any value
+
+The map through a sum is `Sum.map` of the maps of its sides (`Occ.map_sum`, `IOcc.map_sum`), and
+through a constant the identity (`Occ.map_const_const`), so the rules of a sum field compute at a
+variable, not only at `Sum.inl` and `Sum.inr`. -/
+
+datatype U
+  | leaf
+  | node (s : U ⊕ U)
+
+example (g : U.F Nat → Nat) (s : U ⊕ U) :
+    U.fold g (.node s) = g (.node (s.map (U.fold g) (U.fold g))) := by
+  simp
+
+datatype V
+  | leaf
+  | node (s : Nat ⊕ V)
+
+example {X Y : Type} (f : X → Y) (s : Nat ⊕ X) : V.F.map f (.node s) = .node (s.map id f) := by
+  simp
+
+example (g : V.F Nat → Nat) (s : Nat ⊕ V) :
+    V.fold g (.node s) = g (.node (s.map id (V.fold g))) := by
+  simp
+
+codatatype CV
+  | leaf
+  | node (s : CV ⊕ Nat)
+
+example {X Y : Type} (f : X → Y) (s : X ⊕ Nat) : CV.F.map f (.node s) = .node (s.map f id) := by
+  simp
+
+-- Indexed: two indices across the sum.
+datatype W : Nat → Type
+  | leaf {n : Nat} : W n
+  | node {n : Nat} (s : W (n + 1) ⊕ W (n + 2)) : W n
+
+example (g : ∀ n, W.F (fun _ => Nat) n → Nat) {n : Nat} (s : W (n + 1) ⊕ W (n + 2)) :
+    W.fold g (.node s) = g n (.node (s.map (W.fold g) (W.fold g))) := by
+  simp
 
 end
 

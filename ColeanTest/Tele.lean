@@ -11,7 +11,7 @@ noncomputable section
 
 -- A countdown protocol: at `n`, choose any `i < n` and continue at `i`. The continuation's
 -- index depends on the answer.
-codata Proto : Nat → Type
+codatatype Proto : Nat → Type
   | choose {n : Nat} (k : (i : Fin n) → Proto i.val) : Proto n
   | done : Proto 0
 
@@ -28,7 +28,7 @@ def Proto.forever (n : Nat) : Proto n :=
   simp [Proto.forever, Proto.dtor_corec]
 
 -- A curried continuation, and one whose second domain depends on the first.
-codata Table
+codatatype Table
   | node (a : Nat) (k : Nat → Bool → Table)
   | leaf (f : (n : Nat) → Fin (n + 1) → Table)
 

@@ -115,6 +115,9 @@ structure Poly where
   /-- The universes of this step: `x`, `x'`, `y`, `y'`, the primed universe of the last
   parameter (`instPolyMapEta`), then `sᵢ`, `pᵢ` per hole, then the primed universes. -/
   fresh : List Name
+  /-- The universes of the variables, in the order of `fresh`, without the primed ones: the fresh
+  ones, or fixed ones when a field fixes the universe of the occurrences (`stepLevels`). -/
+  lvls : Array Level
   /-- The user's universes of the holes and their primed versions, for `H'`. -/
   primes : List (Name × Level)
   /-- With indices, the index of the presentation: the packed index `J` over the constants, or in
@@ -129,7 +132,7 @@ namespace Poly
 
 variable (P : Poly)
 
-def lvl (i : Nat) : Level := .param P.fresh[i]!
+def lvl (i : Nat) : Level := P.lvls[i]!
 def lx : Level := P.lvl 0
 def lx' : Level := P.lvl 1
 def ly : Level := P.lvl 2

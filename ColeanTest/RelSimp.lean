@@ -19,7 +19,7 @@ open Codata
 
 /-! ### A colist -/
 
-codata CoList (α : Type u)
+codatatype CoList (α : Type u)
   | nil
   | cons (head : α) (tail : CoList α)
 
@@ -134,7 +134,7 @@ theorem CoList.append_assoc {α : Type u} (s t r : CoList α) :
 The two sides share the data in the types of the recursive arguments: `rel_vis_vis` is at one `X`.
 -/
 
-codata ITree (E : Type → Type) (R : Type)
+codatatype ITree (E : Type → Type) (R : Type)
   | ret (r : R)
   | tau (t : ITree E R)
   | vis {X : Type} (e : E X) (k : X → ITree E R)
@@ -150,7 +150,7 @@ codata ITree (E : Type → Type) (R : Type)
 
 /-! ### Families: a result index that is a pattern, and one that is not -/
 
-codata Vec (α : Type u) : Nat → Type u
+codatatype Vec (α : Type u) : Nat → Type u
   | nil : Vec α 0
   | cons {n : Nat} (a : α) (v : Vec α n) : Vec α (n + 1)
 
@@ -166,7 +166,7 @@ codata Vec (α : Type u) : Nat → Type u
   t.dtor = Vec.F.cons a v ↔ t = Vec.cons a v -/
 #guard_msgs in #check @Vec.dtor_eq_cons_iff
 
-codata P : Nat → Type
+codatatype P : Nat → Type
   | mk (n : Nat) (t : P n) : P (n * 2)
 
 /-- info: @P.F.rel_mk_mk : ∀ {X : ℕ → Type u_1} {Y : ℕ → Type u_2} {R : (j₁ : ℕ) → X j₁ → Y j₁ → Prop} (n : ℕ) (t : X n)
@@ -180,7 +180,7 @@ example {X Y : Nat → Type} (R : ∀ n, X n → Y n → Prop) (n : Nat) (t : X 
 /-! Constructors whose results meet only one way round: `stop n` is at any index, `step` at a
 successor. The lemma is stated where they meet, either way. -/
 
-codata Lad : Nat → Type
+codatatype Lad : Nat → Type
   | stop (n : Nat) : Lad n
   | step {n : Nat} (t : Lad n) : Lad (n + 1)
 
@@ -194,7 +194,7 @@ codata Lad : Nat → Type
 
 /-! ### Nested through `List`, `Option` and a product -/
 
-codata Rose (α : Type u)
+codatatype Rose (α : Type u)
   | node (a : α) (cs : List (Rose α))
 
 /-- info: @Rose.F.rel_node_node : ∀ {α : Type u_1} {X : Type u_2} {Y : Type u_3} {R : X → Y → Prop} (a : α) (cs : List X) (a' : α)
@@ -221,7 +221,7 @@ example {α β γ : Type u} (f : α → β) (g : β → γ) (t : Rose α) :
     simp [Rose.map_node]
     exact fun t _ => ⟨t, rfl, rfl⟩
 
-codata OStr (α : Type u)
+codatatype OStr (α : Type u)
   | cons (a : α) (t : Option (OStr α))
 
 example {α : Type u} {X Y : Type v} (R : X → Y → Prop) (a : α) (x : X) (y : Y) (h : R x y) :
@@ -232,7 +232,7 @@ example {α : Type u} {X Y : Type v} (R : X → Y → Prop) (a : α) (x : X) :
     ¬ OStr.F.Rel (Y := Y) R (.cons a (some x)) (.cons a none) := by
   simp
 
-codata Bin (α : Type u)
+codatatype Bin (α : Type u)
   | leaf
   | node (a : α) (p : Bin α × Bin α)
 
@@ -253,7 +253,7 @@ The premise is the relation of `CoList`'s structure as a leaf. On a variable, a 
 moves into the relation, and a value related to itself is a relation at its members: `simp` closes
 the step of `map id`. -/
 
-codata NRose (α : Type u)
+codatatype NRose (α : Type u)
   | node (a : α) (cs : CoList (NRose α))
 
 /-- info: @NRose.F.rel_node_node : ∀ {α : Type u_1} {X : Type u_2} {Y : Type u_3} {R : X → Y → Prop} (a : α) (cs : CoList X)
@@ -276,9 +276,9 @@ example {α : Type u} (t : NRose α) : t.map id = t := by
 namespace Mutual
 
 mutual
-codata Tree (α : Type u)
+codatatype Tree (α : Type u)
   | node (a : α) (children : Forest α)
-codata Forest (α : Type u)
+codatatype Forest (α : Type u)
   | nil
   | cons (t : Tree α) (f : Forest α)
 end
@@ -338,9 +338,9 @@ example {α : Type u} (a : α) : Forest.full a = .cons (Tree.full a) (Forest.ful
 packed by cases, which `simp` takes back to the relation of its type (`IOcc.rel_ofOcc`). -/
 
 mutual
-codata LTree (α : Type u)
+codatatype LTree (α : Type u)
   | node (a : α) (cs : List (LTree α)) (f : LForest α)
-codata LForest (α : Type u)
+codatatype LForest (α : Type u)
   | nil
   | cons (t : LTree α) (f : LForest α)
 end
@@ -354,7 +354,7 @@ end Mutual
 
 /-! ### A family with two indices, nested through `List` and a product -/
 
-codata G : Nat → Bool → Type
+codatatype G : Nat → Bool → Type
   | mk (n : Nat) (b : Bool) (ts : List (G n b)) (p : G n b × G (n + 1) b) : G n b
 
 example {X Y : Nat → Bool → Type} (R : ∀ n b, X n b → Y n b → Prop) (n : Nat) (b : Bool)
@@ -368,9 +368,9 @@ example {X Y : Nat → Bool → Type} (R : ∀ n b, X n b → Y n b → Prop) (n
 namespace Mixed
 
 mixed_mutual
-codata Tree (α : Type u)
+codatatype Tree (α : Type u)
   | node (a : α) (children : Forest α)
-data Forest (α : Type u)
+datatype Forest (α : Type u)
   | nil
   | cons (t : Tree α) (f : Forest α)
 end

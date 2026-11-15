@@ -10,7 +10,7 @@ namespace CodataTest
 
 noncomputable section
 
-codata Diag : Nat → Nat → Type
+codatatype Diag : Nat → Nat → Type
   | step {n : Nat} (d : Diag (n + 1) (n + 1)) : Diag n n
   | stop {n m : Nat} : Diag n m
 

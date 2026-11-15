@@ -11,7 +11,7 @@ namespace CodataTest
 
 noncomputable section
 
-codata Rose (α : Type u)
+codatatype Rose (α : Type u)
   | node (a : α) (children : List (Rose α))
 
 #check @Rose.node
@@ -50,7 +50,7 @@ example {α : Type u} (t : Rose α) : ∃ a cs, t = Rose.node a cs := by
   | node a cs => exact ⟨a, cs, rfl⟩
 
 -- Through a composite: optional children in a list.
-codata Rose₂ (α : Type u)
+codatatype Rose₂ (α : Type u)
   | node (a : α) (children : List (Option (Rose₂ α)))
 
 #check @Rose₂.node
@@ -66,7 +66,7 @@ theorem Rose₂.dtor_rep {α : Type u} (a : α) :
   rfl
 
 -- Possibly ending streams: `Option` in a recursive position.
-codata Stream? (α : Type u)
+codatatype Stream? (α : Type u)
   | cons (a : α) (tail : Option (Stream? α))
 
 #check @Stream?.cons
@@ -80,7 +80,7 @@ def Stream?.const {α : Type u} (a : α) : Stream? α :=
   simp [Stream?.const, Stream?.dtor_corec]
 
 -- Streams as pairs: `A × ·` in a recursive position.
-codata Str' (α : Type u)
+codatatype Str' (α : Type u)
   | mk (p : α × Str' α)
 
 def Str'.const {α : Type u} (a : α) : Str' α := Str'.corec (S := Unit) (fun _ => .mk (a, ())) ()

@@ -1,8 +1,8 @@
 import Colean.MutualCmd
 
-/-! # Test: corecursion and coinduction per type in a `codata` block
+/-! # Test: corecursion and coinduction per type in a `codatatype` block
 
-Each type of a `mutual` block of `codata` gets the interface of a single type, with the shape of
+Each type of a `mutual` block of `codatatype` gets the interface of a single type, with the shape of
 Lean's mutual recursors: a state, a step, a morphism and a relation per type, and nothing about
 the block's index `Blk.Ix` (`ctor`, `dtor`, Lambek's lemma, `corec`, `dtor_corec`, `corec_eq`,
 `corec_unique`, `bisim`, the laws of the layer). The layer of a type at a family per type is
@@ -20,9 +20,9 @@ noncomputable section
 /-! ### Trees and forests -/
 
 mutual
-codata Tree (α : Type)
+codatatype Tree (α : Type)
   | node (a : α) (children : Forest α)
-codata Forest (α : Type)
+codatatype Forest (α : Type)
   | nil
   | cons (t : Tree α) (f : Forest α)
 end
@@ -230,9 +230,9 @@ example {α : Type} (a : α) : Tree α :=
 /-! ### Indices: even and odd streams of labels -/
 
 mutual
-codata Even : Nat → Type
+codatatype Even : Nat → Type
   | succ {n : Nat} (a : Nat) (o : Odd (n + 1)) : Even n
-codata Odd : Nat → Type
+codatatype Odd : Nat → Type
   | succ {n : Nat} (e : Even (n + 1)) : Odd n
 end
 
@@ -303,11 +303,11 @@ example (n : Nat) : Even.nat n = Even.corec (S₁ := fun _ => Nat) (S₂ := fun 
 /-! ### Three types, one without constructors of its own -/
 
 mutual
-codata X1
+codatatype X1
   | mk (y : X2)
-codata X2
+codatatype X2
   | mk (z : X3)
-codata X3
+codatatype X3
   | stop
   | mk (x : X1)
 end
@@ -334,9 +334,9 @@ example : (X1.around 0).dtor = .X1_mk (X2.corec (fun k => .X1_mk k) (fun k => .X
 /-! ### Nesting through a list -/
 
 mutual
-codata Rose (α : Type)
+codatatype Rose (α : Type)
   | node (a : α) (children : List (Rose α)) (rest : Bush α)
-codata Bush (α : Type)
+codatatype Bush (α : Type)
   | leaf
   | grow (b : Bush α)
 end
@@ -357,12 +357,12 @@ example {α : Type} (a : α) : (Rose.two a).dtor = .node a [Rose.two a, Rose.two
 interface -/
 
 mixed_mutual
-data D (α : Type)
+datatype D (α : Type)
   | leaf (a : α)
   | node (s : S α)
-codata S (α : Type)
+codatatype S (α : Type)
   | cons (d : D α) (s : S α) (o : O α)
-codata O (α : Type)
+codatatype O (α : Type)
   | none
   | some (d : D α)
 end

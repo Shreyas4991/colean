@@ -5,7 +5,7 @@ import Colean.Model.Occ
 /-!
 # Generators on `Expr`: an order for `partial_fixpoint` (`with_ccpo`)
 
-*Spec.* Input: a type `T` declared by a single `codata` declaration, with parameters and at most
+*Spec.* Input: a type `T` declared by a single `codatatype` declaration, with parameters and at most
 one index, and the constructor without arguments chosen as the bottom (by name,
 `with_ccpo (bot := c)`, or the first one).
 Output, from the type's public declarations (`T.contract`, `T.F`, `T.F.Rel`, `T.F.rel_map`,
@@ -19,12 +19,13 @@ Output, from the type's public declarations (`T.contract`, `T.F`, `T.F.Rel`, `T.
 * `T.approx_coind`: a relation `R` with `R x y → x ⊑ y ∨ T.F.Rel (R ∪ ⊑) x.dtor y.dtor` is
   contained in the order (coinduction up to the order);
 * `T.bot_eq : Lean.Order.bot = T.c₀`, a `simp` lemma;
-* for every constructor `c` with a recursive argument plain, under a function, or nested through a
-  leaf, `T.monotone_c : monotone fun x => T.c a₁ (t₁ x) …` for monotone `tᵢ`, tagged
+* for every constructor `c` with a recursive argument plain, under a function, or nested,
+  `T.monotone_c : monotone fun x => T.c a₁ (t₁ x) …` for monotone `tᵢ`, tagged
   `@[partial_fixpoint_monotone]`: what `partial_fixpoint` needs to prove a definition monotone
-  through the constructors. A nested argument through a leaf (`List T`, at one index of a family
-  too) is ordered through the leaf's structure (`Occ.order`, `leafOrder`); the other arguments are
-  fixed.
+  through the constructors. A nested argument with a plain structure (`List T`, `T × T`, at one
+  index of a family too) is ordered through it (`Occ.order`, `nestOrder`), for which
+  `Model/CCPO.lean` proves the maps and constructors of the leaves and the pairs of a product
+  monotone; the other arguments are fixed.
 
 The bottom of a family is a constructor at every index: its result index is the index variable
 and it has no other argument (`| stop {n : Nat} : T n`).
@@ -42,8 +43,10 @@ its premises by the hypotheses, or by reflexivity for a fixed nested argument (`
 
 Not supported: a type of a `mutual` block or of an inner run of a `mixed_mutual` block (each type
 needs its bottom, and the order is over the block's index), several indices (the contract is over
-the packed index), and recursion through a nested argument other than a leaf (a product, a
-composite, a function into a leaf), whose order would have to be Lean's where Lean has one.
+the packed index), and recursion through a nested argument by anything but the maps and the
+constructors of a leaf and the pairs of a product: through a composite (`some [f n]` in
+`Option (List T)`) or a function into a leaf, whose order would have to be Lean's where Lean has
+one.
 -/
 
 open Lean Meta Elab Term
@@ -100,22 +103,21 @@ def atIndex (c : Name) (ps : Array Expr) (X : Expr) (target : Expr) :
   return some (vals.extract 1 vals.size, mkAppN (mkAppN f ps) vals)
 
 /-- The order of a nested argument whose premise in `T.F.Rel` is `prem`, when its structure is a
-leaf (`Occ.ofIso G`), or a leaf at one index of a family (`IOcc.ofOcc (Occ.ofIso G) i`): the order
-through it, `Occ.order`. -/
-def leafOrder (prem : Expr) : MetaM (Option Expr) := do
+plain one (`Occ`: a leaf `Occ.ofIso G`, a product, …), or a plain one at one index of a family
+(`IOcc.ofOcc o i`): the order through it, `Occ.order`. -/
+def nestOrder (prem : Expr) : MetaM (Option Expr) := do
   let args := prem.getAppArgs
-  if prem.isAppOfArity ``Codata.Occ.Rel 11 && args[3]!.isAppOf ``Codata.Occ.ofIso then
+  if prem.isAppOfArity ``Codata.Occ.Rel 11 then
     return some (← mkAppOptM ``Codata.Occ.order #[none, none, none, args[3]!, args[6]!, none])
   if prem.isAppOfArity ``Codata.IOcc.Rel 13 && args[5]!.isAppOfArity ``Codata.IOcc.ofOcc 6 then
     let o := args[5]!.getAppArgs
-    if o[4]!.isAppOf ``Codata.Occ.ofIso then
-      let X ← whnfR (mkApp args[8]! o[5]!)
-      return some (← mkAppOptM ``Codata.Occ.order #[none, none, none, o[4]!, X.headBeta, none])
+    let X ← whnfR (mkApp args[8]! o[5]!)
+    return some (← mkAppOptM ``Codata.Occ.order #[none, none, none, o[4]!, X.headBeta, none])
   return none
 
 /-- `T.monotone_c` for the constructor `T.F.c`, when it has a recursive argument plain or under a
-function, or nested through a leaf: these arguments monotone functions (a nested one for the order
-through its structure, `leafOrder`), the others fixed. -/
+function, or nested with a plain structure: these arguments monotone functions (a nested one for
+the order through its structure, `nestOrder`), the others fixed. -/
 def genMonotone (c : Name) (ps : Array Expr) (plain : Bool)
     (Tps I σ T' F' K e C Rel' relOfC : Expr)
     (instAt : Array Expr → Expr) (lvls : List Name) (v : Name) : TermElabM Unit := do
@@ -165,7 +167,7 @@ def genMonotone (c : Name) (ps : Array Expr) (plain : Bool)
       | .nest =>
         let prem ← instantiateMVars (← gs[j]!.getType)
         j := j + 1
-        out := out.push (← leafOrder prem)
+        out := out.push (← nestOrder prem)
     pure out
   unless orders.any (·.isSome) do return
   withLocalDecl `γ .implicit (mkSort (.param v)) fun γ => do
@@ -235,13 +237,13 @@ def genMonotone (c : Name) (ps : Array Expr) (plain : Bool)
 def genCCPO (bot? : Option Name) : TermElabM Unit := do
   let env ← getEnv
   let some kci := env.find? (T ++ `contract)
-    | fail m!"`{.ofConstName T}` is not a type declared by a single `codata` declaration (the \
+    | fail m!"`{.ofConstName T}` is not a type declared by a single `codatatype` declaration (the \
         types of `mutual` and `mixed_mutual` blocks are not supported)"
   let us := kci.levelParams.map mkLevelParam
   forallTelescope (← instantiateTypeLevelParams kci.toConstantVal us) fun ps body => do
   withBinderInfo ps .implicit do
   unless body.isAppOfArity ``Codata.Contract 3 do
-    fail m!"`{.ofConstName T}` is a `data` type: the order is for `codata` types"
+    fail m!"`{.ofConstName T}` is a `datatype`: the order is for `codatatype`s"
   let #[I, T', F'] := body.getAppArgs | unreachable!
   let K := mkAppN (.const (T ++ `contract) us) ps
   -- `T ps`, and whether there is an index.

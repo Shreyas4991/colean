@@ -1,13 +1,13 @@
 import Colean.DataCmd
 
-/-! # Test: `data` with two indices, bare and repeated (`Le n n`), and proofs by induction -/
+/-! # Test: `datatype` with two indices, bare and repeated (`Le n n`), and proofs by induction -/
 
 namespace DataTest
 
 noncomputable section
 
 -- `Nat.le` as a `Type`-valued family: the classic inductive family with two indices.
-data Le : Nat → Nat → Type
+datatype Le : Nat → Nat → Type
   | refl {n : Nat} : Le n n
   | step {n m : Nat} (h : Le n m) : Le n (m + 1)
 

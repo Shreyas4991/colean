@@ -6,7 +6,7 @@ namespace CodataTest
 
 noncomputable section
 
-codata CoList
+codatatype CoList
   | nil
   | cons (n : Nat) (s : CoList)
 

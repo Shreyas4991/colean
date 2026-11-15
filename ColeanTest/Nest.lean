@@ -3,7 +3,7 @@ import Colean.MutualCmd
 /-! # Test: nesting through a user's functor
 
 The interface of `Colean/PolyIso.lean`: instances of `PolyIso` and `PolyMap` make a type
-constructor usable in nested arguments, for `codata`, `data` and mutual blocks. -/
+constructor usable in nested arguments, for `codatatype`, `datatype` and mutual blocks. -/
 
 universe u u' v
 
@@ -21,9 +21,9 @@ instance : Codata.PolyMap Box.{u} Box.{u'} where
   map f b := ⟨f b.val⟩
   equiv_map _ _ := rfl
 
-/-! ### `codata` and `data` -/
+/-! ### `codatatype` and `datatype` -/
 
-codata BStream (α : Type u)
+codatatype BStream (α : Type u)
   | cons (a : α) (tail : Box (BStream α))
 
 /-- The state may live in another universe than the type. -/
@@ -44,7 +44,7 @@ example {X : Type u} {Y : Type u'} (f : X → Y) (b : Box X) :
   rw [Codata.Occ.map_ofIso]
   rfl
 
-data BList (α : Type u)
+datatype BList (α : Type u)
   | nil
   | cons (a : α) (tail : Box (BList α))
 
@@ -54,19 +54,19 @@ def BList.length {α : Type u} (l : BList α) : Nat :=
 /-! ### Composites and families -/
 
 -- The leaf composes with the built-in forms and with other leaves.
-codata BTree
+codatatype BTree
   | node (children : List (Box BTree × Option (Box BTree)))
 
 -- At several indices of a family, through a plain leaf.
-codata BVec (α : Type u) : Nat → Type u
+codatatype BVec (α : Type u) : Nat → Type u
   | nil : BVec α 0
   | cons {n : Nat} (a : α) (tail : Box (BVec α n)) : BVec α (n + 1)
 
 mutual
-data Even
+datatype Even
   | zero
   | succ (o : Box Odd)
-data Odd
+datatype Odd
   | succ (e : Box Even)
 end
 
@@ -86,7 +86,7 @@ instance : Codata.IPolyMap Both.{u} Both.{u'} where
   map f t := ⟨f _ t.yes, f _ t.no⟩
   equiv_map f t := congrArg (Sigma.mk ()) (funext fun b => by cases b <;> rfl)
 
-codata Alt : Bool → Type
+codatatype Alt : Bool → Type
   | mk {b : Bool} (children : Both (fun c => Alt c)) : Alt b
 
 /-! ### Missing instances -/
@@ -98,7 +98,7 @@ structure NoIso (X : Type u) where
 error: no `Codata.PolyIso` instance for `NoIso`; to nest through a type constructor, give it `Codata.PolyIso` and `Codata.PolyMap` instances (`Colean/PolyIso.lean`); products, sums, functions and dependent pairs over constant types need none
 -/
 #guard_msgs in
-codata Bad₁
+codatatype Bad₁
   | mk (x : NoIso Bad₁)
 
 structure NoMap (X : Type u) where
@@ -111,14 +111,14 @@ instance : Codata.PolyIso NoMap.{u} Unit (fun _ => Unit) where
 error: no `Codata.PolyMap` instance for `NoMap`: the `Codata.PolyIso` instance needs the intended action on functions, and its naturality
 -/
 #guard_msgs in
-codata Bad₂
+codatatype Bad₂
   | mk (x : NoMap Bad₂)
 
 end
 
 /-! ### A noncomputable instance, outside a `noncomputable section` -/
 
-data NBox (X : Type u)
+datatype NBox (X : Type u)
   | mk (val : X)
 
 noncomputable def NBox.val {X : Type u} (b : NBox X) : X :=
@@ -138,7 +138,7 @@ noncomputable instance : Codata.PolyMap NBox.{u} NBox.{u'} where
   map f b := .mk (f b.val)
   equiv_map f b := by simp [Equiv.coe_fn_mk, Codata.PolyIso.equiv, Codata.Poly.map]
 
-codata NStream
+codatatype NStream
   | cons (tail : NBox NStream)
 
 #check @NStream.corec

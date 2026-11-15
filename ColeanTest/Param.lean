@@ -2,8 +2,8 @@ import Colean.DataCmd
 
 /-! # Test: declared types nested through in their parameter
 
-A `data` or `codata` whose parameter `α` is used only at parameter positions (as the type of a
-field, under a function type, or nested) gets `PolyIso` and `PolyMap` instances in `α` (step 5,
+A `datatype` or `codatatype` whose parameter `α` is used only at parameter positions (as the type of
+a field, under a function type, or nested) gets `PolyIso` and `PolyMap` instances in `α` (step 5,
 `T.Poly.*`), with the `simp` lemmas `T.Poly.map_c` and `T.Poly.mem_c`, so that later
 declarations nest through it. This is what a `mixed_mutual` block does for its runs inside, with
 the parameter standing for the outer types (`Mixed.lean`): here the trees through the forests,
@@ -18,7 +18,7 @@ open Codata
 noncomputable section
 
 -- Finite lists.
-data Forest (X : Type u)
+datatype Forest (X : Type u)
   | nil
   | cons (t : X) (f : Forest X)
 
@@ -33,7 +33,7 @@ def Forest.sum (f : Forest Nat) : Nat :=
 
 -- An inductive type nesting through a declared inductive type: the induction hypothesis holds
 -- at the members of the forest.
-data Rose (α : Type u)
+datatype Rose (α : Type u)
   | node (a : α) (children : Forest (Rose α))
 
 /--
@@ -58,7 +58,7 @@ theorem Rose.size_pos {α : Type u} (t : Rose α) : 0 < t.size := by
 
 -- A coinductive type nesting through a declared inductive type: finitely branching trees of
 -- infinite depth, the branching given by `Forest`. This is the mixed block `Tree`/`Forest`.
-codata Tree (α : Type u)
+codatatype Tree (α : Type u)
   | node (a : α) (children : Forest (Tree α))
 
 /-- The tree whose every node has two children, corecursively. -/
@@ -71,7 +71,7 @@ theorem Tree.bin_eq {α : Type u} (a : α) :
   simp [Tree.bin]
 
 -- Parameter positions under a function type and nested in a list.
-data Node (α : Type u)
+datatype Node (α : Type u)
   | leaf (f : Bool → α)
   | branch (as : List α) (l r : Node α)
 
@@ -79,7 +79,7 @@ data Node (α : Type u)
 #check @Node.Poly.map_branch
 
 -- Indexed: the instance is at every index.
-data Vec (α : Type u) : Nat → Type u
+datatype Vec (α : Type u) : Nat → Type u
   | nil : Vec α 0
   | cons {n : Nat} (a : α) (v : Vec α n) : Vec α (n + 1)
 
@@ -88,7 +88,7 @@ data Vec (α : Type u) : Nat → Type u
 
 -- The parameter in a negative position is not a parameter position: the type is declared as
 -- before, without the instance.
-data Neg (α : Type u)
+datatype Neg (α : Type u)
   | mk (f : α → Nat) (n : Neg α)
   | stop
 

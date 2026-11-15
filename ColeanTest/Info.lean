@@ -24,10 +24,10 @@ def declaredInfo (src : String) : CommandElabM (Array Name) := do
 
 /-- info: [InfoTest.A, InfoTest.A.nil, InfoTest.A.cons] -/
 #guard_msgs in
-run_cmd do logInfo m!"{← declaredInfo "codata A (α : Type) | nil | cons (a : α) (t : A α)"}"
+run_cmd do logInfo m!"{← declaredInfo "codatatype A (α : Type) | nil | cons (a : α) (t : A α)"}"
 
 /-- info: [InfoTest.E, InfoTest.O, InfoTest.E.z, InfoTest.E.s, InfoTest.O.s] -/
 #guard_msgs in
-run_cmd do logInfo m!"{← declaredInfo "mutual\n data E | z | s (o : O)\n data O | s (e : E)\nend"}"
+run_cmd do logInfo m!"{← declaredInfo "mutual\n datatype E | z | s (o : O)\n datatype O | s (e : E)\nend"}"
 
 end InfoTest

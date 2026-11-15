@@ -1,6 +1,6 @@
 import Colean.MutualCmd
 
-/-! # Test: a mutual `codata` block, trees and forests of infinite depth and width
+/-! # Test: a mutual `codatatype` block, trees and forests of infinite depth and width
 
 The block-level interface: one state family over `Tree_Forest.Ix`, one coalgebra, one relation.
 The interface per type (a state, a step and a relation per type) is `ColeanTest/MutualCorec.lean`.
@@ -13,9 +13,9 @@ namespace CodataTest.Mutual
 noncomputable section
 
 mutual
-codata Tree (α : Type u)
+codatatype Tree (α : Type u)
   | node (a : α) (children : Forest α)
-codata Forest (α : Type u)
+codatatype Forest (α : Type u)
   | nil
   | cons (t : Tree α) (f : Forest α)
 end

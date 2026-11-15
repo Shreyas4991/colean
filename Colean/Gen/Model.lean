@@ -5,10 +5,10 @@ import Colean.Gen.Rel
 
 *Spec.* Input: the context, `T.F` (step 1), the signature and the isomorphism. Output:
 
-* `T := Cotype (T.sig params)` (`Intype` for `data`), curried in the indices;
-* for `codata`: `T.dtor`, `T.corec` (with a state in any universe), `T.dtor_corec` (simp),
+* `T := Cotype (T.sig params)` (`Intype` for `datatype`), curried in the indices;
+* for `codatatype`: `T.dtor`, `T.corec` (with a state in any universe), `T.dtor_corec` (simp),
   `T.bisim` (for `T.F.Rel`), and `T.contract : Codata.Contract T F`;
-* for `data`: `T.ctor`, `T.fold` (into a family in any universe), `T.fold_ctor` (simp), and
+* for `datatype`: `T.ctor`, `T.fold` (into a family in any universe), `T.fold_ctor` (simp), and
   `T.contract : Data.Contract T F`.
 
 No proofs: every theorem instantiates a transport theorem of `Model/Cotype.lean`,

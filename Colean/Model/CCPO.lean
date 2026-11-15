@@ -16,7 +16,8 @@ coinduction for it with a lifting equivalent to the canonical one (`ccpo_rel_iff
 `ccpo_coind_of`, for the generated `T.F.Rel`), the bottom of the `CCPO` is the bottom layer
 (`bot_eq`), and being below an element is admissible, for fixpoint induction
 (`Codata.admissible_rel`). Last, the order on a nested argument through its occurrence structure
-(`Occ.order`), and the monotonicity of the maps of the library's leaves for it.
+(`Occ.order`), and the monotonicity for it of the maps and the constructors of the library's
+leaves, and of the pairs of a product.
 
 The order is coinductive: `x ⊑ y` when `x` is the bottom, or `dtor x` and `dtor y` are related
 by the canonical lifting `Rel K.map` of the order itself (same constructor, equal data, related
@@ -435,8 +436,10 @@ end Contract
 A nested argument `cs : G T` (`List T`) is ordered by the lifting of the order through its
 occurrence structure: the same shape, the contents ordered position by position. This is the
 order of `T.F.Rel` on the argument, so a constructor is monotone in it; `partial_fixpoint` then
-needs the monotonicity of the functions a definition applies there, for a leaf the maps
-(`monotone_list_map`, `monotone_option_map`, `monotone_array_map`). -/
+needs the monotonicity of the functions a definition applies there: for a leaf the maps
+(`monotone_list_map`, `monotone_option_map`, `monotone_array_map`) and the constructors
+(`monotone_list_cons`, `monotone_option_some`), and the pairs of a product
+(`monotone_prod_mk`, …). -/
 
 namespace Occ
 
@@ -497,6 +500,64 @@ theorem monotone_array_map {X Y : Type u} [PO Y] {γ : Sort c} [PO γ] (a : Arra
   have h := monotone_map array a hf
   simp only [map_array] at h
   exact h
+
+/-! The constructors of the leaves and of products, for the recursive calls written out in a
+nested argument (`[f (n + 1), f (n + 2)]`, `some (f n)`, `(f n, t)`); `[]` and `none` are
+constants. A component that is the type itself (the structure's `hole`) is ordered by the type's
+order, which is what `partial_fixpoint` proves a recursive call monotone in, so a product has a
+lemma per place of the holes: the one with the holes first, since `partial_fixpoint` applies the
+first lemma that fits. -/
+
+/-- `List.cons` is monotone, for the order through the list's structure. -/
+@[partial_fixpoint_monotone]
+theorem monotone_list_cons {X : Type u} [PO X] {γ : Sort c} [PO γ] {f : γ → X}
+    {g : γ → List X} (hf : monotone f) (hg : @monotone γ _ (List X) list.order g) :
+    @monotone γ _ (List X) list.order fun x => f x :: g x :=
+  fun x y h => (rel_list _ _).mpr (.cons (hf x y h) ((rel_list _ _).mp (hg x y h)))
+
+/-- `Option.some` is monotone, for the order through the option's structure. -/
+@[partial_fixpoint_monotone]
+theorem monotone_option_some {X : Type u} [PO X] {γ : Sort c} [PO γ] {f : γ → X}
+    (hf : monotone f) : @monotone γ _ (Option X) option.order fun x => some (f x) :=
+  fun x y h => (rel_option _ _).mpr (.some (hf x y h))
+
+section Prod
+
+variable {X : Type u} [PO X] {γ : Sort c} [PO γ] {Sh₁ : Type s} {Pos₁ : Sh₁ → Type p'}
+  {Sh₂ : Type b} {Pos₂ : Sh₂ → Type w} {G₁ : Type u → Type g} {G₂ : Type u → Type v}
+
+/-- A pair of two occurrences of the type is monotone in both, for the order through the
+product's structure. -/
+@[partial_fixpoint_monotone]
+theorem monotone_prod_mk_hole {f g : γ → X} (hf : monotone f) (hg : monotone g) :
+    @monotone γ _ (X × X) (prod hole hole).order fun x => (f x, g x) :=
+  fun x y h => (rel_prod _ _ _ _ _ _).mpr ⟨rel_hole_intro (hf x y h), rel_hole_intro (hg x y h)⟩
+
+/-- A pair with an occurrence of the type first is monotone, for the order through the
+product's structure. -/
+@[partial_fixpoint_monotone]
+theorem monotone_prod_mk_hole_left (o₂ : Occ Sh₂ Pos₂ G₂) {f : γ → X} {g : γ → G₂ X}
+    (hf : monotone f) (hg : @monotone γ _ (G₂ X) o₂.order g) :
+    @monotone γ _ (X × G₂ X) (prod hole o₂).order fun x => (f x, g x) :=
+  fun x y h => (rel_prod _ _ _ _ _ _).mpr ⟨rel_hole_intro (hf x y h), hg x y h⟩
+
+/-- A pair with an occurrence of the type second is monotone, for the order through the
+product's structure. -/
+@[partial_fixpoint_monotone]
+theorem monotone_prod_mk_hole_right (o₁ : Occ Sh₁ Pos₁ G₁) {f : γ → G₁ X} {g : γ → X}
+    (hf : @monotone γ _ (G₁ X) o₁.order f) (hg : monotone g) :
+    @monotone γ _ (G₁ X × X) (prod o₁ hole).order fun x => (f x, g x) :=
+  fun x y h => (rel_prod _ _ _ _ _ _).mpr ⟨hf x y h, rel_hole_intro (hg x y h)⟩
+
+/-- A pair is monotone in both components, each for the order through its structure. -/
+@[partial_fixpoint_monotone]
+theorem monotone_prod_mk (o₁ : Occ Sh₁ Pos₁ G₁) (o₂ : Occ Sh₂ Pos₂ G₂) {f : γ → G₁ X}
+    {g : γ → G₂ X} (hf : @monotone γ _ (G₁ X) o₁.order f)
+    (hg : @monotone γ _ (G₂ X) o₂.order g) :
+    @monotone γ _ (G₁ X × G₂ X) (prod o₁ o₂).order fun x => (f x, g x) :=
+  fun x y h => (rel_prod _ _ _ _ _ _).mpr ⟨hf x y h, hg x y h⟩
+
+end Prod
 
 end Occ
 

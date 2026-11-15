@@ -10,7 +10,7 @@ namespace CodataTest
 
 noncomputable section
 
-codata Bounded : (n : Nat) → n ≤ 10 → Type
+codatatype Bounded : (n : Nat) → n ≤ 10 → Type
   | step {n : Nat} {h : n + 1 ≤ 10} (s : Bounded (n + 1) h) : Bounded n (Nat.le_of_succ_le h)
   | stay {n : Nat} {h : n ≤ 10} (s : Bounded n h) : Bounded n h
 

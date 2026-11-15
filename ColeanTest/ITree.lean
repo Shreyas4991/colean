@@ -5,7 +5,7 @@ import Colean.CodataCmd
 
 namespace CodataTest
 
-codata ITree (E : Type → Type) (R : Type)
+codatatype ITree (E : Type → Type) (R : Type)
   | Ret (r : R)
   | Tau (t : ITree E R)
   | Vis {X : Type} (e : E X) (k : X → ITree E R)

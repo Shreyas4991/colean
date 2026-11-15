@@ -1,6 +1,6 @@
 import Colean.MutualCmd
 
-/-! `with_ccpo`: the order of approximation on a `codata` type, for definitions by
+/-! `with_ccpo`: the order of approximation on a `codatatype`, for definitions by
 `partial_fixpoint`. -/
 
 namespace CCPOTest
@@ -11,7 +11,7 @@ noncomputable section
 
 /-! ### Colists: the generated declarations -/
 
-codata CoList (α : Type u)
+codatatype CoList (α : Type u)
   | nil
   | cons (a : α) (t : CoList α)
 
@@ -143,7 +143,7 @@ end CoList
 
 /-! ### The bottom chosen among several constructors without arguments -/
 
-codata Res (α : Type)
+codatatype Res (α : Type)
   | fail
   | done
   | ret (a : α)
@@ -155,7 +155,7 @@ attribute [with_ccpo (bot := done)] Res
 #guard_msgs in #check @Res.bot_eq
 
 -- The bottom written qualified.
-codata Two
+codatatype Two
   | a
   | b
   | next (t : Two)
@@ -178,7 +178,7 @@ example : Res.spin = .done := by
 /-! ### Written before the declaration -/
 
 @[with_ccpo]
-codata Stream'' (α : Type u)
+codatatype Stream'' (α : Type u)
   | stop
   | cons (a : α) (t : Stream'' α)
 
@@ -190,7 +190,7 @@ partial_fixpoint
 A nested argument is ordered through its occurrence structure (`Codata.Occ.order`), and
 `partial_fixpoint` goes through the maps of the leaves (`Codata.Occ.monotone_list_map`, …). -/
 
-codata Tree (α : Type)
+codatatype Tree (α : Type)
   | leaf
   | node (a : α) (k : Nat → Tree α)
   | rose (cs : List (Tree α)) (next : Tree α)
@@ -228,7 +228,7 @@ theorem Tree.map_rose {α β : Type} (f : α → β) (cs : List (Tree α)) (next
   rw [map.eq_1, dtor_rose]
 
 -- Binary trees with optional children: through `Option.map`.
-codata ORose (α : Type)
+codatatype ORose (α : Type)
   | leaf
   | node (a : α) (l r : Option (ORose α))
 
@@ -240,9 +240,72 @@ def ORose.map {α β : Type} (f : α → β) (t : ORose α) : ORose β :=
   | .node a l r => .node (f a) (l.map (map f)) (r.map (map f))
 partial_fixpoint
 
+/-! ### Recursive calls written out in a nested argument
+
+A list literal, `some`, and a pair: `partial_fixpoint` goes through the constructors of the leaves
+and the pairs of a product (`Codata.Occ.monotone_list_cons`, `Codata.Occ.monotone_option_some`,
+`Codata.Occ.monotone_prod_mk_hole`, …), and a product argument is ordered through its structure
+too. -/
+
+@[with_ccpo] codatatype CT
+  | leaf
+  | node (n : Nat) (kids : List CT)
+
+def CT.full (n : Nat) : CT := .node n [CT.full (n + 1), CT.full (n + 2)]
+partial_fixpoint
+
+example (n : Nat) : CT.full n = .node n [CT.full (n + 1), CT.full (n + 2)] := by
+  rw [CT.full.eq_1]
+
+@[with_ccpo] codatatype COpt
+  | leaf
+  | node (n : Nat) (next : Option COpt)
+
+def COpt.down (n : Nat) : COpt :=
+  if n = 0 then .node 0 none else .node n (some (COpt.down (n - 1)))
+partial_fixpoint
+
+example (n : Nat) :
+    COpt.down n = if n = 0 then .node 0 none else .node n (some (COpt.down (n - 1))) := by
+  rw [COpt.down.eq_1]
+
+@[with_ccpo] codatatype CPair
+  | leaf
+  | both (p : CPair × CPair)
+  | left (q : Nat × CPair)
+  | right (r : CPair × Nat)
+  | mixed (s : List CPair × CPair)
+
+/--
+info: @CPair.monotone_both : ∀ {γ : Sort u_1} [inst : Lean.Order.PartialOrder γ] {p : γ → CPair × CPair},
+  monotone p → monotone fun x => CPair.both (p x)
+-/
+#guard_msgs in #check @CPair.monotone_both
+
+def CPair.spine (n : Nat) : CPair := .both (CPair.spine (n + 1), .leaf)
+partial_fixpoint
+
+example (n : Nat) : CPair.spine n = .both (CPair.spine (n + 1), .leaf) := by
+  rw [CPair.spine.eq_1]
+
+def CPair.full (n : Nat) : CPair := .both (CPair.full (n + 1), CPair.full (n + 2))
+partial_fixpoint
+
+def CPair.count (n : Nat) : CPair := .left (n, CPair.count (n + 1))
+partial_fixpoint
+
+example (n : Nat) : CPair.count n = .left (n, CPair.count (n + 1)) := by
+  rw [CPair.count.eq_1]
+
+def CPair.count' (n : Nat) : CPair := .right (CPair.count' (n + 1), n)
+partial_fixpoint
+
+def CPair.wide (n : Nat) : CPair := .mixed ([CPair.wide (n + 1), .leaf], CPair.wide (n + 2))
+partial_fixpoint
+
 /-! ### A family, with the bottom at every index -/
 
-codata Delay : Nat → Type
+codatatype Delay : Nat → Type
   | stop {n : Nat} : Delay n
   | now {n : Nat} (v : Fin (n + 1)) : Delay n
   | later {n : Nat} (d : Delay (n + 1)) : Delay n
@@ -269,7 +332,7 @@ example (n : Nat) : Delay.never n = .later (Delay.never (n + 1)) := by
   rw [Delay.never.eq_1]
 
 -- Nested at one index of the family.
-codata DTree : Nat → Type
+codatatype DTree : Nat → Type
   | stop {n : Nat} : DTree n
   | kids {n : Nat} (cs : List (DTree (n + 1))) : DTree n
 
@@ -290,7 +353,7 @@ The monotonicity of a user's function in a function argument, here `bind` in its
 is proved by coinduction for the order (`approx_coind`) and registered for `partial_fixpoint`,
 which then accepts recursion through it: `iter`, which need not be productive. -/
 
-codata ITree (E : Type → Type) (R : Type)
+codatatype ITree (E : Type → Type) (R : Type)
   | spin
   | ret (r : R)
   | tau (t : ITree E R)
@@ -353,23 +416,23 @@ end ITree
 #guard_msgs in attribute [with_ccpo] CoList
 
 mutual
-codata A
+codatatype A
   | nilA
   | a (b : B)
-codata B
+codatatype B
   | nilB
   | b (a : A)
 end
 
 /--
-error: with_ccpo: `A` is not a type declared by a single `codata` declaration (the types of `mutual` and `mixed_mutual` blocks are not supported)
+error: with_ccpo: `A` is not a type declared by a single `codatatype` declaration (the types of `mutual` and `mixed_mutual` blocks are not supported)
 -/
 #guard_msgs in attribute [with_ccpo] A
 
 mixed_mutual
-data Box (α : Type)
+datatype Box (α : Type)
   | mk (s : Strm α)
-codata Strm (α : Type)
+codatatype Strm (α : Type)
   | stop
   | cons (a : α) (b : Box α)
 end
@@ -379,7 +442,7 @@ error: with_ccpo: `Strm` is a type of an inner run of a `mixed_mutual` block, wh
 -/
 #guard_msgs in attribute [with_ccpo] Strm
 
-codata Grid : Nat → Nat → Type
+codatatype Grid : Nat → Nat → Type
   | stop {m n : Nat} : Grid m n
 
 /-- error: with_ccpo: `Grid` has several indices, which are not supported yet -/
@@ -388,7 +451,7 @@ codata Grid : Nat → Nat → Type
 /-- error: with_ccpo: the attribute is global only -/
 #guard_msgs in attribute [local with_ccpo] Grid
 
-codata Str
+codatatype Str
   | cons (a : Nat) (t : Str)
 
 /--
@@ -396,7 +459,7 @@ error: with_ccpo: `Str` has no constructor without arguments, which the order ta
 -/
 #guard_msgs in attribute [with_ccpo] Str
 
-codata Bin
+codatatype Bin
   | leaf
   | node (l r : Bin)
 
@@ -416,7 +479,7 @@ run_cmd
   | .ok _ => Lean.logInfo "parsed"
   | .error e => Lean.logInfo e
 
-codata Vec (α : Type) : Nat → Type
+codatatype Vec (α : Type) : Nat → Type
   | nil : Vec α 0
   | cons {n : Nat} (a : α) (v : Vec α n) : Vec α (n + 1)
 
@@ -425,15 +488,15 @@ error: with_ccpo: `Vec` has no constructor without arguments at every index, whi
 -/
 #guard_msgs in attribute [with_ccpo] Vec
 
-data N
+datatype N
   | zero
   | succ (n : N)
 
-/-- error: with_ccpo: `N` is a `data` type: the order is for `codata` types -/
+/-- error: with_ccpo: `N` is a `datatype`: the order is for `codatatype`s -/
 #guard_msgs in attribute [with_ccpo] N
 
 /--
-error: with_ccpo: `Nat` is not a type declared by a single `codata` declaration (the types of `mutual` and `mixed_mutual` blocks are not supported)
+error: with_ccpo: `Nat` is not a type declared by a single `codatatype` declaration (the types of `mutual` and `mixed_mutual` blocks are not supported)
 -/
 #guard_msgs in attribute [with_ccpo] Nat
 

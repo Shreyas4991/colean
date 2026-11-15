@@ -26,9 +26,9 @@ noncomputable section
 /-! ### Codata outer -/
 
 mixed_mutual
-codata Entry (α : Type u)
+codatatype Entry (α : Type u)
   | mk (name : α) (contents : Dir α) (next : Entry α)
-data Dir (α : Type u)
+datatype Dir (α : Type u)
   | nil
   | cons (e : Entry α) (d : Dir α)
 end
@@ -54,10 +54,10 @@ example {α : Type u} (a : α) : ∃ d e, Entry.loop a = .mk a d e ∧ Entry.loo
 /-! ### Data outer -/
 
 mixed_mutual
-data DirB (α : Type u)
+datatype DirB (α : Type u)
   | nil
   | cons (e : EntryB α) (d : DirB α)
-codata EntryB (α : Type u)
+codatatype EntryB (α : Type u)
   | mk (name : α) (contents : DirB α) (next : EntryB α)
 end
 

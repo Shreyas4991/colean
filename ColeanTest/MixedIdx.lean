@@ -16,9 +16,9 @@ noncomputable section
 
 -- Infinite trees whose children are vectors of trees, of the length the node says.
 mixed_mutual
-codata ITree (α : Type u)
+codatatype ITree (α : Type u)
   | node (a : α) (n : Nat) (cs : IForest α n)
-data IForest (α : Type u) : Nat → Type u
+datatype IForest (α : Type u) : Nat → Type u
   | nil : IForest α 0
   | cons {n : Nat} (t : ITree α) (f : IForest α n) : IForest α (n + 1)
 end
@@ -61,9 +61,9 @@ theorem ITree.bin_eq {α : Type u} (a : α) :
 
 -- The other order: induction over trees through coinductive families of trees.
 mixed_mutual
-data JTree (α : Type u)
+datatype JTree (α : Type u)
   | node (a : α) (n : Nat) (cs : JForest α n)
-codata JForest (α : Type u) : Nat → Type u
+codatatype JForest (α : Type u) : Nat → Type u
   | nil : JForest α 0
   | cons {n : Nat} (t : JTree α) (f : JForest α n) : JForest α (n + 1)
 end

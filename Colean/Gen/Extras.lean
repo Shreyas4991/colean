@@ -4,8 +4,7 @@ import Colean.Gen.Framework
 # Generators on `Expr`, step 2b: the dependent recursor
 
 *Spec.* Input: the model (signature, isomorphism, `T.ctor`) and the constructors `T.cᵢ` (step
-4). Output, for `data`, justified by the encoding rather than by the contract (step
-2b):
+4). Output, for `datatype`, justified by the encoding rather than by the contract (step 2b):
 
 * `T.rec`, the dependent recursor into any `Sort`, with one minor premise per constructor
   carrying an induction hypothesis per recursive argument: `motive _ x` for a plain one,

@@ -31,17 +31,17 @@ happens at leaves only.
 
 `map` and `Rel` go between two structures with the same shapes and positions, for `G` at one
 universe and `G'` at another (`List.{u}` and `List.{v}`): this is what keeps the state of `corec`
-and `fold` in any universe. The simp lemmas `map_list`, `map_prod`, `map_comp`, … compute `map`
-through the combinators back to the usual maps (`List.map`, pairs, composition), the `rel_*`
-lemmas do the same for `Rel` (`rel_prod`, `rel_comp`, …, down to `List.Forall₂` and `Option.Rel`
-at the leaves, a map on either side moved into the relation, `rel_map_left`, and a value related
-to itself related at its members, `rel_self`), and `forall_toC_*` turn "for every position" into
-membership or components; the members of a value (`Mem`) are computed by `simp` the same way. The
-instances of
-`PolyIso.lean` for products, sums, functions, dependent pairs and composites are these
-combinators by definition (`ofIso_prod`, …, at the end, simp lemmas too), so a hypothesis at
-every position of a structure is one by membership for the instance (`PolyIso.memRec`): this is
-how the recursor states the induction hypotheses of nested arguments.
+and `fold` in any universe. The simp lemmas `map_list`, `map_prod`, `map_sum`, `map_comp`, …
+compute `map` through the combinators back to the usual maps (`List.map`, pairs, `Sum.map`,
+composition), the `rel_*` lemmas do the same for `Rel` (`rel_prod`, `rel_comp`, …, down to
+`List.Forall₂` and `Option.Rel` at the leaves, a map on either side moved into the relation,
+`rel_map_left`, and a value related to itself related at its members, `rel_self`), and
+`forall_toC_*` turn "for every position" into membership or components; the members of a value
+(`Mem`) are computed by `simp` the same way. The instances of `PolyIso.lean` for products, sums,
+functions, dependent pairs and composites are these combinators by definition (`ofIso_prod`, …,
+at the end, simp lemmas too), so a hypothesis at every position of a structure is one by
+membership for the instance (`PolyIso.memRec`): this is how the recursor states the induction
+hypotheses of nested arguments.
 
 The indexed version `IOcc` is for occurrences of a *family*: every position carries an index,
 `G X ≃ Σ sh, (q : Pos sh) → X (pidx sh q)`, so that occurrences at different indices may live
@@ -748,6 +748,10 @@ variable {X : Type u} {Y : Type u'}
 another map (`List.map`). -/
 @[simp] theorem map_hole_hole (f : X → Y) : map hole hole f = f := rfl
 
+/-- The map through a constant is the identity, also where it is not applied: as a function of
+another map (`Sum.map`). -/
+@[simp] theorem map_const_const {A : Type v} (f : X → Y) : map (const A) (const A) f = id := rfl
+
 theorem toC_hole (x : X) : hole.toC x = ⟨(), fun _ => x⟩ := rfl
 
 theorem forall_toC_hole {P : X → Prop} (x : X) : (∀ q, P ((hole.toC x).2 q)) ↔ P x :=
@@ -769,6 +773,11 @@ theorem toC_prod (x : G₁ X × G₂ X) :
 
 @[simp] theorem map_sum_inr (f : X → Y) (x : G₂ X) :
     map (sum o₁ o₂) (sum o₁' o₂') f (.inr x) = .inr (map o₂ o₂' f x) := rfl
+
+/-- The map through a sum at any value is `Sum.map` of the maps of the two sides. -/
+@[simp] theorem map_sum (f : X → Y) (x : G₁ X ⊕ G₂ X) :
+    map (sum o₁ o₂) (sum o₁' o₂') f x = Sum.map (map o₁ o₁' f) (map o₂ o₂' f) x := by
+  cases x <;> rfl
 
 theorem forall_toC_prod {P : X → Prop} (x : G₁ X × G₂ X) :
     (∀ q, P (((prod o₁ o₂).toC x).2 q)) ↔
@@ -1257,6 +1266,10 @@ variable {J : Type j} {K : Type k} {X : J → Type u} {Y : J → Type u'}
 @[simp] theorem map_hole_hole (i : J) (f : ∀ j, X j → Y j) : map (hole i) (hole i) f = f i :=
   rfl
 
+/-- The map through a constant is the identity, also where it is not applied. -/
+@[simp] theorem map_const_const {A : Type v} (f : ∀ j, X j → Y j) :
+    map (const A) (const A) f = id := rfl
+
 variable {Sh₁ : Type s} {Pos₁ : Sh₁ → Type p} {pidx₁ : (sh : Sh₁) → Pos₁ sh → J}
   {Sh₂ : Type s'} {Pos₂ : Sh₂ → Type p'} {pidx₂ : (sh : Sh₂) → Pos₂ sh → J}
   {G₁ : (J → Type u) → Type v} {G₂ : (J → Type u) → Type v'}
@@ -1272,6 +1285,11 @@ variable {Sh₁ : Type s} {Pos₁ : Sh₁ → Type p} {pidx₁ : (sh : Sh₁) �
 
 @[simp] theorem map_sum_inr (f : ∀ j, X j → Y j) (x : G₂ X) :
     map (sum o₁ o₂) (sum o₁' o₂') f (.inr x) = .inr (map o₂ o₂' f x) := rfl
+
+/-- The map through a sum at any value is `Sum.map` of the maps of the two sides. -/
+@[simp] theorem map_sum (f : ∀ j, X j → Y j) (x : G₁ X ⊕ G₂ X) :
+    map (sum o₁ o₂) (sum o₁' o₂') f x = Sum.map (map o₁ o₁' f) (map o₂ o₂' f) x := by
+  cases x <;> rfl
 
 end Compute
 

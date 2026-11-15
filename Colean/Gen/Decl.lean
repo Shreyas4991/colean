@@ -410,11 +410,11 @@ def addAttrs (name : Name) (attrs : Array (TSyntax ``Parser.Term.attrInstance)) 
     TermElabM Unit := do
   Term.applyAttributes name (← elabAttrs attrs)
 
-/-- The recursors per type `Tₘ.rec` of the `data` blocks (`Gen/Surface.lean`). They have a motive
-per type, as Lean's mutual recursors, so plain `induction` does not use them and refuses the type
-as it refuses a mutual inductive (`MutualCmd.lean`). -/
+/-- The recursors per type `Tₘ.rec` of the `datatype` blocks (`Gen/Surface.lean`). They have a
+motive per type, as Lean's mutual recursors, so plain `induction` does not use them and refuses the
+type as it refuses a mutual inductive (`MutualCmd.lean`). -/
 initialize mutualRecAttr : TagAttribute ←
   registerTagAttribute `colean_mutual_rec
-    "the recursor per type of a `data` block, with a motive per type (internal)"
+    "the recursor per type of a `datatype` block, with a motive per type (internal)"
 
 end Codata.Gen

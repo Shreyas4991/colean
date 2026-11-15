@@ -1,23 +1,23 @@
 import Colean.CodataCmd
 
 /-!
-# The `data` command
+# The `datatype` command
 
-The inductive twin of `codata`, with the same syntax and the same scope (parameters, indices,
+The inductive twin of `codatatype`, with the same syntax and the same scope (parameters, indices,
 recursive arguments under telescopes):
 
 ```
-data FinList (α : Type u)
+datatype FinList (α : Type u)
   | nil
   | cons (a : α) (l : FinList α)
 
-data Vec (α : Type u) : Nat → Type u
+datatype Vec (α : Type u) : Nat → Type u
   | nil : Vec α 0
   | cons {n : Nat} (a : α) (v : Vec α n) : Vec α (n + 1)
 ```
 
 The analysis of the declaration and the generators of `T.F`, the signature `T.sig` and the
-isomorphism `T.toC`/`T.ofC` are those of `codata` (`Gen/`, `CodataCmd.lean`); `T.F.Rel` is not
+isomorphism `T.toC`/`T.ofC` are those of `codatatype` (`Gen/`, `CodataCmd.lean`); `T.F.Rel` is not
 generated. The command then produces, from the generic theory (`Framework.lean`,
 `Model/Intype.lean`):
 
@@ -27,7 +27,8 @@ generated. The command then produces, from the generic theory (`Framework.lean`,
   index directly from `Signature.induction_of`;
 * derived from the contract: `T.dtor` (Lambek), `T.dtor_ctor`, `T.ctor_dtor`,
   `T.ctor_injective`, `T.fold_eq`, `T.fold_unique`; the constructors `T.ctorᵢ` with `T.dtor_ctorᵢ`,
-  `T.ctor_ctorᵢ`, `T.fold_ctorᵢ`, injectivity and disjointness, and `T.casesOn`, as for `codata`;
+  `T.ctor_ctorᵢ`, `T.fold_ctorᵢ`, injectivity and disjointness, and `T.casesOn`, as for
+  `codatatype`;
 * the dependent recursor `T.rec : {motive : ∀ i, T i → Sort v} → minors → ∀ {i} (t : T i),
   motive i t`, with one minor premise per constructor carrying an induction hypothesis for each
   recursive argument (`∀ ys, motive _ (k ys)` under a telescope; for a nested argument `c`, by

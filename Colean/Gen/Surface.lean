@@ -19,10 +19,10 @@ tactic proofs from what exists:
   constructors meet, with the arguments of one at which they meet those of the other
   (`withMeet`), and not otherwise;
 * the case analysis `T.casesOn` (by cases on `F` after `dtor`, cast along `ctor_dtor`; the
-  `cases` eliminator, and for `codata`, which has no induction, the `induction` one, so that
+  `cases` eliminator, and for `codatatype`, which has no induction, the `induction` one, so that
   `induction` does not unfold the type to its encoding), `T.casesOnAux`, `T.casesOn_ctor` and the
   simp lemmas `T.casesOn_cᵢ`;
-* for `data`, the computation rules `T.rec_cᵢ` and `T.fold_cᵢ` (simp lemmas), the hypothesis of
+* for `datatype`, the computation rules `T.rec_cᵢ` and `T.fold_cᵢ` (simp lemmas), the hypothesis of
   a nested argument given as `fun t _ => T.rec … t` on its members; in a block the rules of the
   block-level recursor and fold are `Blk.rec_cᵢ`, `Blk.fold_cᵢ`, with the block-level names of
   the constructors, and so are those of the block-level `dtor` and `ctor`, `Blk.dtor_cᵢ`,
@@ -34,24 +34,24 @@ tactic proofs from what exists:
   have a motive per type (`genLayers`, `genTypeLambek`, `genTypeCorecs`, `genTypeFolds`):
   `Blk.St`, packing a family per type into one on `Blk.Ix` by cases; the layer
   `Tₘ.F params S₁ … Sₖ idx`, its map `Tₘ.F.map f₁ … fₖ` with the rules `Tₘ.F.map_cᵢ`, and for
-  `codata` its lifting `Tₘ.F.Rel R₁ … Rₖ`, the block's at the packed families (reducible, so
+  `codatatype` its lifting `Tₘ.F.Rel R₁ … Rₖ`, the block's at the packed families (reducible, so
   patterns and dot notation find the block functor's constructors), with the laws
   `Tₘ.F.map_id`, `Tₘ.F.map_comp` and `Tₘ.F.rel_map`; the destructor `Tₘ.dtor` into the layer at
   the types and the constructor `Tₘ.ctor` out of it, with Lambek's lemma `Tₘ.dtor_ctor`,
-  `Tₘ.ctor_dtor`, `Tₘ.ctor_injective` and the rules `Tₘ.dtor_cᵢ`, `Tₘ.ctor_cᵢ`; for `codata`,
+  `Tₘ.ctor_dtor`, `Tₘ.ctor_injective` and the rules `Tₘ.dtor_cᵢ`, `Tₘ.ctor_cᵢ`; for `codatatype`,
   `Tₘ.corec c₁ … cₖ`, `Tₘ.dtor_corec`, `Tₘ.corec_eq`, `Tₘ.corec_unique`,
-  `Tₘ.bisim R₁ … Rₖ H₁ … Hₖ`; for `data`, `Tₘ.fold a₁ … aₖ`, `Tₘ.fold_ctor`, `Tₘ.fold_eq`,
+  `Tₘ.bisim R₁ … Rₖ H₁ … Hₖ`; for `datatype`, `Tₘ.fold a₁ … aₖ`, `Tₘ.fold_ctor`, `Tₘ.fold_eq`,
   `Tₘ.fold_unique` and the rules `Tₘ.fold_cᵢ`. All from the block-level ones, which stay; the
-  contract stays the block's only. For `codata` also the lemmas of `T.F.Rel` of a single type
+  contract stays the block's only. For `codatatype` also the lemmas of `T.F.Rel` of a single type
   (`Gen/Rel.lean`), per type (`genLayerRels`): one step of `Tₘ.F.Rel R₁ … Rₖ` at two
   constructors, `Tₘ.F.rel_cᵢ_cⱼ` (`simp`), `Tₘ.F.Rel.mono` from the block's, `Tₘ.F.rel_refl`;
 * equality by the destructor (`genDtorLemmas`): in a block, per type, `Tₘ.dtor_injective` and
   `Tₘ.dtor_inj` (`simp`), as step 3 gives them for a single type; and for every constructor
   `T.dtor_eq_cᵢ_iff : t.dtor = F.cᵢ ys ↔ t = T.cᵢ ys` (`simp`), from `T.dtor_inj` and `T.dtor_cᵢ`;
-* for `codata`, coinduction up to equality (`genCoinduct`), `T.coinduct R H`, with the step at
+* for `codatatype`, coinduction up to equality (`genCoinduct`), `T.coinduct R H`, with the step at
   `R x y ∨ x = y`: `T.bisim` at that relation, the step at equal values by `T.F.rel_refl`; in a
   block per type, `Tₘ.coinduct R₁ … Rₖ H₁ … Hₖ`;
-* in a `data` block, the recursors per type `Tₘ.rec`, in the shape of Lean's mutual inductives
+* in a `datatype` block, the recursors per type `Tₘ.rec`, in the shape of Lean's mutual inductives
   (a motive per type), as `Blk.rec` at the motive made of them, and their rules `Tₘ.rec_cᵢ`,
   which are the block-level rules by unfolding; a hypothesis by `IPolyIso.Mem` is one per type
   of the argument there. They are not `induction` eliminators, having a motive per type, but
@@ -217,7 +217,7 @@ def tyRelType (j : Nat) (X Y : Expr) : TermElabM Expr :=
   ctx.withTyIdx j .default fun js => do
     mkForallFVars js (← mkArrow (mkAppN X js) (← mkArrow (mkAppN Y js) (mkSort .zero)))
 
-/-- The names of the declarations per type of a `codata` block: `Blk.St`, `Tₘ.F`, `Tₘ.F.map`,
+/-- The names of the declarations per type of a `codatatype` block: `Blk.St`, `Tₘ.F`, `Tₘ.F.map`,
 `Tₘ.F.Rel`. -/
 def stN : Name := ctx.gen "St"
 def layerN (m : Nat) : Name := ctx.tyGenP m "F"
@@ -325,7 +325,7 @@ def layerMapped (c : Ctor) (ys : Array Expr) (σ : Expr → Expr) (Xs fs : Array
     | .nest o => mkAppM ``Codata.IOcc.map #[ctx.nestAt o wX σ, ctx.nestAt o wY σ, packF, y]
 
 /-- The laws of the layer per type, as those of `T.F` for a single type: `Tₘ.F.map_id`,
-`Tₘ.F.map_comp`, and for `codata` `Tₘ.F.rel_map`. Each is the block's law at the packed
+`Tₘ.F.map_comp`, and for `codatatype` `Tₘ.F.rel_map`. Each is the block's law at the packed
 functions, the packed identities or composites equal to the identity or composite of the packed
 ones by cases on the index (`funextCases`). -/
 def genLayerLaws : TermElabM Unit := do
@@ -421,9 +421,9 @@ def genLayerLaws : TermElabM Unit := do
 /-- In a block, the layer per type: `Blk.St`, which packs one family per type into one on
 `Blk.Ix` by cases, the layer of each type at a family per type `Tₘ.F params S₁ … Sₖ idx` (the
 block's functor at the packed family, at the type's constructor of `Blk.Ix`), its map `Tₘ.F.map`
-with one function per type and the rules `Tₘ.F.map_cᵢ`, and for `codata` its lifting to
+with one function per type and the rules `Tₘ.F.map_cᵢ`, and for `codatatype` its lifting to
 relations `Tₘ.F.Rel` with one relation per type, all reducible; the laws `Tₘ.F.map_id`,
-`Tₘ.F.map_comp` and for `codata` `Tₘ.F.rel_map`, the block's at the packed functions, equal to
+`Tₘ.F.map_comp` and for `codatatype` `Tₘ.F.rel_map`, the block's at the packed functions, equal to
 the packed composites by cases on the index; and the destructor and the constructor per type,
 `Tₘ.dtor` into the layer at the types and `Tₘ.ctor` out of it, the block's followed or preceded
 by the map by the identity `ι` or `ρ` (`atTypes`). -/
@@ -530,7 +530,7 @@ def genLayers : TermElabM Unit := do
           ← mkLambdaFVars (ctx.params ++ uidx ++ #[y]) value)
       addDef (ctx.tyGenP m "ctor") (← ctx.levelParamsOf [] #[type, value]) type value (ref m)
 
-/-- In a `codata` block, per type, the lemmas of `T.F.Rel` for a single type (`Gen/Rel.lean`):
+/-- In a `codatatype` block, per type, the lemmas of `T.F.Rel` for a single type (`Gen/Rel.lean`):
 the one-step lemmas of `Tₘ.F.Rel R₁ … Rₖ` (`RelStep`), `simp`, the premise at a recursive argument
 at the relation of its type, at a nested one the block's at the relations packed by cases;
 `Tₘ.F.Rel.mono`, the block's `T.F.Rel.mono` at the relations and the hypotheses packed by cases;
@@ -949,7 +949,7 @@ def genCasesOf (m : Nat) : TermElabM Unit := do
     addDef casesN (← ctx.elimLevelParamsOf fresh #[type, value]) type value ref
     addAttrs casesN #[← `(Parser.Term.attrInstance| elab_as_elim),
       ← `(Parser.Term.attrInstance| cases_eliminator)]
-    -- `codata` has no induction: `induction` is case analysis, not the encoding's.
+    -- `codatatype` has no induction: `induction` is case analysis, not the encoding's.
     if ctx.co then addAttrs casesN #[← `(Parser.Term.attrInstance| induction_eliminator)]
   -- `casesOn_ctor`: the cast disappears once `dtor (ctor y) = y` is substituted.
   do
@@ -992,7 +992,7 @@ def genTypes : TermElabM Unit := do
     addRangesUser t.name t.ref t.nameRef
     addDef t.name (← ctx.levelParamsOf [] #[type, value]) type value t.ref
 
-/-- In a `codata` block, corecursion and coinduction per type, in the shape of Lean's mutual
+/-- In a `codatatype` block, corecursion and coinduction per type, in the shape of Lean's mutual
 recursors (one motive per type), with one state and one step per type, and one relation per type:
 
 * `Tₘ.corec c₁ … cₖ s`, with `cⱼ : ∀ idx, Sⱼ idx → Tⱼ.F params S₁ … Sₖ idx` and `s : Sₘ idx`,
@@ -1195,7 +1195,7 @@ def genTypeCorecs : TermElabM Unit := do
       return (← mkForallFVars xs (← mkEq x y), ← mkLambdaFVars xs value)
     addThm (ctx.tyGenP m "bisim") (← ctx.levelParamsOf [] #[type]) type value ctx.types[m]!.ref
 
-/-- Coinduction up to equality, for `codata`: `T.coinduct R H h`, where the step `H` relates the
+/-- Coinduction up to equality, for `codatatype`: `T.coinduct R H h`, where the step `H` relates the
 layers by `R` or equality, `fun x y => R x y ∨ x = y`: `T.bisim` at that relation, the step at an
 equal pair by `T.F.rel_refl`. In a block, per type, `Tₘ.coinduct R₁ … Rₖ H₁ … Hₖ` from `Tₘ.bisim`
 and `Tⱼ.F.rel_refl`. Not generated when a constructor is named `coinduct`. -/
@@ -1273,7 +1273,7 @@ def genCoinduct : TermElabM Unit := do
       return (← mkForallFVars xs (← mkEq x y), ← mkLambdaFVars xs value)
     addThm names[m]! (← ctx.levelParamsOf [] #[type]) type value ref
 
-/-- In a `data` block, folding per type, in the shape of Lean's mutual recursors (one motive per
+/-- In a `datatype` block, folding per type, in the shape of Lean's mutual recursors (one motive per
 type), with one family and one algebra per type, as step 3 states it for a single type:
 
 * `Tₘ.fold a₁ … aₖ t`, with `aⱼ : ∀ idx, Tⱼ.F params S₁ … Sₖ idx → Sⱼ idx` and `t : Tₘ idx`, the
@@ -1417,7 +1417,7 @@ def genTypeFolds : TermElabM Unit := do
     thm m (ctx.tyGenP m "fold_unique") (hs ++ hhs ++ uidx ++ #[t])
       (← mkEq (mkAppN hs[m]! (uidx.push t)) (← foldAt m uidx t)) value
 
-/-! ### `data`: the computation rules of `rec` and `fold` -/
+/-! ### `datatype`: the computation rules of `rec` and `fold` -/
 
 /-- The induction hypotheses of `c` with arguments `ys` (as those of `T.c`) as values, the
 recursor applied to the recursive arguments: `recAt idx x` at the family-level index arguments
@@ -1541,7 +1541,7 @@ def genRecLemmas : TermElabM Unit := do
     addThm n (← ctx.elimLevelParamsOf fresh #[type]) type value ctx.ref
     addSimp n
 
-/-! ### `data` blocks: the recursors per type -/
+/-! ### `datatype` blocks: the recursors per type -/
 
 /-- Run `k` on the motives `{motive_1 : ∀ j₁ j₂, T₁ params j₁ j₂ → Sort v} …` of the types of a
 block, in block order, and the block-level motive they make,
@@ -1568,7 +1568,7 @@ def withTypeMotives (v : Level) (k : Array Expr → Expr → TermElabM α) : Ter
   termination_by ctx.types.size - m
   go 0 #[]
 
-/-- In a `data` block, `Tₘ.rec` for every type, the recursor in the shape of Lean's mutual
+/-- In a `datatype` block, `Tₘ.rec` for every type, the recursor in the shape of Lean's mutual
 inductives: a motive per type (`motive_1`, … in block order), the minor premises of every
 constructor of the block (with their block-level names), then `Tₘ`'s indices and the target. It
 is `Blk.rec` at the motive `fun i x => Blk.Ix.casesOn i motive_1 … x`, whose minor premises are

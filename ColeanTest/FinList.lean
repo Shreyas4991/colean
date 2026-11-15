@@ -1,7 +1,7 @@
 import Mathlib.Logic.Equiv.Defs
 import Colean.DataCmd
 
-/-! # Test: `data`, a plain inductive type -/
+/-! # Test: `datatype`, a plain inductive type -/
 
 universe u
 
@@ -9,7 +9,7 @@ namespace DataTest
 
 noncomputable section
 
-data FinList (α : Type u)
+datatype FinList (α : Type u)
   | nil
   | cons (a : α) (l : FinList α)
 
@@ -42,7 +42,7 @@ theorem FinList.toList_ofList {α : Type u} (l : List α) : (FinList.ofList l).t
   | nil => simp [FinList.ofList]
   | cons a l ih => simp [FinList.ofList, ih]
 
-/-- The other direction, by induction on the `data` type: `FinList.rec` is the eliminator. -/
+/-- The other direction, by induction on the `datatype`: `FinList.rec` is the eliminator. -/
 theorem FinList.ofList_toList {α : Type u} (l : FinList α) : FinList.ofList l.toList = l := by
   induction l with
   | nil => simp [FinList.ofList]

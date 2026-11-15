@@ -2,10 +2,10 @@ import Colean.Gen.Command
 import Colean.Gen.CCPO
 
 /-!
-# The `codata` command
+# The `codatatype` command
 
-Current scope: parameters, a single type, a mutual block or a mixed block of `codata` and `data`
-declarations (`MutualCmd.lean`), any number of indices. Constructor
+Current scope: parameters, a single type, a mutual block or a mixed block of `codatatype` and
+`datatype` declarations (`MutualCmd.lean`), any number of indices. Constructor
 binders may be explicit or implicit; recursive arguments may be plain (`t : T params idx`),
 under a telescope of arrows (`f : (y₁ : B₁) → … → Bₙ → T params idx`), dependent or not, where
 the domains may depend on the constructor's own data and the index on the bound variables, or
@@ -20,12 +20,12 @@ given such instances when its parameters allow it, at every index (step 5, `Gen/
 that a later declaration can nest through it; for other types the user provides them.
 
 ```
-codata ITree (E : Type → Type) (R : Type)
+codatatype ITree (E : Type → Type) (R : Type)
   | Ret (r : R)
   | Tau (t : ITree E R)
   | Vis {X : Type} (e : E X) (k : X → ITree E R)
 
-codata Vec (α : Type u) : Nat → Type u
+codatatype Vec (α : Type u) : Nat → Type u
   | nil : Vec α 0
   | cons {n : Nat} (a : α) (v : Vec α n) : Vec α (n + 1)
 ```
@@ -53,7 +53,7 @@ does, implicit elsewhere):
   simp lemmas;
 * a case analysis principle `T.casesOn`, registered as the `cases` eliminator for `T`, with
   its computation rules `T.casesOn_ctorᵢ` as simp lemmas. It is the `induction` eliminator too:
-  `codata` has no induction, and `induction s` is `cases s` rather than a look at the encoding.
+  `codatatype` has no induction, and `induction s` is `cases s` rather than a look at the encoding.
 
 `T.ctor`, `T.bisim`, `T.F`, `T.contract` and the internals (the signature, the isomorphism and
 its laws, the model's recursor, everything under `T.Poly`) are `protected`, as `inductive`
@@ -62,7 +62,7 @@ protects its auxiliary constructions: after `open T` they are not `bisim`, `toC`
 constructors, the eliminators `T.rec`, `T.casesOn` (as Lean leaves them), `T.fold`, `T.corec`,
 `T.dtor`, and the lemmas are not protected.
 
-With indices (`codata T (params) : (i₁ : I₁) → I₂ → Type u`, constructors
+With indices (`codatatype T (params) : (i₁ : I₁) → I₂ → Type u`, constructors
 `ctorᵢ … : T params idx₁ idx₂`), the same declarations are generated in their indexed form:
 `T.F (params) (X : ∀ i₁ i₂, Type _) : ∀ i₁ i₂, Type _`, `T.F.map (f : ∀ j₁ j₂, X j₁ j₂ → Y j₁ j₂)`,
 `T.Shape : ∀ i₁ i₂, Type _`, `T.B : ∀ i₁ i₂, T.Shape i₁ i₂ → ∀ j₁ j₂, Type _` (a position records
@@ -97,15 +97,15 @@ The declaration is analysed (`Gen/Front.lean`) and the generated declarations ar
 `Gen/Functor.lean` (step 1), `Gen/Signature.lean`, `Gen/Iso.lean`,
 `Gen/Model.lean` (step 2), `Gen/Extras.lean` (step 2b), `Gen/Framework.lean` (step 3),
 `Gen/Rel.lean` and `Gen/Surface.lean` (step 4), `Gen/Derive.lean` (step 5); `Gen/Command.lean`
-is the pipeline, shared with the `data` command (`DataCmd.lean`), which differs only in the
+is the pipeline, shared with the `datatype` command (`DataCmd.lean`), which differs only in the
 contract and what is derived from it, and with mutual blocks (`MutualCmd.lean`); `T.F.Rel`,
-`rel_map` and `rel_ofC` are generated for `codata` only.
+`rel_map` and `rel_ofC` are generated for `codatatype` only.
 
 The attribute `with_ccpo` (`Syntax.lean`), off by default, gives a declared type the order of
 approximation, Lean's `Lean.Order.CCPO`, with which `partial_fixpoint` defines corecursive
 functions into it, and the monotonicity lemmas of its constructors (`Gen/CCPO.lean`): applied
 after the declaration, `attribute [with_ccpo] T`, or among the declaration's modifiers,
-`@[with_ccpo] codata T …`, applied once everything is declared, as `inductive` applies its
+`@[with_ccpo] codatatype T …`, applied once everything is declared, as `inductive` applies its
 attributes. The bottom is the first constructor without arguments, or the one named by
 `with_ccpo (bot := c)`.
 
@@ -120,11 +120,11 @@ namespace Codata
 
 @[command_elab codataCmd] def elabCodata : CommandElab := Gen.elabDecl
 
-/-- The attribute `with_ccpo` (`Syntax.lean`), on a `codata` type: `Gen/CCPO.lean`. A failure is
+/-- The attribute `with_ccpo` (`Syntax.lean`), on a `codatatype`: `Gen/CCPO.lean`. A failure is
 an error of the attribute, which then declares nothing. -/
 initialize registerBuiltinAttribute {
   name := `with_ccpo
-  descr := "the order of approximation on a `codata` type, for `partial_fixpoint`"
+  descr := "the order of approximation on a `codatatype`, for `partial_fixpoint`"
   applicationTime := .afterTypeChecking
   add := fun decl stx kind => do
     unless kind == .global do throwError "with_ccpo: the attribute is global only"

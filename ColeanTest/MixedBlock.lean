@@ -2,7 +2,7 @@ import Colean.MutualCmd
 
 /-! # Test: a run of several types inside a mixed block
 
-An inner run of two `data` types is one block, declared open (`Rose_Forest.Open` over the index
+An inner run of two `datatype`s is one block, declared open (`Rose_Forest.Open` over the index
 `Rose_Forest.Ix`, with the types `Rose.Open` and `Forest.Open`), and closed as `Rose_Forest`,
 `Rose` and `Forest` with the interface of a `mutual` block: per-type constructors, `casesOn`,
 folds, and recursors with a motive per type. -/
@@ -16,11 +16,11 @@ open Codata
 noncomputable section
 
 mixed_mutual
-codata T (α : Type u)
+codatatype T (α : Type u)
   | node (a : α) (r : Rose α)
-data Rose (α : Type u)
+datatype Rose (α : Type u)
   | node (t : T α) (f : Forest α)
-data Forest (α : Type u)
+datatype Forest (α : Type u)
   | nil
   | cons (r : Rose α) (f : Forest α)
 end
@@ -78,16 +78,16 @@ theorem T.twice_eq {α : Type u} (a : α) :
   conv_lhs => rw [← T.ctor_dtor (T.twice a), T.twice, T.dtor_corec]
   simp [T.twice]
 
-/-! A `data` run outside a block: its recursor's hypothesis through the block is by membership
+/-! A `datatype` run outside a block: its recursor's hypothesis through the block is by membership
 in its closed types. -/
 
 mixed_mutual
-data D (α : Type u)
+datatype D (α : Type u)
   | leaf (a : α)
   | node (s : S α)
-codata S (α : Type u)
+codatatype S (α : Type u)
   | cons (d : D α) (s : S α) (o : O α)
-codata O (α : Type u)
+codatatype O (α : Type u)
   | none
   | some (d : D α)
 end

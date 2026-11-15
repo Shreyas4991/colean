@@ -34,8 +34,8 @@ import Colean.MutualCmd
 /-!
 # (Co)inductive types as subtypes of one general type
 The framework (`Framework`), the user interface for nesting (`PolyIso`), the model (`Model/`),
-the command syntax (`Syntax`), the command generators by step, on `Expr` (`Gen/`), the `codata`
-and `data` commands (`CodataCmd`, `DataCmd`) and their mutual and mixed blocks (`MutualCmd`), and
-the attribute `with_ccpo` for `partial_fixpoint` (`Model/CCPO`, `Gen/CCPO`, `CodataCmd`).
+the command syntax (`Syntax`), the command generators by step, on `Expr` (`Gen/`), the `codatatype`
+and `datatype` commands (`CodataCmd`, `DataCmd`) and their mutual and mixed blocks (`MutualCmd`),
+and the attribute `with_ccpo` for `partial_fixpoint` (`Model/CCPO`, `Gen/CCPO`, `CodataCmd`).
 The tests are the separate library `ColeanTest`.
 -/

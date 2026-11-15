@@ -10,7 +10,7 @@ namespace CodataTest
 
 noncomputable section
 
-codata BTree (I : Type u) (α : Type v)
+codatatype BTree (I : Type u) (α : Type v)
   | node (a : α) (children : I → BTree I α)
 
 #check @BTree.corec
@@ -40,7 +40,7 @@ example {I : Type u} {α : Type v} (t : BTree I α) : BTree.map id t = t := by
     simp [BTree.map, BTree.dtor_corec]
 
 -- Plain and functional recursive arguments together.
-codata Mixed (I : Type u)
+codatatype Mixed (I : Type u)
   | leaf
   | node (t : Mixed I) (f : I → Mixed I)
 

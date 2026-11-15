@@ -4,7 +4,7 @@ import Colean.Syntax
 /-!
 # Generators on `Expr`: the front end
 
-*Spec.* Input: the syntax of a `codata`/`data` declaration, or of the declarations of a
+*Spec.* Input: the syntax of a `codatatype`/`datatype` declaration, or of the declarations of a
 `mutual` block (`DeclStx`). Output: their context `Ctx` (`Gen/Ctx.lean`), passed to a
 continuation inside the local context its free variables live in (`withCtx`). Nothing is
 declared here, except the index `Blk.Ix` of a block.
@@ -86,7 +86,8 @@ structure CtorStx where
   type? : Option Syntax
   deriving Inhabited
 
-/-- A `codata` or `data` declaration as written, and what its modifiers give (`elabMods`). -/
+/-- A `codatatype` or `datatype` declaration as written, and what its modifiers give
+(`elabMods`). -/
 structure DeclStx where
   co : Bool
   mods : Syntax
@@ -114,7 +115,7 @@ structure DeclStx where
 /-- The full name as users write it, without the private prefix. -/
 def DeclStx.userName (d : DeclStx) : Name := privateToUserName d.declName
 
-/-- Read a `codata` or `data` declaration. -/
+/-- Read a `codatatype` or `datatype` declaration. -/
 def DeclStx.read? (stx : Syntax) : Option DeclStx := do
   let co ← if stx.isOfKind ``codataCmd then some true
     else if stx.isOfKind ``dataCmd then some false else none
@@ -126,12 +127,13 @@ def DeclStx.read? (stx : Syntax) : Option DeclStx := do
   return { co, mods := stx[0], declId := stx[2], T := ⟨stx[2][0]⟩, binderStx
            ps := binderStx.getArgs, sort?, ctors, derivingStx := stx[6], ref := stx }
 
-/-- The keyword of a command: `codata`, `data`, `mutual` or `mixed_mutual`. -/
+/-- The keyword of a command: `codatatype`, `datatype`, `mutual` or `mixed_mutual`. -/
 def keywordOf (stx : Syntax) : Syntax :=
   if stx.isOfKind ``codataCmd || stx.isOfKind ``dataCmd then stx[1] else stx[0]
 
-/-- Reject the modifiers `codata` and `data` do not support, at the modifier: `unsafe`, `partial`,
-`nonrec` and `meta` (`noncomputable` is accepted, everything being noncomputable already). -/
+/-- Reject the modifiers `codatatype` and `datatype` do not support, at the modifier: `unsafe`,
+`partial`, `nonrec` and `meta` (`noncomputable` is accepted, everything being noncomputable
+already). -/
 private def checkMods (kw : String) (stx : Syntax) (m : Modifiers) : TermElabM Unit := do
   let reject (s : Syntax) (what : String) : TermElabM Unit :=
     throwErrorAt s "`{what}` is not supported by `{kw}`"
@@ -148,7 +150,7 @@ a `private` type may not be `private` or `protected`, with Lean's errors, and a 
 constructor of a public type is not supported: its declarations would be named after the type,
 public. `unsafe`, `partial`, `nonrec`, `meta` and `deriving` are not supported. -/
 def DeclStx.elabMods (d : DeclStx) : TermElabM DeclStx := do
-  let kw := if d.co then "codata" else "data"
+  let kw := if d.co then "codatatype" else "datatype"
   let mods ← elabModifiers ⟨d.mods⟩
   checkMods kw d.mods mods
   unless d.derivingStx[0].isNone do
@@ -648,8 +650,8 @@ private def indexRef (d : DeclStx) : Syntax :=
     else s
   | none => d.T
 
-/-- Analyse the declarations `decls`, one or the types of a `mutual` block, all `codata` (`co`)
-or all `data`, and run `k` on their context, inside the local context of the context's free
+/-- Analyse the declarations `decls`, one or the types of a `mutual` block, all `codatatype` (`co`)
+or all `datatype`, and run `k` on their context, inside the local context of the context's free
 variables. `ref` is the command. `vars` are the section variables: those the declarations use
 become their first parameters, as with `inductive`. A block is one family over its index
 `Blk.Ix`, which is declared here.

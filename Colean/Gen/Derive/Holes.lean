@@ -17,7 +17,7 @@ open Lean Meta Elab Term
 register_option codata.deriveDetails : Bool := {
   defValue := false
   descr := "show the error itself when the instances of a declared type are not generated \
-    (step 5 of the `codata` and `data` commands)"
+    (step 5 of the `codatatype` and `datatype` commands)"
 }
 
 namespace Codata.Gen
@@ -268,6 +268,29 @@ def polyName (s : String) : Name := .str (.str ctx.name "Poly") s
 
 /-! ### The holes -/
 
+/-- The universes of the variables of this step, in the order of `Poly.lvls`: `x`, `x'` (of `X`
+and of the second instantiation's `X'`), `y`, `y'` (of the layer's `Y` and `Y'`), the primed
+universe of the last parameter, then `sᵢ`, `pᵢ` per hole (of the premises' shapes and positions).
+They are the fresh ones named `fresh`, unless a field fixes the universe of the occurrences to `l`
+(`fixedLvl?`, nesting through a type at one universe: `NDet (Game α)` with
+`NDet : Type → Type`). Then `T.F`, `T.corec` and `T.fold` take their families in `Type l`, so the
+layer's `Y` and `Y'` are at `l`, and so must be the states of `corec` or `fold` by which the
+fixpoint is built (`coFix`, `inFix`, `Model/Poly.lean`): the trees of shapes, made of the
+premises' shapes among others, and for `codatatype` the contents at their paths, made of their
+positions and of `X`. So the premises' shapes, and for `codatatype` their positions, are in `Type`,
+the one universe at most any `l`, and for `codatatype` `X` is at `l` (`X'` at `prime l`, at the
+primed universes of the holes); the others stay fresh. At `l = 0`, the common case, the instances
+are as general as the type allows; above, those of `datatype` need trees of shapes at `l`
+(`checkStateLevel`). -/
+def stepLevels (fresh : List Name) (nh : Nat) (prime : Level → Level) : Array Level :=
+  let w (i : Nat) : Level := .param fresh[i]!
+  match ctx.fixedLvl? with
+  | none => (Array.range (5 + 2 * nh)).map w
+  | some l =>
+    let (x, x') := if ctx.co then (l, prime l) else (w 0, w 1)
+    #[x, x', l, l, w 4] ++ (Array.range nh).flatMap fun i =>
+      #[.zero, if ctx.co then .zero else w (6 + 2 * i)]
+
 /-- Run `k` with local instances `PolyMap Hᵢ Hᵢ` for the premises `Hs` with their instances
 `insts`: a leaf at the premises (`fun X => E (H₁ X) (H₂ X)`) has a `PolyMap` instance only with
 those of its premises, which the analysis of a field checks (`leafOcc`). Nothing generated
@@ -278,16 +301,17 @@ def withSelfMaps (Hs Ss Rs insts : Array Expr) (k : TermElabM α) : TermElabM α
 
 /-- Run `k` on premises for the parameters `cands`, as the instances will have them: for each
 `Hᵢ : Type x → Aᵢ` with an instance `PolyIso Hᵢ Sᵢ Rᵢ`, given to `k` as `Occ.ofIso Hᵢ`, and the
-universe `x`. For the checks of `refineHoles` only. -/
+universe `x`, at the universes of the instances (`stepLevels`). For the checks of `refineHoles`
+only. -/
 def withCheckPremises (cands : Array Expr) (k : Array Expr → Level → TermElabM α) :
     TermElabM α := do
   let n := cands.size
-  let fresh := ctx.freshLevels (1 + 2 * n)
-  let lv (i : Nat) : Level := .param fresh[i]!
+  let lvls := ctx.stepLevels (ctx.freshLevels (5 + 2 * n)) n id
+  let lv (i : Nat) : Level := lvls[i]!
   withLocalsN n (fun i => do
       return (`H, .default, ← mkArrow (mkSort (lv 0).succ) (← inferType cands[i]!))) fun Hs => do
-  withLocalsN n (fun i => return (`S, .default, mkSort (lv (1 + 2 * i)).succ)) fun Ss => do
-  withLocalsN n (fun i => return (`R, .default, ← mkArrow Ss[i]! (mkSort (lv (2 + 2 * i)).succ)))
+  withLocalsN n (fun i => return (`S, .default, mkSort (lv (5 + 2 * i)).succ)) fun Ss => do
+  withLocalsN n (fun i => return (`R, .default, ← mkArrow Ss[i]! (mkSort (lv (6 + 2 * i)).succ)))
     fun Rs => do
   withLocalsN n (fun i => return (`inst, .instImplicit,
       ← mkAppM ``Codata.PolyIso #[Hs[i]!, Ss[i]!, Rs[i]!])) fun insts => do

@@ -18,12 +18,12 @@ open Codata
 noncomputable section
 
 mixed_mutual
-codata Proc (α : Type u)
+codatatype Proc (α : Type u)
   | step (a : α) (menu : Menu α) (t : Trace α)
-data Menu (α : Type u)
+datatype Menu (α : Type u)
   | nil
   | cons (p : Proc α) (t : Trace α) (rest : Menu α)
-codata Trace (α : Type u)
+codatatype Trace (α : Type u)
   | tick (m : Menu α) (next : Trace α)
 end
 
@@ -85,12 +85,12 @@ example {α : Type u} (p : Proc α) (t : Trace α) : (Menu.cons p t .nil).procs 
 
 -- A reference two runs inside, from the outermost run: through the composite of the open types.
 mixed_mutual
-codata Outer (α : Type u)
+codatatype Outer (α : Type u)
   | mk (m : Mid α) (i : Inner α)
-data Mid (α : Type u)
+datatype Mid (α : Type u)
   | nil
   | cons (o : Outer α) (i : Inner α) (m : Mid α)
-codata Inner (α : Type u)
+codatatype Inner (α : Type u)
   | mk (a : α) (i : Inner α) (m : Mid α)
 end
 

@@ -8,8 +8,8 @@ If a layer is polynomial in the parameter `X` and in the recursive variable `Y`,
 `Lay P B X Y = Σ s, (P s → X) × (B s → Y)`, then its least and greatest fixpoints in `Y` are
 polynomial in `X`: a value is a *tree of shapes* and the contents of its slots, a slot being a
 finite path to a node with a position `P s` there (`Path`). Both fixpoints go through one proof:
-`data` and `codata` both have a destructor and a bisimulation principle, and differ only in how
-`erase` (a value to its tree of shapes) and `fill` (a tree of shapes with contents to a value)
+`datatype` and `codatatype` both have a destructor and a bisimulation principle, and differ only in
+how `erase` (a value to its tree of shapes) and `fill` (a tree of shapes with contents to a value)
 are obtained (`coFill` by corecursion, `inFill` by a fold and well-founded recursion).
 
 This is the construction of `MvPFunctor.wp` and `MvPFunctor.M.Path`, on any type satisfying the

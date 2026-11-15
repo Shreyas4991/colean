@@ -1,11 +1,11 @@
 import Colean.MutualCmd
 
-/-! # Test: mixed `data`/`codata` blocks
+/-! # Test: mixed `datatype`/`codatatype` blocks
 
 A `mixed_mutual` block nests its declarations in the order written, the first outermost. Here
 the coinductive type comes first: the finitely branching infinite trees. The forests are
 declared open in the trees (`Forest.Open α X`), the trees nest through `Forest.Open α (Tree α)`,
-and `Forest α` is that type, with the whole interface of a `data` declaration. -/
+and `Forest α` is that type, with the whole interface of a `datatype` declaration. -/
 
 universe u
 
@@ -16,17 +16,17 @@ open Codata
 noncomputable section
 
 mixed_mutual
-codata Tree (α : Type u)
+codatatype Tree (α : Type u)
   | node (a : α) (children : Forest α)
-data Forest (α : Type u)
+datatype Forest (α : Type u)
   | nil
   | cons (t : Tree α) (f : Forest α)
 end
 
 /-! ### What the user sees
 
-The trees as a single `codata` declaration with `Forest α` for its children; the forests as a
-single `data` declaration with `Tree α` for its trees. -/
+The trees as a single `codatatype` declaration with `Forest α` for its children; the forests as a
+single `datatype` declaration with `Tree α` for its trees. -/
 
 /-- info: @Tree.node : {α : Type u_1} → α → Forest α → Tree α -/
 #guard_msgs in #check @Tree.node

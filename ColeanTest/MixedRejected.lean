@@ -2,8 +2,8 @@ import Colean.MutualCmd
 
 /-! # Test: the rejected forms of mixed blocks, and the failures
 
-A plain `mutual` block may not mix `data` and `codata`; a `mixed_mutual` block of one kind is a
-`mutual` block, with a warning. The other blocks here fail at the instances of an open run
+A plain `mutual` block may not mix `datatype` and `codatatype`; a `mixed_mutual` block of one kind
+is a `mutual` block, with a warning. The other blocks here fail at the instances of an open run
 (step 5): the outer run nests through the open type in its parameter for the outer types, and no
 instance is generated for it when that parameter is a family (an outer run with indices, or a
 block), occurs in a field without an occurrence structure in it (a function domain), or in a
@@ -17,25 +17,25 @@ namespace RejectedTest
 noncomputable section
 
 /--
-error: a `mutual` block may not mix `data` and `codata` declarations: the block is a nested fixpoint and the nesting order is a choice; use `mixed_mutual … end`, which nests the declarations in the order written, the first outermost
+error: a `mutual` block may not mix `datatype` and `codatatype` declarations: the block is a nested fixpoint and the nesting order is a choice; use `mixed_mutual … end`, which nests the declarations in the order written, the first outermost
 -/
 #guard_msgs in
 mutual
-data A (α : Type u)
+datatype A (α : Type u)
   | nil
   | cons (b : B α) (a : A α)
-codata B (α : Type u)
+codatatype B (α : Type u)
   | mk (a : A α)
 end
 
 /--
-warning: all declarations of this `mixed_mutual` block are `codata`; use `mutual`
+warning: all declarations of this `mixed_mutual` block are `codatatype`; use `mutual`
 -/
 #guard_msgs in
 mixed_mutual
-codata E (α : Type u)
+codatatype E (α : Type u)
   | mk (a : α) (f : F α)
-codata F (α : Type u)
+codatatype F (α : Type u)
   | mk (e : E α)
 end
 
@@ -51,9 +51,9 @@ its parameter `X`, standing for `VTree`, is a family over the index of `VTree`: 
 -/
 #guard_msgs in
 mixed_mutual
-codata VTree (α : Type u) : Nat → Type u
+codatatype VTree (α : Type u) : Nat → Type u
   | node {n : Nat} (a : α) (children : VForest α n) : VTree α n
-data VForest (α : Type u) : Nat → Type u
+datatype VForest (α : Type u) : Nat → Type u
   | nil : VForest α 0
   | cons {n : Nat} (t : VTree α n) (f : VForest α n) : VForest α (n + 1)
 end
@@ -65,16 +65,16 @@ its parameter `X`, standing for `Tree₂`, is a family over the index of `Tree�
 -/
 #guard_msgs in
 mixed_mutual
-codata Tree₂ (α : Type u)
+codatatype Tree₂ (α : Type u)
   | node (a : α) (children : Forest₂ α)
-codata Str₂ (α : Type u)
+codatatype Str₂ (α : Type u)
   | cons (hd : Tree₂ α) (tl : Str₂ α)
-data Forest₂ (α : Type u)
+datatype Forest₂ (α : Type u)
   | nil
   | cons (t : Tree₂ α) (s : Str₂ α) (f : Forest₂ α)
 end
 
-data Two (α β : Type u)
+datatype Two (α β : Type u)
   | mk (a : α) (b : β)
 
 -- An outer type in a field with the run's own type, in two arguments of a type constructor: the
@@ -86,9 +86,9 @@ its parameter `X`, standing for `Tree₃`, cannot vary: it occurs in a field wit
 -/
 #guard_msgs in
 mixed_mutual
-codata Tree₃ (α : Type u)
+codatatype Tree₃ (α : Type u)
   | node (a : α) (children : Forest₃ α)
-data Forest₃ (α : Type u)
+datatype Forest₃ (α : Type u)
   | nil
   | cons (p : Two (Tree₃ α) (Forest₃ α))
 end
@@ -100,9 +100,9 @@ its parameter `X`, standing for `Tree₄`, cannot vary: it occurs in a field wit
 -/
 #guard_msgs in
 mixed_mutual
-codata Tree₄ (α : Type u)
+codatatype Tree₄ (α : Type u)
   | node (a : α) (children : Forest₄ α)
-data Forest₄ (α : Type u)
+datatype Forest₄ (α : Type u)
   | nil
   | cons (k : Tree₄ α → Nat) (f : Forest₄ α)
 end

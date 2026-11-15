@@ -10,7 +10,7 @@ namespace CodataTest
 
 noncomputable section
 
-codata Walk : Int → Type
+codatatype Walk : Int → Type
   | up {n : Int} (w : Walk (n + 1)) : Walk n
   | down {n : Int} (w : Walk (n - 1)) : Walk n
 

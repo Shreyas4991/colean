@@ -13,7 +13,7 @@ open Codata
 
 /-! ### A family, at a fixed and at a variable index -/
 
-data Vec (α : Type u) : Nat → Type u
+datatype Vec (α : Type u) : Nat → Type u
   | nil : Vec α 0
   | cons {n : Nat} (a : α) (t : Vec α n) : Vec α (n + 1)
 
@@ -28,59 +28,59 @@ variable (n : Nat)
 end
 
 -- At a fixed index.
-data ThroughVec
+datatype ThroughVec
   | leaf
   | mk (v : Vec ThroughVec 3)
 
 -- A family through a family, at its own index.
-data VTree : Nat → Type
+datatype VTree : Nat → Type
   | leaf : VTree 0
   | node {n : Nat} (cs : Vec (VTree n) n) : VTree (n + 1)
 
-/-! ### `codata` families, and a result index that is not a pattern -/
+/-! ### `codatatype` families, and a result index that is not a pattern -/
 
-codata CoVec (α : Type u) : Nat → Type u
+codatatype CoVec (α : Type u) : Nat → Type u
   | nil : CoVec α 0
   | cons {n : Nat} (a : α) (t : CoVec α n) : CoVec α (n + 1)
 
 #synth PolyIso (fun X : Type => CoVec X 2) _ _
 
-codata CoThrough
+codatatype CoThrough
   | mk (v : CoVec CoThrough 2)
 
--- `data` through `codata`.
-data FinThrough
+-- `datatype` through `codatatype`.
+datatype FinThrough
   | leaf
   | mk (v : CoVec FinThrough 1)
 
-data Dbl (α : Type u) : Nat → Type u
+datatype Dbl (α : Type u) : Nat → Type u
   | nil : Dbl α 0
   | mk (n : Nat) (a : α) (t : Dbl α n) : Dbl α (n * 2 + 1)
 
-data ThroughDbl
+datatype ThroughDbl
   | leaf
   | mk (v : Dbl ThroughDbl 3)
 
 /-! ### Several indices, and nested arguments inside the family -/
 
-data Grid (α : Type u) : Nat → Nat → Type u
+datatype Grid (α : Type u) : Nat → Nat → Type u
   | nil {m : Nat} : Grid α 0 m
   | cons {n m : Nat} (a : α) (t : Grid α n m) : Grid α (n + 1) m
 
-codata CoGrid (α : Type u) : Nat → Nat → Type u
+codatatype CoGrid (α : Type u) : Nat → Nat → Type u
   | cons {n m : Nat} (a : α) (t : CoGrid α n (m + 1)) : CoGrid α (n + 1) m
 
 #synth PolyIso (fun X : Type => Grid X 2 5) _ _
 
-data ThroughGrid
+datatype ThroughGrid
   | leaf
   | mk (g : Grid ThroughGrid 2 5) (h : CoGrid ThroughGrid 1 0)
 
-data LRose (α : Type u) : Nat → Type u
+datatype LRose (α : Type u) : Nat → Type u
   | leaf (a : α) : LRose α 0
   | node {n : Nat} (cs : List (LRose α n)) : LRose α (n + 1)
 
-codata ThroughLRose
+codatatype ThroughLRose
   | mk (r : LRose ThroughLRose 2)
 
 /-! ### Types of blocks
@@ -89,10 +89,10 @@ The presentation is per block (`Ping_Pong.Poly.*`, over the block's index withou
 parameters that vary, `Ping_Pong.Poly.Ix`), the instances per type (`Ping.Poly.*`). -/
 
 mutual
-data Ping (α : Type u)
+datatype Ping (α : Type u)
   | nil
   | cons (a : α) (b : Pong α)
-data Pong (α : Type u)
+datatype Pong (α : Type u)
   | cons (a : α) (b : Ping α)
 end
 
@@ -102,27 +102,27 @@ end
 #synth PolyIso (fun X : Type => Pong (Option X)) _ _
 #synth PolyMap Pong.{0} Pong.{1}
 
-data ThroughPing
+datatype ThroughPing
   | leaf
   | mk (p : Ping ThroughPing)
 
 mutual
-codata CPing (α : Type u)
+codatatype CPing (α : Type u)
   | nil
   | cons (a : α) (b : CPong α)
-codata CPong (α : Type u)
+codatatype CPong (α : Type u)
   | cons (a : α) (b : CPing α)
 end
 
-codata ThroughCPong
+codatatype ThroughCPong
   | mk (p : CPong ThroughCPong)
 
 -- A block with indices.
 mutual
-data Ev (α : Type u) : Nat → Type u
+datatype Ev (α : Type u) : Nat → Type u
   | zero (a : α) : Ev α 0
   | succ {n : Nat} (o : Od α n) : Ev α (n + 1)
-data Od (α : Type u) : Nat → Type u
+datatype Od (α : Type u) : Nat → Type u
   | succ {n : Nat} (a : α) (e : Ev α n) : Od α (n + 1)
 end
 
@@ -130,20 +130,20 @@ end
 #guard_msgs in
 #synth PolyIso (fun X : Type => Od X 3) _ _
 
-data ThroughEv
+datatype ThroughEv
   | leaf
   | mk (e : Ev ThroughEv 2)
 
 -- A block nesting through a leaf.
 mutual
-data E1 (α : Type u)
+datatype E1 (α : Type u)
   | nil
   | mk (a : α) (o : List (O1 α))
-data O1 (α : Type u)
+datatype O1 (α : Type u)
   | mk (e : E1 α)
 end
 
-codata ThroughE1
+codatatype ThroughE1
   | mk (e : E1 ThroughE1)
 
 /-! ### Using the nesting types -/
@@ -220,10 +220,10 @@ variables. Through a product or a sum it is one only after cases on the position
 then split into its components for the presentation (`ColeanTest/NestGaps.lean`). -/
 
 mutual
-data QA (α : Type u)
+datatype QA (α : Type u)
   | nil
   | mk (a : α) (p : QA α × Nat)
-data QB (α : Type u)
+datatype QB (α : Type u)
   | mk (a : QA α)
 end
 
@@ -246,10 +246,10 @@ the positions of the nested argument `p` are at several types of the block
 -/
 #guard_msgs in
 mutual
-data RA (α : Type u)
+datatype RA (α : Type u)
   | nil
   | mk (a : α) (p : List (RA α × RB α))
-data RB (α : Type u)
+datatype RB (α : Type u)
   | mk (a : RA α)
 end
 

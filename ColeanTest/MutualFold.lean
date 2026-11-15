@@ -1,8 +1,8 @@
 import Colean.MutualCmd
 
-/-! # Test: folding per type in a `data` block
+/-! # Test: folding per type in a `datatype` block
 
-Each type of a `mutual` block of `data` gets the interface of a single type, with the shape of
+Each type of a `mutual` block of `datatype` gets the interface of a single type, with the shape of
 Lean's mutual recursors: a family, an algebra and a morphism per type, and nothing about the
 block's index `Blk.Ix` (`dtor`, `ctor`, Lambek's lemma, `fold`, `fold_ctor`, `fold_eq`,
 `fold_unique`, the rules `fold_cᵢ`, the laws of the layer). The layer of a type at a family per
@@ -22,9 +22,9 @@ noncomputable section
 /-! ### Trees and forests -/
 
 mutual
-data Tree (α : Type)
+datatype Tree (α : Type)
   | node (a : α) (children : Forest α)
-data Forest (α : Type)
+datatype Forest (α : Type)
   | nil
   | cons (t : Tree α) (f : Forest α)
 end
@@ -176,10 +176,10 @@ example {α : Type} (t : Tree α) (f : Forest α) :
 /-! ### Indices: even and odd naturals -/
 
 mutual
-data Even : Nat → Type
+datatype Even : Nat → Type
   | zero : Even 0
   | succ {n : Nat} (o : Odd n) : Even (n + 1)
-data Odd : Nat → Type
+datatype Odd : Nat → Type
   | succ {n : Nat} (e : Even n) : Odd (n + 1)
 end
 
@@ -249,12 +249,12 @@ theorem Even.toNat_eq {n : Nat} (e : Even n) : e.toNat = n :=
 /-! ### Three types -/
 
 mutual
-data A3
+datatype A3
   | leaf
   | mk (b : B3)
-data B3
+datatype B3
   | mk (c : C3) (a : A3)
-data C3
+datatype C3
   | mk (a : A3)
 end
 
@@ -277,9 +277,9 @@ The rule of a nested argument maps it by the folds per type packed on the block'
 `simp` takes to the fold of the type at the index of the positions (`IOcc.map_ofOcc`). -/
 
 mutual
-data NRose (α : Type)
+datatype NRose (α : Type)
   | node (a : α) (cs : List (NRose α)) (b : NBush α)
-data NBush (α : Type)
+datatype NBush (α : Type)
   | leaf
   | grow (r : NRose α) (b : NBush α)
 end
@@ -302,11 +302,11 @@ example :
 interface -/
 
 mixed_mutual
-codata T (α : Type)
+codatatype T (α : Type)
   | node (a : α) (r : Rose α)
-data Rose (α : Type)
+datatype Rose (α : Type)
   | node (t : T α) (f : Bush α)
-data Bush (α : Type)
+datatype Bush (α : Type)
   | nil
   | cons (r : Rose α) (f : Bush α)
 end

@@ -38,9 +38,9 @@ computes through the instances:
   `PolyFix.exists_val_iff` after `dtor_c`, then cases on the positions of the layer.
 
 The functors of the left-hand sides are not indexed (`no_index`): the leaves of other types'
-rules are often eta-reduced (`Occ.ofIso Forest`). Both lemmas are stated for `codata` as for
-`data`: a value of a `codata` type is the constructor of its `dtor` (`ctor_dtor`), and `corec_eq`
-writes a corecursive value so; membership is one step for `codata` too, since a member is at a
+rules are often eta-reduced (`Occ.ofIso Forest`). Both lemmas are stated for `codatatype` as for
+`datatype`: a value of a `codatatype` is the constructor of its `dtor` (`ctor_dtor`), and `corec_eq`
+writes a corecursive value so; membership is one step for `codatatype` too, since a member is at a
 finite depth.
 
 The lemmas are per constructor of the presentation (`VCtor`): with a split argument they are

@@ -13,10 +13,10 @@ open Codata
 
 /-! ### One parameter -/
 
-codata Str (α : Type u)
+codatatype Str (α : Type u)
   | cons (a : α) (t : Str α)
 
-data L (α : Type u)
+datatype L (α : Type u)
   | nil
   | cons (a : α) (t : L α)
 
@@ -27,27 +27,27 @@ data L (α : Type u)
 
 /-! ### Nesting through them, in every combination of kinds -/
 
-data Rose
+datatype Rose
   | node (cs : L Rose)
 
-codata Inf
+codatatype Inf
   | node (cs : L Inf)
 
 -- Inductive through coinductive, which Lean's `inductive` has no counterpart of.
-data Bush
+datatype Bush
   | leaf
   | node (c : Str Bush)
 
-codata CoBush
+codatatype CoBush
   | node (c : Str CoBush)
 
 -- A composite: the premise of the instance.
-codata Mix
+codatatype Mix
   | node (c : L (List Mix))
 
 /-! ### Several parameters: one instance, composed with constants and with the identity -/
 
-data E (α β : Type u)
+datatype E (α β : Type u)
   | l (a : α)
   | r (b : β)
 
@@ -56,54 +56,54 @@ data E (α β : Type u)
 #synth PolyIso (E Nat) _ _
 #synth PolyIso (fun X : Type u => E (List X) (Option X)) _ _
 
-data T₁
+datatype T₁
   | leaf
   | mk (p : E T₁ T₁)
 
-codata T₂
+codatatype T₂
   | mk (p : List (E Nat T₂))
 
-data T₃
+datatype T₃
   | leaf
   | mk (p : E (List T₃) (Option T₃))
 
 /-! ### Other fields -/
 
 -- A product in a field, and nesting inside the type.
-data Two (α : Type u)
+datatype Two (α : Type u)
   | mk (p : α × α)
 
-data Tw
+datatype Tw
   | leaf
   | mk (p : Two Tw)
 
-data Rose₂ (α : Type u)
+datatype Rose₂ (α : Type u)
   | node (a : α) (cs : List (Rose₂ α))
 
-data Rose₃
+datatype Rose₃
   | mk (r : Rose₂ Rose₃)
 
 -- A constant parameter and a telescope.
-data Fn (A : Type) (α : Type u)
+datatype Fn (A : Type) (α : Type u)
   | leaf (a : α)
   | node (k : A → Fn A α)
 
-data UseFn
+datatype UseFn
   | mk (f : Fn Nat UseFn)
 
 /-! ### Parameters that cannot vary: nothing is generated, silently -/
 
-data Neg (α : Type u)
+datatype Neg (α : Type u)
   | mk (f : α → Nat)
 
-data Dep (α : Type)
+datatype Dep (α : Type)
   | mk (a : α) (h : a = a)
 
 /--
 error: no `Codata.PolyIso` instance for `Neg`; to nest through a type constructor, give it `Codata.PolyIso` and `Codata.PolyMap` instances (`Colean/PolyIso.lean`); products, sums, functions and dependent pairs over constant types need none
 -/
 #guard_msgs in
-data NoNest
+datatype NoNest
   | mk (x : Neg NoNest)
 
 /-! ### The map is the structural one -/
@@ -133,7 +133,7 @@ warning: `Bad` cannot be nested through: no `Codata.PolyIso` instance was genera
 generating the fixpoint `DeriveTest.Bad.Poly.fix` failed, an error of the generator (`set_option codata.deriveDetails true` shows it)
 -/
 #guard_msgs in
-data Bad (α : Type)
+datatype Bad (α : Type)
   | nil
   | cons (a : α) (t : Bad α)
 

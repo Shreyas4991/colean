@@ -17,7 +17,7 @@ noncomputable section
 
 /-! ### Through `List` -/
 
-data Rose (α : Type u)
+datatype Rose (α : Type u)
   | node (a : α) (cs : List (Rose α))
 
 /--
@@ -65,7 +65,7 @@ theorem Rose.size_eq {α : Type u} (t : Rose α) : t.size = t.size' := by
 
 /-! ### Through `Option` -/
 
-data OTree
+datatype OTree
   | node (n : Nat) (l r : Option OTree)
 
 /--
@@ -90,7 +90,7 @@ example : (OTree.node 1 (some (.node 2 none none)) none).sum = 3 := by
 
 /-! ### Through a product -/
 
-data Weighted
+datatype Weighted
   | leaf (n : Nat)
   | node (l r : Weighted × Nat)
 
@@ -128,11 +128,11 @@ theorem Weighted.total_le (t : Weighted) (h : ∀ n, 0 < n) : 0 < t.total := by
 
 /-! ### Through a declared type, with its generated instance -/
 
-data Forest (X : Type u)
+datatype Forest (X : Type u)
   | nil
   | cons (x : X) (rest : Forest X)
 
-data FTree
+datatype FTree
   | node (n : Nat) (cs : Forest FTree)
 
 /--
@@ -158,7 +158,7 @@ example (cs : Forest FTree) (P : FTree → Prop) (h : ∀ t, PolyIso.Mem Forest 
 
 /-! ### In a family, at one index -/
 
-data LT : Nat → Type
+datatype LT : Nat → Type
   | leaf : LT 0
   | node {n : Nat} (cs : List (LT n)) : LT (n + 1)
 
@@ -204,7 +204,7 @@ theorem LT.leaves_eq {n : Nat} (t : LT n) : t.leaves = t.leaves' := by
 
 /-! ### In a family, at several indices -/
 
-data Chain : Nat → Type
+datatype Chain : Nat → Type
   | zero : Chain 0
   | link {n : Nat} (p : Chain n × Chain (n + 1)) : Chain (n + 2)
 
@@ -231,11 +231,11 @@ example {n : Nat} (p : Chain n × Chain (n + 1)) : (Chain.link p).size = p.1.siz
 /-! ### In a block -/
 
 mutual
-data Tm
+datatype Tm
   | num (n : Nat)
   | add (args : List Tm)
   | bind (b : Bd) (body : Tm)
-data Bd
+datatype Bd
   | mk (val : Option Tm)
 end
 
@@ -267,10 +267,10 @@ see that a member `t : PA` is at `PA_PB.Ix.PA`, since `PA` is a definition, so t
 below are given by their position. -/
 
 mutual
-data PA
+datatype PA
   | nil
   | mk (p : PA × PB)
-data PB
+datatype PB
   | mk (a : PA)
 end
 

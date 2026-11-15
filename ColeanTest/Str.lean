@@ -1,12 +1,12 @@
 import Colean.CodataCmd
 
-/-! Streams of naturals: the smallest `codata`, one constructor of arity one. -/
+/-! Streams of naturals: the smallest `codatatype`, one constructor of arity one. -/
 
 namespace CodataTest
 
 noncomputable section
 
-codata Str
+codatatype Str
   | cons (n : Nat) (s : Str)
 
 #check @Str.dtor

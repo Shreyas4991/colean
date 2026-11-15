@@ -13,10 +13,10 @@ section
 
 variable (β : Type u) {γ : Type} [Inhabited γ]
 
-codata SStream
+codatatype SStream
   | cons (b : β) (t : SStream)
 
-data SList
+datatype SList
   | nil
   | cons (c : γ) (l : SList)
 

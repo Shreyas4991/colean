@@ -31,7 +31,7 @@ noncomputable section
 
 /-! ### Several parameters in one field -/
 
-data P2 (α β : Type u)
+datatype P2 (α β : Type u)
   | mk (p : α × β)
 
 /-- info: P2.Poly.instPolyIso -/
@@ -52,7 +52,7 @@ info: @P2.Poly.map_mk : ∀ {H₁ H₂ : Type u_2 → Type u_1} {H'₁ H'₂ : T
 #guard_msgs(whitespace := lax) in
 #check @P2.Poly.map_mk
 
-data ThroughP2
+datatype ThroughP2
   | leaf
   | mk (p : P2 ThroughP2 Nat)
 
@@ -84,10 +84,10 @@ theorem ThroughP2.size_pos (t : ThroughP2) : 0 < t.size := by
 
 /-! A third parameter in a field of its own, and parameters in different universes. -/
 
-data P3 (α β γ : Type u)
+datatype P3 (α β γ : Type u)
   | mk (p : α × β) (c : γ)
 
-data ThroughP3
+datatype ThroughP3
   | leaf
   | mk (x : P3 Nat ThroughP3 ThroughP3)
 
@@ -95,7 +95,7 @@ data ThroughP3
 #guard_msgs in
 #synth PolyIso (fun X : Type => P3 X X Nat) _ _
 
-data PU (α : Type u) (β : Type v)
+datatype PU (α : Type u) (β : Type v)
   | mk (p : α × List β)
 
 /-- info: PU.Poly.instPolyIso -/
@@ -104,14 +104,14 @@ data PU (α : Type u) (β : Type v)
 
 /-! A declared leaf taking two parameters in one field: its instance at both premises. -/
 
-data E (α β : Type u)
+datatype E (α β : Type u)
   | l (a : α)
   | r (b : β)
 
-data EP (α β : Type u)
+datatype EP (α β : Type u)
   | mk (e : E α β) (f : E α (List β))
 
-data ThroughEP
+datatype ThroughEP
   | leaf
   | mk (x : EP ThroughEP Nat)
 
@@ -122,11 +122,11 @@ example (t a : ThroughEP) (n : Nat) :
 /-! A parameter that cannot vary with the others in a field is kept constant: `Fn`'s parameter
 `A` is a function domain, so `K` varies in `β` only. -/
 
-data Fn (A : Type) (α : Type u)
+datatype Fn (A : Type) (α : Type u)
   | leaf (a : α)
   | node (k : A → Fn A α)
 
-data K (α β : Type)
+datatype K (α β : Type)
   | mk (x : Fn α β)
 
 /-- info: K.Poly.instPolyIsoEta -/
@@ -151,12 +151,12 @@ only `X` does, which is all the outer run needs. -/
 namespace Distant
 
 mixed_mutual
-codata A (α : Type u)
+codatatype A (α : Type u)
   | mk (b : B α)
-data B (α : Type u)
+datatype B (α : Type u)
   | nil
   | cons (c : C α) (b : B α)
-codata C (α : Type u)
+codatatype C (α : Type u)
   | mk (a : A α) (c : C α)
 end
 
@@ -176,12 +176,12 @@ end Distant
 namespace DistantDomain
 
 mixed_mutual
-codata A (α : Type)
+codatatype A (α : Type)
   | mk (b : B α)
-data B (α : Type)
+datatype B (α : Type)
   | nil
   | cons (c : C α) (b : B α)
-codata C (α : Type)
+codatatype C (α : Type)
   | mk (a : α → A α) (c : C α)
 end
 
@@ -203,7 +203,7 @@ end DistantDomain
 
 /-! ### A parameter in the same field as a recursive occurrence -/
 
-codata PairStr (α : Type u)
+codatatype PairStr (α : Type u)
   | mk (p : α × PairStr α)
 
 /--
@@ -231,7 +231,7 @@ example (f : Nat → Nat) (a : Nat) (s : PairStr Nat) :
       PairStr.mk (f a, (Occ.ofIso PairStr).map (Occ.ofIso PairStr) f s) := by
   simp
 
-data ThroughPairStr
+datatype ThroughPairStr
   | leaf
   | mk (x : PairStr ThroughPairStr)
 
@@ -251,7 +251,7 @@ example (t a : ThroughPairStr) : PolyIso.Mem PairStr t (PairStr.const a) ↔
 
 /-! Through a sum: a constructor of the presentation, and a rule, for each side. -/
 
-data Tm (α : Type u)
+datatype Tm (α : Type u)
   | var (a : α)
   | app (f : Tm α ⊕ α) (arg : Tm α)
 
@@ -264,7 +264,7 @@ info: @Tm.Poly.mem_app_inr : ∀ {H : Type u_2 → Type u_1} {S : Type u_3} {R :
 #guard_msgs(whitespace := lax) in
 #check @Tm.Poly.mem_app_inr
 
-data ThroughTm
+datatype ThroughTm
   | leaf
   | mk (t : Tm ThroughTm)
 
@@ -301,7 +301,7 @@ theorem ThroughTm.ind (P : ThroughTm → Prop) (hl : P .leaf)
 
 /-! Nested parts and a sum inside a product. -/
 
-data Mix (α : Type u)
+datatype Mix (α : Type u)
   | leaf (a : α)
   | node (p : (Mix α ⊕ α) × List (Mix α)) (k : Nat → Mix α)
 
@@ -311,14 +311,14 @@ example (x a b : Nat) :
 
 /-! In a family. -/
 
-codata VStr (α : Type u) : Nat → Type u
+codatatype VStr (α : Type u) : Nat → Type u
   | mk {n : Nat} (p : α × VStr α n) : VStr α (n + 1)
 
 /-- info: VStr.Poly.instPolyIso 3 -/
 #guard_msgs in
 #synth PolyIso (fun X : Type => VStr X 3) _ _
 
-codata VL (α : Type u) : Nat → Type u
+codatatype VL (α : Type u) : Nat → Type u
   | mk {n : Nat} (p : α × List (VL α n)) : VL α (n + 1)
 
 /-- info: VL.Poly.instPolyIso 3 -/
@@ -330,9 +330,9 @@ codata VL (α : Type u) : Nat → Type u
 namespace Pair
 
 mixed_mutual
-codata Tree (α : Type u)
+codatatype Tree (α : Type u)
   | node (a : α) (children : Forest α)
-data Forest (α : Type u)
+datatype Forest (α : Type u)
   | nil
   | cons (p : Tree α × Forest α)
 end
@@ -366,10 +366,10 @@ end Pair
 /-! ### A type of a block with a product or a sum in a nested argument -/
 
 mutual
-data QA (α : Type u)
+datatype QA (α : Type u)
   | nil
   | mk (a : α) (p : QA α × QB α)
-data QB (α : Type u)
+datatype QB (α : Type u)
   | mk (a : α) (q : QA α)
 end
 
@@ -385,7 +385,7 @@ info: @QA.Poly.map_mk : ∀ {H : Type u_2 → Type u_1} {H' : Type u_3 → Type 
 #guard_msgs(whitespace := lax) in
 #check @QA.Poly.map_mk
 
-data ThroughQB
+datatype ThroughQB
   | leaf
   | mk (q : QB ThroughQB)
 
@@ -407,10 +407,10 @@ example : (ThroughQB.mk (.mk .leaf .nil)).size = 2 := by
   simp [ThroughQB.size, QB.sum]
 
 mutual
-data SA (α : Type u)
+datatype SA (α : Type u)
   | nil
   | mk (a : α) (p : SA α ⊕ SB α)
-data SB (α : Type u)
+datatype SB (α : Type u)
   | mk (q : SA α)
 end
 
@@ -418,10 +418,10 @@ example (x a : Nat) : PolyIso.Mem SA x (.mk a (.inr (.mk .nil))) ↔ x = a := by
   simp
 
 mutual
-data NA (α : Type u)
+datatype NA (α : Type u)
   | nil
   | mk (p : List (NA α) × NB α)
-data NB (α : Type u)
+datatype NB (α : Type u)
   | mk (a : α) (q : NA α)
 end
 
@@ -436,7 +436,7 @@ on them, is split through its products and sums as in a block: the rules of the 
 membership are then stated with its components, each at the type at its index, rather than
 through the indexed structure (`IOcc.map`, `IPolyIso.Mem` at an index). -/
 
-data Chain2 (α : Type u) : Nat → Type u
+datatype Chain2 (α : Type u) : Nat → Type u
   | leaf {n : Nat} (a : α) : Chain2 α n
   | link {n : Nat} (p : Chain2 α n × Chain2 α (n + 1)) : Chain2 α (n + 2)
 
@@ -465,7 +465,7 @@ product only after cases on the position (`T n × T n`, `T n × Nat`), the recur
 by `PolyIso.Mem` at that index, as at one index at variables: the hypothesis at the positions is
 brought to that index by cases on them. -/
 
-data Twin : Nat → Type
+datatype Twin : Nat → Type
   | leaf {n : Nat} : Twin n
   | node {n : Nat} (p : Twin n × Twin n) : Twin (n + 1)
 
@@ -497,7 +497,7 @@ theorem Twin.ind (P : ∀ n, Twin n → Prop) (hl : ∀ n, P n .leaf)
     simp at ih
     exact hn _ p.1 p.2 ih.1 ih.2
 
-data TwinL : Nat → Type
+datatype TwinL : Nat → Type
   | leaf {n : Nat} : TwinL n
   | node {n : Nat} (p : List (TwinL n × TwinL n)) : TwinL (n + 1)
 
@@ -513,10 +513,10 @@ info: @TwinL.rec : {motive : (j₁ : ℕ) → TwinL j₁ → Sort u_1} →
 #check @TwinL.rec
 
 mutual
-data BA
+datatype BA
   | nil
   | mk (p : BA × Nat)
-data BB
+datatype BB
   | mk (a : BA)
 end
 
@@ -544,11 +544,11 @@ The recursor's hypothesis is stated with the instance that instance search finds
 `fun X => Vec (List X) 2`, `Vec`'s at the premise `List`, so a hypothesis written by hand is the
 recursor's. -/
 
-data Vec (α : Type u) : Nat → Type u
+datatype Vec (α : Type u) : Nat → Type u
   | nil : Vec α 0
   | cons {n : Nat} (a : α) (t : Vec α n) : Vec α (n + 1)
 
-data VLst
+datatype VLst
   | leaf
   | node (cs : Vec (List VLst) 2)
 
@@ -574,7 +574,7 @@ example : (VLst.node (.cons [.leaf, .leaf] (.cons [.leaf] .nil))).size = 4 := by
   simp [VLst.size]
 
 -- In a family, at the index of the family.
-data FV : Nat → Type
+datatype FV : Nat → Type
   | leaf : FV 0
   | node {n : Nat} (cs : Vec (List (FV n)) 2) : FV (n + 1)
 

@@ -30,7 +30,7 @@ noncomputable section
 
 /-! ### A family with a product of occurrences at two indices -/
 
-data Chain : Nat → Type
+datatype Chain : Nat → Type
   | zero : Chain 0
   | one : Chain 1
   | link {n : Nat} (p : Chain n × Chain (n + 1)) : Chain (n + 2)
@@ -57,7 +57,7 @@ theorem Chain.ind (P : ∀ n, Chain n → Prop) (h0 : P 0 .zero) (h1 : P 1 .one)
     guard_hyp ih :ₛ P n p.1 ∧ P (n + 1) p.2
     exact hl _ p.1 p.2 ih.1 ih.2
 
-data Chain3 : Nat → Type
+datatype Chain3 : Nat → Type
   | zero : Chain3 0
   | one : Chain3 1
   | two : Chain3 2
@@ -72,7 +72,7 @@ example (P : ∀ n, Chain3 n → Prop) (n : Nat) (p : Chain3 n × Chain3 (n + 1)
   guard_hyp ih :ₛ P n p.1 ∧ P (n + 1) p.2.1 ∧ P (n + 2) p.2.2
   exact ih
 
-data ChainL : Nat → Type
+datatype ChainL : Nat → Type
   | zero : ChainL 0
   | link {n : Nat} (p : List (ChainL n) × ChainL (n + 1)) : ChainL (n + 2)
 
@@ -95,7 +95,7 @@ theorem ChainL.ind (P : ∀ n, ChainL n → Prop) (h0 : P 0 .zero)
 function also where it is not applied (`Occ.map_hole_hole`, `IOcc.map_hole_hole`): the map of a
 list field is `List.map f`. -/
 
-data PL (α : Type u)
+datatype PL (α : Type u)
   | mk (l : List α)
 
 example (f : Nat → Nat) (l : List Nat) (x : PL Nat) (h : PL.mk (l.map f) = x) :
@@ -114,11 +114,11 @@ example {X Y : Nat → Type} (f : ∀ j, X j → Y j) (n : Nat) (l : List (X n))
 
 /-! ### A built-in form in an argument of a leaf other than its last -/
 
-data E (α β : Type u)
+datatype E (α β : Type u)
   | l (a : α)
   | r (b : β)
 
-data EProd
+datatype EProd
   | leaf
   | mk (p : E (EProd × Nat) Nat)
 
@@ -152,7 +152,7 @@ example (t a : EProd) (n : Nat) : PolyIso.Mem (fun X => E (X × Nat) Nat) t (.l 
   simp
 
 -- With the type in both arguments, as before.
-data EProdBoth
+datatype EProdBoth
   | leaf
   | mk (p : E (EProdBoth × Nat) EProdBoth)
 
@@ -166,7 +166,7 @@ example : (EProdBoth.mk (.l (.mk (.r .leaf), 2))).size = 5 := by
 
 /-! ### A parameter with the type under a named type constructor -/
 
-codata S (α : Type u)
+codatatype S (α : Type u)
   | mk (p : List (α × S α))
 
 /-- info: S.Poly.instPolyIsoEta -/
@@ -218,7 +218,7 @@ example (x a : Nat) : PolyIso.Mem S x (S.const a) ↔ x = a ∨ PolyIso.Mem S x 
   simp
 
 -- Nesting through it: the rules of the outer type map through `S`'s.
-data ThroughS
+datatype ThroughS
   | leaf
   | mk (s : S ThroughS)
 
@@ -232,7 +232,7 @@ example : (ThroughS.mk (.mk [(.leaf, .mk []), (.mk (.mk []), .mk [])])).size = 3
 
 /-! ### A parameter with the type under a function -/
 
-data FPair (α : Type u)
+datatype FPair (α : Type u)
   | leaf
   | mk (k : Nat → α × FPair α)
 
@@ -256,9 +256,9 @@ parameter for the trees in the same field as the forests' own recursion, under `
 namespace ListPair
 
 mixed_mutual
-codata Tree (α : Type u)
+codatatype Tree (α : Type u)
   | node (a : α) (children : Forest α)
-data Forest (α : Type u)
+datatype Forest (α : Type u)
   | nil
   | cons (p : List (Tree α × Forest α))
 end
