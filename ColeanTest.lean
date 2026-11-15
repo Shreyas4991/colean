@@ -19,7 +19,6 @@ import ColeanTest.FinTree
 import ColeanTest.FinVec
 import ColeanTest.LeT
 import ColeanTest.Nat
-import ColeanTest.WType
 import ColeanTest.Rose
 import ColeanTest.FinRose
 import ColeanTest.OccNest

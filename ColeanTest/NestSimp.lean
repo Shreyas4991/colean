@@ -153,7 +153,7 @@ datatype Vec (α : Type u) : Nat → Type u
 
 /--
 info: @Vec.Colean.Poly.map_cons : ∀ {H : Type u_2 → Type u_1} {H' : Type u_3 → Type u_6} {S : Type u_4} {R : S → Type u_5}
-  [inst : PolyIso H S R] [inst' : PolyIso H' S R] {X : Type u_2} {Y : Type u_3} (f : X → Y) {n : ℕ} (a : H X)
+  [inst : PolyIso H S R] [inst' : PolyIso H' S R] {X : Type u_2} {Y : Type u_3} (f : X → Y) {n : Nat} (a : H X)
   (t : Vec (H X) n),
   (Occ.ofIso fun X => Vec (H X) (n + 1)).map (Occ.ofIso fun X => Vec (H' X) (n + 1)) f (Vec.cons a t) =
     Vec.cons ((Occ.ofIso H).map (Occ.ofIso H') f a)
@@ -164,7 +164,7 @@ info: @Vec.Colean.Poly.map_cons : ∀ {H : Type u_2 → Type u_1} {H' : Type u_3
 
 /--
 info: @Vec.Colean.Poly.mem_cons : ∀ {H : Type u_2 → Type u_1} {S : Type u_3} {R : S → Type u_4} [inst : PolyIso H S R] {X : Type u_2}
-  (x : X) {n : ℕ} (a : H X) (t : Vec (H X) n),
+  (x : X) {n : Nat} (a : H X) (t : Vec (H X) n),
   PolyIso.Mem (fun X => Vec (H X) (n + 1)) x (Vec.cons a t) ↔ PolyIso.Mem H x a ∨ PolyIso.Mem (fun X => Vec (H X) n) x t
 -/
 #guard_msgs(whitespace := lax) in

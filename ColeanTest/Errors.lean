@@ -38,7 +38,7 @@ codatatype C3 : Type 3
 #check C3.mk
 
 /--
-error: `I` is declared with sort `ℕ → Prop` but defined with sort `ℕ → Type`: these commands define types, not propositions; write `ℕ → Type`, or `Type _` to leave the universe to the command
+error: `I` is declared with sort `Nat → Prop` but defined with sort `Nat → Type`: these commands define types, not propositions; write `Nat → Type`, or `Type _` to leave the universe to the command
 -/
 #guard_msgs in
 codatatype I : Nat → Prop

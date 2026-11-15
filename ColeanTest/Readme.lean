@@ -28,7 +28,7 @@ theorem Stream.map_comp {α β γ : Type} (f : α → β) (g : β → γ) (s : S
   -- coinductive step
   cases s with | cons h t => -- `cases` works with `codatatype`
   simp [map]
-  use t
+  exists t
 
 -- An easier way to define corecursive functions is to use Lean's `partial_fixpoint`:
 

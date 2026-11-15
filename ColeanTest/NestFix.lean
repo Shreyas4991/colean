@@ -90,7 +90,7 @@ end
 
 example (x : Nat) (p : List (Nat ⊕ SA Nat)) :
     PolyIso.Mem SA x (.mk p) ↔ Sum.inl x ∈ p ∨ ∃ t, Sum.inr t ∈ p ∧ PolyIso.Mem SA x t := by
-  simp
+  simp [Sum.exists]
 
 /-! ### 2. `PolyMap` premises -/
 
@@ -123,7 +123,7 @@ datatype W1
 -- No map between `E` at two premises with the same shapes.
 /--
 error: failed to synthesize
-  PolyMap (fun X => E (List X) ℕ) fun X => E (Array X) ℕ
+  PolyMap (fun X => E (List X) Nat) fun X => E (Array X) Nat
 
 Hint: Additional diagnostic information may be available using the `set_option diagnostics true` command.
 -/
@@ -142,12 +142,12 @@ datatype FS (α : Type) : Nat → Type
 
 /--
 info: @FS.rec : {α : Type} →
-  {motive : (j₁ : ℕ) → FS α j₁ → Sort u_1} →
+  {motive : (j₁ : Nat) → FS α j₁ → Sort u_1} →
     motive 0 FS.z →
-      ({n : ℕ} →
+      ({n : Nat} →
           (p : FS α n ⊕ FS α n) →
             ((t : FS α n) → PolyIso.Mem (fun X => X ⊕ X) t p → motive n t) → motive (n + 1) (FS.s p)) →
-        {i₁ : ℕ} → (t : FS α i₁) → motive i₁ t
+        {i₁ : Nat} → (t : FS α i₁) → motive i₁ t
 -/
 #guard_msgs in
 #check @FS.rec
@@ -201,7 +201,7 @@ example {α : Type} (P : ∀ n, FS₄ α n → Prop) (h0 : P 0 .z)
   induction t with
   | z => exact h0
   | @s n p ih =>
-    simp at ih
+    simp [Sum.forall] at ih
     guard_hyp ih :ₛ (∀ a, Sum.inl a ∈ p → P n a) ∧ ∀ b, Sum.inr b ∈ p → P n b
     exact hs _ p ih.1 ih.2
 
@@ -213,7 +213,7 @@ datatype FP (α : Type u) : Nat → Type u
 
 /--
 info: @FP.Colean.Poly.mem_s : ∀ {H : Type u_2 → Type u_1} {S : Type u_3} {R : S → Type u_4} [inst : PolyIso H S R] {X : Type u_2}
-  (x : X) {n : ℕ} (a : H X) (p : List (FP (H X) n × FP (H X) n)),
+  (x : X) {n : Nat} (a : H X) (p : List (FP (H X) n × FP (H X) n)),
   PolyIso.Mem (fun X => FP (H X) (n + 1)) x (FP.s a p) ↔
     PolyIso.Mem H x a ∨ ∃ p₀ t, IPolyIso.Mem (fun X => List (X n × X n)) p₀ t p ∧ PolyIso.Mem (fun X => FP (H X) p₀) x t
 -/
@@ -462,9 +462,9 @@ end
 
 /--
 info: @CA.Colean.Poly.mem_mk : ∀ {H : Type u_2 → Type u_1} {S : Type u_3} {R : S → Type u_4} [inst : PolyIso H S R] {X : Type u_2}
-  (x : X) (a : H X) (p : List (CA (H X) × ℕ)),
+  (x : X) (a : H X) (p : List (CA (H X) × Nat)),
   PolyIso.Mem (fun X => CA (H X)) x (CA.mk a p) ↔
-    PolyIso.Mem H x a ∨ ∃ t, PolyIso.Mem (fun X => List (X × ℕ)) t p ∧ PolyIso.Mem (fun X => CA (H X)) x t
+    PolyIso.Mem H x a ∨ ∃ t, PolyIso.Mem (fun X => List (X × Nat)) t p ∧ PolyIso.Mem (fun X => CA (H X)) x t
 -/
 #guard_msgs(whitespace := lax) in
 #check @CA.Colean.Poly.mem_mk
@@ -476,7 +476,7 @@ datatype HX (α : Type u)
 
 /--
 info: @HX.Colean.Poly.mem_mk : ∀ {H₀ : Type u_2 → Type u_1} {S : Type u_3} {R : S → Type u_4} [inst : PolyIso H₀ S R] {X₀ : Type u_2}
-  (x : X₀) (H : H₀ X₀) (X : List (HX (H₀ X₀))) (t : ℕ),
+  (x : X₀) (H : H₀ X₀) (X : List (HX (H₀ X₀))) (t : Nat),
   PolyIso.Mem (fun X => HX (H₀ X)) x (HX.mk H X t) ↔
     PolyIso.Mem H₀ x H ∨ ∃ t₀, PolyIso.Mem (fun X => List X) t₀ X ∧ PolyIso.Mem (fun X => HX (H₀ X)) x t₀
 -/
@@ -530,7 +530,7 @@ example (x : Nat) {n : Nat} (p : List (FS₄ Nat n ⊕ FS₄ Nat n)) :
     PolyIso.Mem (fun X => FS₄ X (n + 1)) x (.s p) ↔
       (∃ a, Sum.inl a ∈ p ∧ PolyIso.Mem (fun X => FS₄ X n) x a) ∨
         ∃ b, Sum.inr b ∈ p ∧ PolyIso.Mem (fun X => FS₄ X n) x b := by
-  simp
+  simp [Sum.exists]
 
 -- Some member of a functor on families with a lemma of its own (`Both.mem`), and at holes
 -- directly.

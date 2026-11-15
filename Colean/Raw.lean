@@ -1,5 +1,4 @@
 import Init.Internal.Order.Basic
-import Mathlib.Data.Nat.Notation
 
 /-!
 # (Co)inductive types as subtypes of one general type
@@ -23,7 +22,7 @@ are equal (`Raw.eq_of_bisim`), again by induction on paths, so bisimulation proo
 subtypes come for free.
 
 The index type `I` is the branching type, and nothing requires it to be countable (`ITree.lean`
-branches over `ℝ`). Constructors with finitely many recursive arguments use `I = ℕ` and
+branches over `ℝ`). Constructors with finitely many recursive arguments use `I = Nat` and
 `Raw.node l [t₁, …, tₖ]`: a `some` root carrying the constructor's non-recursive data `l`,
 children `t₁, …, tₖ` for the recursive arguments, and `Raw.empty` at every other index (this last
 convention is what makes `Raw.node` injective).
@@ -188,33 +187,33 @@ theorem corec_unique (f : S → Option L × (I → S)) (g : S → Raw I L)
 /-! ### Finitely many children, indexed by naturals
 
 A constructor with non-recursive data `l` and recursive arguments `t₁, …, tₖ` is encoded as
-`node l [t₁, …, tₖ]` in `Raw ℕ L`. -/
+`node l [t₁, …, tₖ]` in `Raw Nat L`. -/
 
 section Nat
 
 variable {L : Type v} {S : Type w}
 
 /-- A node with a label and a finite list of children; the remaining children are `empty`. -/
-def node (l : L) (cs : List (Raw ℕ L)) : Raw ℕ L := mk (some l) fun i => cs.getD i empty
+def node (l : L) (cs : List (Raw Nat L)) : Raw Nat L := mk (some l) fun i => cs.getD i empty
 
-@[simp] theorem root_node (l : L) (cs : List (Raw ℕ L)) : (node l cs).root = some l := rfl
-@[simp] theorem child_node (l : L) (cs : List (Raw ℕ L)) (i : ℕ) :
+@[simp] theorem root_node (l : L) (cs : List (Raw Nat L)) : (node l cs).root = some l := rfl
+@[simp] theorem child_node (l : L) (cs : List (Raw Nat L)) (i : Nat) :
     (node l cs).child i = cs.getD i empty := rfl
 
-@[simp] theorem node_ne_empty (l : L) (cs : List (Raw ℕ L)) : node l cs ≠ empty := by
+@[simp] theorem node_ne_empty (l : L) (cs : List (Raw Nat L)) : node l cs ≠ empty := by
   intro h; simpa using congrArg root h
 
-theorem node_inj_left {l l' : L} {cs cs' : List (Raw ℕ L)} (h : node l cs = node l' cs') :
+theorem node_inj_left {l l' : L} {cs cs' : List (Raw Nat L)} (h : node l cs = node l' cs') :
     l = l' := by
   simpa using congrArg root h
 
-theorem node_inj_child {l l' : L} {cs cs' : List (Raw ℕ L)} (h : node l cs = node l' cs')
-    (i : ℕ) : cs.getD i empty = cs'.getD i empty := by
+theorem node_inj_child {l l' : L} {cs cs' : List (Raw Nat L)} (h : node l cs = node l' cs')
+    (i : Nat) : cs.getD i empty = cs'.getD i empty := by
   simpa using congrArg (child · i) h
 
 /-- A tree whose root is `some l` is `node l` of its first `k` children, for any `k` such that
 all later children are `empty`. -/
-theorem eq_node_of_root {t : Raw ℕ L} {l : L} (hr : t.root = some l) (k : ℕ)
+theorem eq_node_of_root {t : Raw Nat L} {l : L} (hr : t.root = some l) (k : Nat)
     (hk : ∀ i, k ≤ i → t.child i = empty) :
     t = node l ((List.range k).map t.child) := by
   refine ext_root_child (by simpa using hr) fun i => ?_
@@ -225,13 +224,13 @@ theorem eq_node_of_root {t : Raw ℕ L} {l : L} (hr : t.root = some l) (k : ℕ)
     exact hk i (by omega)
 
 /-- The coalgebra on `Option S` underlying `corecList`: `none` is the state of `empty`. -/
-def listCoalg (f : S → L × List S) : Option S → Option L × (ℕ → Option S)
+def listCoalg (f : S → L × List S) : Option S → Option L × (Nat → Option S)
   | none => (none, fun _ => none)
   | some s => (some (f s).1, fun i => (f s).2[i]?)
 
 /-- Corecursion for user types: a coalgebra `S → L × List S` describes, for each state, the
 constructor label and the states of its recursive arguments. The absent children are `empty`. -/
-def corecList (f : S → L × List S) (s : S) : Raw ℕ L := corec (listCoalg f) (some s)
+def corecList (f : S → L × List S) (s : S) : Raw Nat L := corec (listCoalg f) (some s)
 
 theorem corec_listCoalg_none (f : S → L × List S) : corec (listCoalg f) none = empty :=
   eq_of_bisim (R := fun t₁ t₂ => t₁ = corec (listCoalg f) none ∧ t₂ = empty)

@@ -34,6 +34,8 @@ structure at that index being the plain one in `Y` alone, which holds by unfoldi
 (`AgreeY.ofOcc₂`).
 -/
 
+open Colean
+
 universe u u' u'' w w' w'' v v' v'' s s' p p' q q' a r r' t t' j i
 
 namespace Codata

@@ -1,7 +1,8 @@
-import Mathlib.Logic.Equiv.Defs
 import Colean.DataCmd
 
 /-! # Test: `datatype` with no parameters, the naturals -/
+
+open Colean
 
 namespace DataTest
 

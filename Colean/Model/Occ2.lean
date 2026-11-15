@@ -36,6 +36,8 @@ the other. There the rules state membership by `MemX` and `MemY`, which `simp` c
 the combinators. The indexed version, for families and blocks, is `Model/IOcc2.lean`.
 -/
 
+open Colean
+
 universe u u' u'' w w' w'' v v' v'' s s' p p' q q' a r r' t t'
 
 namespace Codata

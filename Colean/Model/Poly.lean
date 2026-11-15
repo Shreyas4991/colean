@@ -25,6 +25,8 @@ slots (`IPath`). It is derived from the first part on the total spaces `Σ i, T 
 is a plain one whose shapes carry their index; the plain case is not an instance of it.
 -/
 
+open Colean
+
 universe s p b x x' y y' w t t' st
 
 namespace Codata
@@ -361,7 +363,7 @@ noncomputable def coFix (d : T → Lay P B X T)
   fill a c := corec (St := Σ a, Path P (coTree B) a → X)
     (fun z => ⟨((coTree B).d z.1).1, fun q => z.2 (.here q), fun i => ⟨_, fun r => z.2 (.there i r)⟩⟩)
     ⟨a, c⟩
-  d_fill a c := d_corec _ _
+  d_fill _ _ := d_corec _ _
 
 /-- The bisimulation principle of a layer destructor, from a contract. -/
 theorem co_bisim {F : Type t → Type t} (K : Contract (fun _ : Unit => T) (fun Y _ => F (Y ())))

@@ -1,4 +1,3 @@
-import Mathlib.Tactic.Conv
 import Colean.CodataCmd
 
 /-! Conatural numbers: case analysis with the generated eliminator, and the simp lemmas. -/
@@ -16,7 +15,7 @@ def CoNat.top : CoNat :=
 
 theorem top_unfold : CoNat.top = .succ CoNat.top := by
   rw [CoNat.top]
-  conv_lhs => rw [CoNat.corec_eq]
+  conv => lhs; rw [CoNat.corec_eq]
   rfl
 
 def CoNat.ofNat (n : Nat) : CoNat :=

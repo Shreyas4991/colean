@@ -68,7 +68,7 @@ datatype OTree
 
 /--
 info: @OTree.rec : {motive : OTree → Sort u_1} →
-  ((n : ℕ) →
+  ((n : Nat) →
       (l r : Option OTree) →
         ((t : OTree) → t ∈ l → motive t) → ((t : OTree) → t ∈ r → motive t) → motive (OTree.node n l r)) →
     (t : OTree) → motive t
@@ -126,10 +126,10 @@ datatype Weighted
 
 /--
 info: @Weighted.rec : {motive : Weighted → Sort u_1} →
-  ((n : ℕ) → motive (Weighted.leaf n)) →
-    ((l r : Weighted × ℕ) →
-        ((t : Weighted) → PolyIso.Mem (fun X => X × ℕ) t l → motive t) →
-          ((t : Weighted) → PolyIso.Mem (fun X => X × ℕ) t r → motive t) → motive (Weighted.node l r)) →
+  ((n : Nat) → motive (Weighted.leaf n)) →
+    ((l r : Weighted × Nat) →
+        ((t : Weighted) → PolyIso.Mem (fun X => X × Nat) t l → motive t) →
+          ((t : Weighted) → PolyIso.Mem (fun X => X × Nat) t r → motive t) → motive (Weighted.node l r)) →
       (t : Weighted) → motive t
 -/
 #guard_msgs in
@@ -167,7 +167,7 @@ datatype FTree
 
 /--
 info: @FTree.rec : {motive : FTree → Sort u_1} →
-  ((n : ℕ) →
+  ((n : Nat) →
       (cs : Forest FTree) →
         ((t : FTree) → PolyIso.Mem (fun X => Forest X) t cs → motive t) → motive (FTree.node n cs)) →
     (t : FTree) → motive t
@@ -193,10 +193,10 @@ datatype LT : Nat → Type
   | node {n : Nat} (cs : List (LT n)) : LT (n + 1)
 
 /--
-info: @LT.rec : {motive : (j₁ : ℕ) → LT j₁ → Sort u_1} →
+info: @LT.rec : {motive : (j₁ : Nat) → LT j₁ → Sort u_1} →
   motive 0 LT.leaf →
-    ({n : ℕ} → (cs : List (LT n)) → ((t : LT n) → t ∈ cs → motive n t) → motive (n + 1) (LT.node cs)) →
-      {i₁ : ℕ} → (t : LT i₁) → motive i₁ t
+    ({n : Nat} → (cs : List (LT n)) → ((t : LT n) → t ∈ cs → motive n t) → motive (n + 1) (LT.node cs)) →
+      {i₁ : Nat} → (t : LT i₁) → motive i₁ t
 -/
 #guard_msgs in
 #check @LT.rec
@@ -236,13 +236,13 @@ datatype Chain : Nat → Type
   | link {n : Nat} (p : Chain n × Chain (n + 1)) : Chain (n + 2)
 
 /--
-info: @Chain.rec : {motive : (j₁ : ℕ) → Chain j₁ → Sort u_1} →
+info: @Chain.rec : {motive : (j₁ : Nat) → Chain j₁ → Sort u_1} →
   motive 0 Chain.zero →
-    ({n : ℕ} →
+    ({n : Nat} →
         (p : Chain n × Chain (n + 1)) →
-          ((j₁ : ℕ) → (t : Chain j₁) → IPolyIso.Mem (fun X => X n × X (n + 1)) j₁ t p → motive j₁ t) →
+          ((j₁ : Nat) → (t : Chain j₁) → IPolyIso.Mem (fun X => X n × X (n + 1)) j₁ t p → motive j₁ t) →
             motive (n + 2) (Chain.link p)) →
-      {i₁ : ℕ} → (t : Chain i₁) → motive i₁ t
+      {i₁ : Nat} → (t : Chain i₁) → motive i₁ t
 -/
 #guard_msgs in
 #check @Chain.rec
@@ -269,7 +269,7 @@ end
 /--
 info: @Tm.rec : {motive_1 : Tm → Sort u_1} →
   {motive_2 : Bd → Sort u_1} →
-    ((n : ℕ) → motive_1 (Tm.num n)) →
+    ((n : Nat) → motive_1 (Tm.num n)) →
       ((args : List Tm) → ((t : Tm) → t ∈ args → motive_1 t) → motive_1 (Tm.add args)) →
         ((b : Bd) → (body : Tm) → motive_2 b → motive_1 body → motive_1 (Tm.bind b body)) →
           ((val : Option Tm) → ((t : Tm) → t ∈ val → motive_1 t) → motive_2 (Bd.mk val)) → (t : Tm) → motive_1 t

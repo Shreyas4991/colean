@@ -155,22 +155,22 @@ codatatype Vec (α : Type u) : Nat → Type u
   | nil : Vec α 0
   | cons {n : Nat} (a : α) (v : Vec α n) : Vec α (n + 1)
 
-/-- info: @Vec.F.rel_cons_cons : ∀ {α : Type u_1} {X : ℕ → Type u_2} {Y : ℕ → Type u_3} {R : (j₁ : ℕ) → X j₁ → Y j₁ → Prop}
-  {n : ℕ} (a : α) (v : X n) (a' : α) (v' : Y n), Vec.F.Rel R (Vec.F.cons a v) (Vec.F.cons a' v') ↔ a = a' ∧ R n v v' -/
+/-- info: @Vec.F.rel_cons_cons : ∀ {α : Type u_1} {X : Nat → Type u_2} {Y : Nat → Type u_3} {R : (j₁ : Nat) → X j₁ → Y j₁ → Prop}
+  {n : Nat} (a : α) (v : X n) (a' : α) (v' : Y n), Vec.F.Rel R (Vec.F.cons a v) (Vec.F.cons a' v') ↔ a = a' ∧ R n v v' -/
 #guard_msgs in #check @Vec.F.rel_cons_cons
 
 -- `nil` and `cons` never meet: no lemma for them.
 /-- error: Unknown constant `RelSimpTest.Vec.F.rel_nil_cons` -/
 #guard_msgs in #check @Vec.F.rel_nil_cons
 
-/-- info: @Vec.dtor_eq_cons_iff : ∀ {α : Type u_1} {n : ℕ} {a : α} {v : Vec α n} {t : Vec α (n + 1)},
+/-- info: @Vec.dtor_eq_cons_iff : ∀ {α : Type u_1} {n : Nat} {a : α} {v : Vec α n} {t : Vec α (n + 1)},
   t.dtor = Vec.F.cons a v ↔ t = Vec.cons a v -/
 #guard_msgs in #check @Vec.dtor_eq_cons_iff
 
 codatatype P : Nat → Type
   | mk (n : Nat) (t : P n) : P (n * 2)
 
-/-- info: @P.F.rel_mk_mk : ∀ {X : ℕ → Type u_1} {Y : ℕ → Type u_2} {R : (j₁ : ℕ) → X j₁ → Y j₁ → Prop} (n : ℕ) (t : X n)
+/-- info: @P.F.rel_mk_mk : ∀ {X : Nat → Type u_1} {Y : Nat → Type u_2} {R : (j₁ : Nat) → X j₁ → Y j₁ → Prop} (n : Nat) (t : X n)
   (t' : Y n), P.F.Rel R (P.F.mk n t) (P.F.mk n t') ↔ R n t t' -/
 #guard_msgs in #check @P.F.rel_mk_mk
 
@@ -185,12 +185,12 @@ codatatype Lad : Nat → Type
   | stop (n : Nat) : Lad n
   | step {n : Nat} (t : Lad n) : Lad (n + 1)
 
-/-- info: @Lad.F.rel_stop_step : ∀ {X : ℕ → Type u_1} {Y : ℕ → Type u_2} {R : (j₁ : ℕ) → X j₁ → Y j₁ → Prop} {n' : ℕ} (t' : Y n'),
-  Lad.F.Rel R (Lad.F.stop (n' + 1)) (Lad.F.step t') ↔ False -/
+/-- info: @Lad.F.rel_stop_step : ∀ {X : Nat → Type u_1} {Y : Nat → Type u_2} {R : (j₁ : Nat) → X j₁ → Y j₁ → Prop} {n' : Nat}
+  (t' : Y n'), Lad.F.Rel R (Lad.F.stop (n' + 1)) (Lad.F.step t') ↔ False -/
 #guard_msgs in #check @Lad.F.rel_stop_step
 
-/-- info: @Lad.F.rel_step_stop : ∀ {X : ℕ → Type u_1} {Y : ℕ → Type u_2} {R : (j₁ : ℕ) → X j₁ → Y j₁ → Prop} {n : ℕ} (t : X n),
-  Lad.F.Rel R (Lad.F.step t) (Lad.F.stop (n + 1)) ↔ False -/
+/-- info: @Lad.F.rel_step_stop : ∀ {X : Nat → Type u_1} {Y : Nat → Type u_2} {R : (j₁ : Nat) → X j₁ → Y j₁ → Prop} {n : Nat}
+  (t : X n), Lad.F.Rel R (Lad.F.step t) (Lad.F.stop (n + 1)) ↔ False -/
 #guard_msgs in #check @Lad.F.rel_step_stop
 
 /-! ### Nested through `List`, `Option` and a product -/
@@ -212,7 +212,8 @@ theorem Rose.map_node {α : Type u} {β : Type v} (f : α → β) (a : α) (cs :
   apply Rose.dtor_injective
   simp [Rose.map, Rose.dtor_corec]
 
--- The premise of the step becomes `List.Forall₂`, and Mathlib's lemmas about it finish.
+-- The premise of the step becomes `Colean.List.Forall₂`, and the lemmas about it (Mathlib's, in
+-- `Colean/Dependencies/`) finish.
 example {α β γ : Type u} (f : α → β) (g : β → γ) (t : Rose α) :
     (t.map f).map g = t.map (g ∘ f) := by
   refine Rose.bisim (fun x y => ∃ t, x = (t.map f).map g ∧ y = t.map (g ∘ f)) ?_ ⟨t, rfl, rfl⟩
@@ -248,7 +249,7 @@ example {α : Type u} {X Y : Type v} (R : X → Y → Prop) (a : α) (x₁ x₂ 
     Bin.F.Rel R (.node a (x₁, x₂)) (.node a (y₁, y₂)) := by
   simp [h₁, h₂]
 
--- Through `Array`: `List.Forall₂` on the lists of the arrays (`Occ.rel_array`).
+-- Through `Array`: `Colean.List.Forall₂` on the lists of the arrays (`Occ.rel_array`).
 codatatype Proc (α : Type)
   | done
   | arr (ps : Array (Proc α))
@@ -258,7 +259,7 @@ example {α : Type} {X Y : Type} (R : X → Y → Prop) (a : X) (c : Y) :
   simp
 
 example {α : Type} {X Y : Type} (R : X → Y → Prop) (ps : Array X) (qs : Array Y) :
-    Proc.F.Rel (α := α) R (.arr ps) (.arr qs) ↔ List.Forall₂ R ps.toList qs.toList := by
+    Proc.F.Rel (α := α) R (.arr ps) (.arr qs) ↔ Colean.List.Forall₂ R ps.toList qs.toList := by
   simp
 
 /-! ### Nested through a declared type
@@ -334,14 +335,16 @@ def Tree.count {α : Type u} (a : α) (n : Nat) : Tree α :=
 def Forest.count {α : Type u} (a : α) (n : Nat) : Forest α :=
   Forest.corec (fun n => .node a (n + 1)) (fun n => .cons (n + 1) (n + 1)) n
 
--- `simp` closes both steps.
+-- `simp` reduces both steps to the next value of the counter.
 example {α : Type u} (a : α) (n : Nat) : Tree.full a = Tree.count a n := by
   refine Tree.bisim (fun x y => x = Tree.full a ∧ ∃ k, y = Tree.count a k)
     (fun x y => x = Forest.full a ∧ ∃ k, y = Forest.count a k) ?_ ?_ ⟨rfl, n, rfl⟩
   · rintro _ _ ⟨rfl, k, rfl⟩
     simp [Tree.full, Tree.count, Forest.full, Forest.count, Tree.dtor_corec]
+    exact ⟨_, rfl⟩
   · rintro _ _ ⟨rfl, k, rfl⟩
     simp [Tree.full, Tree.count, Forest.full, Forest.count, Forest.dtor_corec]
+    exact ⟨⟨_, rfl⟩, _, rfl⟩
 
 -- Unfolding through the destructor per type.
 example {α : Type u} (a : α) : Forest.full a = .cons (Tree.full a) (Forest.full a) := by
@@ -419,7 +422,8 @@ example {X Y : Type u} (R : X → Y → Prop) (x : X) (y : Y) (l : List X) (l' :
 
 example {X : Type u} (R : X → X → Prop) (f g : X → X) (l : List X) :
     (Occ.ofIso List).Rel (Occ.ofIso List) R (l.map f) (l.map g) ↔ ∀ x ∈ l, R (f x) (g x) := by
-  simp [List.forall₂_map_left_iff, List.forall₂_map_right_iff, List.forall₂_same]
+  simp [Colean.List.forall₂_map_left_iff, Colean.List.forall₂_map_right_iff,
+    Colean.List.forall₂_same]
 
 example {X Y : Type u} (R : X → Y → Prop) (k : Nat → Option X) (k' : Nat → Option Y) :
     (Occ.pi Nat fun _ => Occ.ofIso Option).Rel (Occ.pi Nat fun _ => Occ.ofIso Option) R k k' ↔

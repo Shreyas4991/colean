@@ -4,6 +4,8 @@ import Colean.DataCmd
 
 universe u
 
+open Colean
+
 namespace DataTest
 
 noncomputable section

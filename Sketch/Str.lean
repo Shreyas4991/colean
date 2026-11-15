@@ -1,3 +1,5 @@
+import Mathlib.Data.List.OfFn
+import Mathlib.Data.List.Forall2
 import Colean.Raw
 
 /-!

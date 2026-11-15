@@ -125,7 +125,8 @@ datatype EProd
 /--
 info: @EProd.rec : {motive : EProd → Sort u_1} →
   motive EProd.leaf →
-    ((p : E (EProd × ℕ) ℕ) → ((t : EProd) → PolyIso.Mem (fun X => E (X × ℕ) ℕ) t p → motive t) → motive (EProd.mk p)) →
+    ((p : E (EProd × Nat) Nat) →
+        ((t : EProd) → PolyIso.Mem (fun X => E (X × Nat) Nat) t p → motive t) → motive (EProd.mk p)) →
       (t : EProd) → motive t
 -/
 #guard_msgs in
@@ -210,11 +211,11 @@ def S.const {α : Type u} (a : α) : S α :=
   S.corec (S := Unit) (fun _ => .mk [(a, ())]) ()
 
 theorem S.const_eq {α : Type u} (a : α) : S.const a = .mk [(a, .const a)] := by
-  conv_lhs => rw [← S.ctor_dtor (S.const a), S.const, S.dtor_corec]
+  conv => lhs; rw [← S.ctor_dtor (S.const a), S.const, S.dtor_corec]
   simp [S.const]
 
 example (x a : Nat) : PolyIso.Mem S x (S.const a) ↔ x = a ∨ PolyIso.Mem S x (S.const a) := by
-  conv_lhs => rw [S.const_eq]
+  conv => lhs; rw [S.const_eq]
   simp
 
 -- Nesting through it: the rules of the outer type map through `S`'s.
@@ -275,7 +276,7 @@ def Tree.loop {α : Type u} (a : α) : Tree α :=
   Tree.corec (S := Unit) (fun _ => .node a (.cons [((), .nil)])) ()
 
 theorem Tree.loop_eq {α : Type u} (a : α) : Tree.loop a = .node a (.cons [(.loop a, .nil)]) := by
-  conv_lhs => rw [← Tree.ctor_dtor (Tree.loop a), Tree.loop, Tree.dtor_corec]
+  conv => lhs; rw [← Tree.ctor_dtor (Tree.loop a), Tree.loop, Tree.dtor_corec]
   simp [Tree.loop]
 
 example {α : Type u} (s t : Tree α) : t ∈ Forest.cons [(s, .nil), (t, .nil)] := by simp

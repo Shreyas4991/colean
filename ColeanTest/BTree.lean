@@ -1,4 +1,3 @@
-import Mathlib.Basic.Real.Basic
 import Colean.CodataCmd
 
 /-! Trees branching over an arbitrary type: a recursive argument under a function type whose
@@ -25,8 +24,10 @@ def BTree.const {I : Type u} {α : Type v} (a : α) : BTree I α :=
 example {I : Type u} {α : Type v} (a : α) :
     (BTree.const (I := I) a).dtor = .node a fun _ => BTree.const a := BTree.dtor_corec _ _
 
-/-- A tree with a child for every real number: the label at path `[r₁, …, rₙ]` is the sum. -/
-noncomputable def BTree.sums : BTree ℝ ℝ := BTree.corec (fun x => .node x fun r => x + r) 0
+/-- A tree with a child for every infinite sequence of bits: the label at path `[r₁, …, rₙ]` is
+their pointwise exclusive or. -/
+noncomputable def BTree.sums : BTree (Nat → Bool) (Nat → Bool) :=
+  BTree.corec (fun x => .node x fun r => fun n => x n ^^ r n) fun _ => false
 
 /-- Map on labels, by corecursion; `map id = id` by bisimulation and `cases`. -/
 def BTree.map {I : Type u} {α : Type v} {β : Type w} (f : α → β) (t : BTree I α) : BTree I β :=

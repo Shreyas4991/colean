@@ -5,7 +5,7 @@ import Colean.MutualCmd
 The occurrence structure of an argument type is built by recursion on its syntax: products,
 sums, functions and dependent pairs over constant types, and named type constructors (leaves).
 Here the shapes that no single container instance covered: `T × T`, `A → List T`,
-`Option (T × T)`, `T ⊕ A`, `(n : ℕ) × (Fin n → T)`, a function from a proposition, occurrences
+`Option (T × T)`, `T ⊕ A`, `(n : Nat) × (Fin n → T)`, a function from a proposition, occurrences
 at different indices in one argument, and a declared type nested through, by hand-written
 instances. -/
 
@@ -161,7 +161,7 @@ instance : Codata.PolyMap Two.{u} Two.{v} where
   map := Two.map
   equiv_map f t := by
     cases t with
-    | mk p => exact congrArg (Sigma.mk ()) (funext fun b => by cases b <;> simp [Equiv.coe_fn_mk, Codata.PolyIso.equiv])
+    | mk p => exact congrArg (Sigma.mk ()) (funext fun b => by cases b <;> simp [Colean.Equiv.coe_fn_mk, Codata.PolyIso.equiv])
 
 datatype Tree
   | leaf

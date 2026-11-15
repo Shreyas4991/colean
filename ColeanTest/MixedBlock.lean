@@ -75,7 +75,7 @@ def T.twice {α : Type u} (a : α) : T α :=
 
 theorem T.twice_eq {α : Type u} (a : α) :
     T.twice a = .node a (.node (.twice a) (.cons (.node (.twice a) .nil) .nil)) := by
-  conv_lhs => rw [← T.ctor_dtor (T.twice a), T.twice, T.dtor_corec]
+  conv => lhs; rw [← T.ctor_dtor (T.twice a), T.twice, T.dtor_corec]
   simp [T.twice]
 
 /-! A `datatype` run outside a block: its recursor's hypothesis through the block is by membership

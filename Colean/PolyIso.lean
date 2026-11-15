@@ -1,4 +1,4 @@
-import Mathlib.Data.List.OfFn
+import Colean.Dependencies
 
 /-!
 # Nesting through a functor
@@ -24,7 +24,8 @@ codatatype Stream' (α : Type u)
 ```
 
 * `PolyIso F Sh Pos` presents `F` as the polynomial functor with shapes `Sh` and positions `Pos`:
-  a bijection `F X ≃ Σ sh : Sh, (Pos sh → X)` for every `X`.
+  a bijection `F X ≃ Σ sh : Sh, (Pos sh → X)` for every `X`. It is a `Colean.Equiv`, Mathlib's
+  `Equiv` restated in core (`Dependencies/`), built as above by its anonymous constructor.
 * `PolyMap F F'` gives the intended action on functions and says that the bijections are natural
   with respect to it. Together the two classes state the isomorphism of functors.
 
@@ -60,6 +61,8 @@ every index, `fun X => T (H X) idx`. With them come
 (`T.Colean.Poly.map_c`) and for membership (`T.Colean.Poly.mem_c`), so that `simp` computes
 through them.
 -/
+
+open Colean
 
 universe u u' u'' v v' v'' w w' s s' p p' j k a
 
@@ -260,7 +263,8 @@ instance : PolyMap List.{u} List.{u'} where
   equiv_map f l := by
     refine List.equivSigmaTuple.symm.injective ?_
     change List.equivSigmaTuple.symm (List.equivSigmaTuple (l.map f)) = List.ofFn (f ∘ l.get)
-    rw [Equiv.symm_apply_apply, ← List.map_ofFn, List.ofFn_get]
+    rw [Equiv.symm_apply_apply, ← List.map_ofFn]
+    exact congrArg _ (List.equivSigmaTuple.symm_apply_apply l).symm
 
 /-- The positions of `Option`: one when the shape is `true`, none when it is `false`. -/
 inductive OptionPos : Bool → Type
@@ -1288,7 +1292,7 @@ member. For a family of functors with one presentation, so that `simp` finds the
 the composite from that of the instance. -/
 @[simp] theorem mem_compI {pidx : (sh : Sh) → Pos sh → K} {G : (K → Type u') → Type v}
     [IPolyIso G Sh Pos pidx] {Sh' : Type s'} {Pos' : Sh' → Type p'}
-    {pidx' : ∀ k (sh : Sh'), Pos' sh → J} {H : K → (J → Type u) → Type u'}
+    {pidx' : K → (sh : Sh') → Pos' sh → J} {H : K → (J → Type u) → Type u'}
     [∀ k, IPolyIso (H k) Sh' Pos' (pidx' k)] {X : J → Type u} (j : J) (x : X j)
     (c : G fun k => H k X) :
     Mem (fun X => G fun k => H k X) j x c ↔

@@ -1,3 +1,5 @@
+import Mathlib.Data.List.OfFn
+import Mathlib.Data.List.Forall2
 import Colean.MutualCmd
 
 /-!
@@ -640,7 +642,7 @@ instance (b : Bool) : PolyIso (fun X : Type u => Tagged X b) Unit (fun _ => Unit
 
 instance (b : Bool) : PolyMap (fun X : Type u => Tagged X b) (fun X : Type v => Tagged X b) where
   map f t := .mk (f t.val)
-  equiv_map f t := by simp [Equiv.coe_fn_mk, PolyIso.equiv, Poly.map]
+  equiv_map f t := by simp [Colean.Equiv.coe_fn_mk, PolyIso.equiv, Poly.map]
 
 datatype ThroughTagged
   | leaf
@@ -672,7 +674,7 @@ instance : PolyIso Hand.{u} Unit (fun _ => Unit) where
 
 instance : PolyMap Hand.{u} Hand.{v} where
   map f t := .mk (f t.val) .stop
-  equiv_map f t := by simp [Equiv.coe_fn_mk, PolyIso.equiv, Poly.map]
+  equiv_map f t := by simp [Colean.Equiv.coe_fn_mk, PolyIso.equiv, Poly.map]
 
 datatype ThroughHand
   | leaf

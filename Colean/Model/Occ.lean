@@ -1,4 +1,3 @@
-import Mathlib.Data.List.Forall2
 import Colean.PolyIso
 
 /-!
@@ -34,8 +33,9 @@ universe and `G'` at another (`List.{u}` and `List.{v}`): this is what keeps the
 and `fold` in any universe. The simp lemmas `map_list`, `map_prod`, `map_sum`, `map_comp`, …
 compute `map` through the combinators back to the usual maps (`List.map`, pairs, `Sum.map`,
 composition), the `rel_*` lemmas do the same for `Rel` (`rel_prod`, `rel_comp`, …, down to
-`List.Forall₂` and `Option.Rel` at the leaves, `List.Forall₂` of their lists for arrays, a map on either side moved into the relation,
-`rel_map_left`, and a value related to itself related at its members, `rel_self`), and
+`Colean.List.Forall₂` (Batteries' `List.Forall₂`, copied in `Dependencies/`) and `Option.Rel` at
+the leaves, `Colean.List.Forall₂` of their lists for arrays, a map on either side moved into the
+relation, `rel_map_left`, and a value related to itself related at its members, `rel_self`), and
 `forall_toC_*` turn "for every position" into membership or components; the members of a value
 (`Mem`) are computed by `simp` the same way. The instances of `PolyIso.lean` for products, sums,
 functions, dependent pairs and composites are these combinators by definition (`ofIso_prod`, …,
@@ -52,6 +52,8 @@ structure at a fixed index, `IOcc.reidx` and `Occ.ofI` reindex a family leaf, an
 the combinators as `Occ.map` (`IOcc.map_prod`, …), and the map of an indexed structure whose
 positions are all at one index is that of the plain one at that index (`IOcc.map_flat_sum`, …).
 -/
+
+open Colean
 
 universe u u' u'' v v' v'' w w' s s' p p' j k a
 
@@ -141,7 +143,7 @@ theorem exists_map_of_rel' {R : X → Y → Prop} {W : Type u''} (fst : W → X)
     (hR : ∀ x y, R x y → ∃ w, fst w = x ∧ snd w = y) {x : G X} {y : G' Y} (h : Rel o o' R x y) :
     ∃ z : G'' W, map o'' o fst z = x ∧ map o'' o' snd z = y := by
   obtain ⟨sh, c, c', hx, hy, hR'⟩ := h
-  choose w hw using fun q => hR _ _ (hR' q)
+  obtain ⟨w, hw⟩ := Classical.axiomOfChoice fun q => hR _ _ (hR' q)
   refine ⟨o''.ofC ⟨sh, w⟩, ?_, ?_⟩
   · rw [map_ofC, ← o.ofC_toC x, hx]
     exact congrArg (fun c => o.ofC ⟨sh, c⟩) (funext fun q => (hw q).1)
@@ -233,7 +235,7 @@ theorem exists_map_of_rel' {R : ∀ j, X j → Y j → Prop} {W : J → Type u''
     (hR : ∀ j x y, R j x y → ∃ w, fst j w = x ∧ snd j w = y) {x : G X} {y : G' Y}
     (h : Rel o o' R x y) : ∃ z : G'' W, map o'' o fst z = x ∧ map o'' o' snd z = y := by
   obtain ⟨sh, c, c', hx, hy, hR'⟩ := h
-  choose w hw using fun q => hR _ _ _ (hR' q)
+  obtain ⟨w, hw⟩ := Classical.axiomOfChoice fun q => hR _ _ _ (hR' q)
   refine ⟨o''.ofC ⟨sh, w⟩, ?_, ?_⟩
   · rw [map_ofC, ← o.ofC_toC x, hx]
     exact congrArg (fun c => o.ofC ⟨sh, c⟩) (funext fun q => (hw q).1)
@@ -789,7 +791,7 @@ theorem forall_toC_prod {P : X → Prop} (x : G₁ X × G₂ X) :
     Rel (const A) (const A) R a b ↔ a = b := by
   constructor
   · rintro ⟨sh, c, c', ha, hb, _⟩
-    exact (Sigma.mk.inj_iff.mp ha).1.trans (Sigma.mk.inj_iff.mp hb).1.symm
+    exact (Sigma.mk.inj ha).1.trans (Sigma.mk.inj hb).1.symm
   · rintro rfl
     exact ⟨a, Empty.elim, Empty.elim, rfl, rfl, fun q => q.elim⟩
 
@@ -1035,9 +1037,9 @@ end ExistsMem
 `Rel o o' R x y` says that the layers of `x` and `y` have one shape and related contents. Through
 `ofC` the two values are substituted away (`rel_iff_ofC`), and every combinator computes by
 definition: `simp` takes the relation through products, sums, functions and composites, down to the
-leaves, whose relations are the library's (`List.Forall₂`, `Option.Rel`), with the generated
-`T.Colean.Poly.rel_cᵢ_cⱼ` for a declared type. A map on either side moves into the relation, and a
-value related to itself is a relation at its members (`rel_self`). -/
+leaves, whose relations are the library's (`Colean.List.Forall₂`, `Option.Rel`), with the
+generated `T.Colean.Poly.rel_cᵢ_cⱼ` for a declared type. A map on either side moves into the
+relation, and a value related to itself is a relation at its members (`rel_self`). -/
 
 section RelGeneric
 
@@ -1078,7 +1080,7 @@ theorem Rel.mono (o : Occ Sh Pos G) (o' : Occ Sh Pos G') {R S : X → Y → Prop
   constructor
   · rintro ⟨sh, c, c', hx, hy, h⟩
     rw [toC_map] at hx
-    obtain ⟨rfl, hc⟩ := Sigma.mk.inj_iff.mp hx
+    obtain ⟨rfl, hc⟩ := Sigma.mk.inj hx
     cases hc
     exact ⟨_, _, c', rfl, hy, h⟩
   · rintro ⟨sh, c, c', hx, hy, h⟩
@@ -1092,7 +1094,7 @@ theorem Rel.mono (o : Occ Sh Pos G) (o' : Occ Sh Pos G') {R S : X → Y → Prop
   constructor
   · rintro ⟨sh, c, c', hx, hy, h⟩
     rw [toC_map] at hy
-    obtain ⟨rfl, hc⟩ := Sigma.mk.inj_iff.mp hy
+    obtain ⟨rfl, hc⟩ := Sigma.mk.inj hy
     cases hc
     exact ⟨_, c, _, hx, rfl, h⟩
   · rintro ⟨sh, c, c', hx, hy, h⟩
@@ -1106,7 +1108,7 @@ members. -/
     Rel o o R x x ↔ ∀ a, Mem o a x → R a a := by
   constructor
   · rintro ⟨sh, c, c', hx, hy, h⟩ a ⟨q, rfl⟩
-    have hc : c = c' := eq_of_heq (Sigma.mk.inj_iff.mp (hx.symm.trans hy)).2
+    have hc : c = c' := eq_of_heq (Sigma.mk.inj (hx.symm.trans hy)).2
     subst hc
     revert q
     rw [hx]
@@ -1184,9 +1186,11 @@ end RelForms
     obtain ⟨sh, c, c', hc, rfl, rfl⟩ := (rel_iff_ofC _ _).mp h
     exact rel_intro (o x) (o' x) (sh x) _ _ fun q => hc ⟨x, q⟩
   · intro h
-    choose sh c c' hc hk hk' using fun x => (rel_iff_ofC _ _).mp (h x)
+    obtain ⟨sh, h₁⟩ := Classical.axiomOfChoice fun x => (rel_iff_ofC _ _).mp (h x)
+    obtain ⟨c, h₂⟩ := Classical.axiomOfChoice h₁
+    obtain ⟨c', h₃⟩ := Classical.axiomOfChoice h₂
     exact (rel_iff_ofC _ _).mpr ⟨sh, fun q => c q.1 q.2, fun q => c' q.1 q.2,
-      fun q => hc q.1 q.2, funext hk, funext hk'⟩
+      fun q => (h₃ q.1).1 q.2, funext fun x => (h₃ x).2.1, funext fun x => (h₃ x).2.2⟩
 
 /-- A composite: the outer relation at the inner one. -/
 @[simp] theorem rel_comp {X : Type u} {Y : Type u'} {Sh : Type s} {Pos : Sh → Type p}
@@ -1201,14 +1205,16 @@ end RelForms
     exact rel_intro oG oG' sh _ _ fun q => rel_intro oH oH' (t q) _ _ fun r => hc ⟨q, r⟩
   · intro h
     obtain ⟨sh, c, c', hc, rfl, rfl⟩ := (rel_iff_ofC _ _).mp h
-    choose t d d' hd hdc hdc' using fun q => (rel_iff_ofC _ _).mp (hc q)
+    obtain ⟨t, h₁⟩ := Classical.axiomOfChoice fun q => (rel_iff_ofC _ _).mp (hc q)
+    obtain ⟨d, h₂⟩ := Classical.axiomOfChoice h₁
+    obtain ⟨d', h₃⟩ := Classical.axiomOfChoice h₂
     refine (rel_iff_ofC _ _).mpr ⟨⟨sh, t⟩, fun r => d r.1 r.2, fun r => d' r.1 r.2,
-      fun r => hd r.1 r.2, ?_, ?_⟩
-    · rw [ofC_comp]; exact congrArg (fun c => oG.ofC ⟨sh, c⟩) (funext hdc)
-    · rw [ofC_comp]; exact congrArg (fun c => oG'.ofC ⟨sh, c⟩) (funext hdc')
+      fun r => (h₃ r.1).1 r.2, ?_, ?_⟩
+    · rw [ofC_comp]; exact congrArg (fun c => oG.ofC ⟨sh, c⟩) (funext fun q => (h₃ q).2.1)
+    · rw [ofC_comp]; exact congrArg (fun c => oG'.ofC ⟨sh, c⟩) (funext fun q => (h₃ q).2.2)
 
-/-- `List`: `List.Forall₂`, with Mathlib's `simp` lemmas (`List.forall₂_cons`,
-`List.forall₂_map_left_iff`, `List.forall₂_same`, …). -/
+/-- `List`: `Colean.List.Forall₂`, with the `simp` lemmas copied from Batteries and Mathlib
+(`List.forall₂_cons`, `List.forall₂_map_left_iff`, `List.forall₂_same`, …, `Dependencies/`). -/
 @[simp] theorem rel_list {X : Type u} {Y : Type u'} {R : X → Y → Prop} (l : List X)
     (l' : List Y) : Rel (ofIso List) (ofIso List) R l l' ↔ List.Forall₂ R l l' := by
   rw [rel_iff_ofC]
@@ -1225,7 +1231,8 @@ end RelForms
     | nil => exact ⟨0, Fin.elim0, Fin.elim0, fun q => q.elim0, rfl, rfl⟩
     | @cons a b l l' hab _ ih =>
       obtain ⟨n, c, c', hc, rfl, rfl⟩ := ih
-      refine ⟨n + 1, Fin.cons a c, Fin.cons b c', fun q => Fin.cases hab hc q, ?_, ?_⟩
+      refine ⟨n + 1, fun q => Fin.cases a c q, fun q => Fin.cases b c' q,
+        fun q => Fin.cases hab hc q, ?_, ?_⟩
       all_goals simp [List.ofFn_succ]
 
 /-- `Option`: `Option.Rel`, with its `simp` lemmas (`Option.rel_some_some`,
@@ -1242,8 +1249,8 @@ end RelForms
     · have e (q : OptionPos false) : False := nomatch q
       exact ⟨false, fun q => (e q).elim, fun q => (e q).elim, fun q => (e q).elim, rfl, rfl⟩
 
-/-- `Array`: `List.Forall₂` on the lists of the arrays, whose instance is that of their lists
-(core and Mathlib have no relation of arrays), with Mathlib's `simp` lemmas, on literals too
+/-- `Array`: `Colean.List.Forall₂` on the lists of the arrays, whose instance is that of their
+lists (core and Mathlib have no relation of arrays), with its `simp` lemmas, on literals too
 (`#[a]`). -/
 @[simp] theorem rel_array {X : Type u} {Y : Type u'} {R : X → Y → Prop} (a : Array X)
     (a' : Array Y) :
@@ -1482,7 +1489,7 @@ theorem Rel.mono (o : IOcc Sh Pos pidx G) (o' : IOcc Sh Pos pidx G')
   constructor
   · rintro ⟨sh, c, c', hx, hy, h⟩
     rw [toC_map] at hx
-    obtain ⟨rfl, hc⟩ := Sigma.mk.inj_iff.mp hx
+    obtain ⟨rfl, hc⟩ := Sigma.mk.inj hx
     cases hc
     exact ⟨_, _, c', rfl, hy, h⟩
   · rintro ⟨sh, c, c', hx, hy, h⟩
@@ -1496,7 +1503,7 @@ theorem Rel.mono (o : IOcc Sh Pos pidx G) (o' : IOcc Sh Pos pidx G')
   constructor
   · rintro ⟨sh, c, c', hx, hy, h⟩
     rw [toC_map] at hy
-    obtain ⟨rfl, hc⟩ := Sigma.mk.inj_iff.mp hy
+    obtain ⟨rfl, hc⟩ := Sigma.mk.inj hy
     cases hc
     exact ⟨_, c, _, hx, rfl, h⟩
   · rintro ⟨sh, c, c', hx, hy, h⟩
@@ -1528,7 +1535,7 @@ variable {J : Type j} {X : J → Type u} {Y : J → Type u'}
     Rel (const (J := J) A) (const A) R a b ↔ a = b := by
   constructor
   · rintro ⟨sh, c, c', ha, hb, _⟩
-    exact (Sigma.mk.inj_iff.mp ha).1.trans (Sigma.mk.inj_iff.mp hb).1.symm
+    exact (Sigma.mk.inj ha).1.trans (Sigma.mk.inj hb).1.symm
   · rintro rfl
     exact ⟨a, fun e => e.elim, fun e => e.elim, rfl, rfl, fun q => q.elim⟩
 
@@ -1615,9 +1622,11 @@ end RelForms
     obtain ⟨sh, c, c', hc, rfl, rfl⟩ := (rel_iff_ofC _ _).mp h
     exact rel_intro (o x) (o' x) (sh x) _ _ fun q => hc ⟨x, q⟩
   · intro h
-    choose sh c c' hc hk hk' using fun x => (rel_iff_ofC _ _).mp (h x)
+    obtain ⟨sh, h₁⟩ := Classical.axiomOfChoice fun x => (rel_iff_ofC _ _).mp (h x)
+    obtain ⟨c, h₂⟩ := Classical.axiomOfChoice h₁
+    obtain ⟨c', h₃⟩ := Classical.axiomOfChoice h₂
     exact (rel_iff_ofC _ _).mpr ⟨sh, fun q => c q.1 q.2, fun q => c' q.1 q.2,
-      fun q => hc q.1 q.2, funext hk, funext hk'⟩
+      fun q => (h₃ q.1).1 q.2, funext fun x => (h₃ x).2.1, funext fun x => (h₃ x).2.2⟩
 
 /-- A plain type constructor applied to an expression with occurrences: the outer relation at the
 inner one. -/
@@ -1634,11 +1643,13 @@ inner one. -/
     exact Occ.rel_intro oG oG' sh _ _ fun q => rel_intro oH oH' (t q) _ _ fun r => hc ⟨q, r⟩
   · intro h
     obtain ⟨sh, c, c', hc, rfl, rfl⟩ := (Occ.rel_iff_ofC _ _).mp h
-    choose t d d' hd hdc hdc' using fun q => (rel_iff_ofC _ _).mp (hc q)
+    obtain ⟨t, h₁⟩ := Classical.axiomOfChoice fun q => (rel_iff_ofC _ _).mp (hc q)
+    obtain ⟨d, h₂⟩ := Classical.axiomOfChoice h₁
+    obtain ⟨d', h₃⟩ := Classical.axiomOfChoice h₂
     refine (rel_iff_ofC _ _).mpr ⟨⟨sh, t⟩, fun r => d r.1 r.2, fun r => d' r.1 r.2,
-      fun r => hd r.1 r.2, ?_, ?_⟩
-    · exact congrArg (fun c => oG.ofC ⟨sh, c⟩) (funext hdc)
-    · exact congrArg (fun c => oG'.ofC ⟨sh, c⟩) (funext hdc')
+      fun r => (h₃ r.1).1 r.2, ?_, ?_⟩
+    · exact congrArg (fun c => oG.ofC ⟨sh, c⟩) (funext fun q => (h₃ q).2.1)
+    · exact congrArg (fun c => oG'.ofC ⟨sh, c⟩) (funext fun q => (h₃ q).2.2)
 
 
 end IOcc
@@ -1770,7 +1781,7 @@ theorem exists_fn_of_forall {A : Sort u} {W : A → Sort u'} {X : A → Sort u''
     (fst : ∀ a, W a → X a) (snd : ∀ a, W a → Y a) {g : ∀ a, X a} {g' : ∀ a, Y a}
     (h : ∀ a, ∃ w, fst a w = g a ∧ snd a w = g' a) :
     ∃ w : ∀ a, W a, (fun a => fst a (w a)) = g ∧ (fun a => snd a (w a)) = g' := by
-  choose w hw using h
+  obtain ⟨w, hw⟩ := Classical.axiomOfChoice h
   exact ⟨w, funext fun a => (hw a).1, funext fun a => (hw a).2⟩
 
 end Codata

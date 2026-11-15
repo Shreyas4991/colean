@@ -85,7 +85,7 @@ datatype LabList {ι : Type} (f : ι → Nat)
 end
 
 /--
-info: @Lab.node : {ι : Type} → {f : ι → ℕ} → {i : ι} → Fin (f i) → LabList f → Lab f
+info: @Lab.node : {ι : Type} → {f : ι → Nat} → {i : ι} → Fin (f i) → LabList f → Lab f
 -/
 #guard_msgs in #check @Lab.node
 
@@ -101,7 +101,7 @@ datatype Forest
   | cons (n : Nat) (f : Forest)
 end
 
-/-- info: Forest.cons : ℕ → Forest → Forest -/
+/-- info: Forest.cons : Nat → Forest → Forest -/
 #guard_msgs in #check @Forest.cons
 /-- info: Forest.nil : Forest -/
 #guard_msgs in #check @Forest.nil
@@ -109,7 +109,7 @@ end
 #guard_msgs in #check @Tree.node
 /--
 info: @Forest.rec : {motive : Forest → Sort u_1} →
-  motive Forest.nil → ((n : ℕ) → (f : Forest) → motive f → motive (Forest.cons n f)) → (t : Forest) → motive t
+  motive Forest.nil → ((n : Nat) → (f : Forest) → motive f → motive (Forest.cons n f)) → (t : Forest) → motive t
 -/
 #guard_msgs in #check @Forest.rec
 
