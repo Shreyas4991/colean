@@ -2,16 +2,9 @@ name = "Colean"
 version = "0.1.0"
 license = "Apache-2.0"
 defaultTargets = ["Colean", "ColeanTest"]
-# The files are not modules (no `module` header), while Mathlib is designed for the module system.
-allowNonModules = true
 
 [[lean_lib]]
 name = "Colean"
 
 [[lean_lib]]
 name = "ColeanTest"
-
-[[require]]
-name = "mathlib"
-git = "https://github.com/leanprover-community/mathlib4"
-rev = "v4.36.0-rc2"
