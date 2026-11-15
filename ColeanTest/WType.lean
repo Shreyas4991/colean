@@ -16,7 +16,7 @@ datatype W (α : Type u) (β : α → Type v)
 
 #check @W.sup
 #check @W.rec
-#check @W.B.sup_f
+#check @W.Colean.B.sup_f
 
 def W.toW {α : Type u} {β : α → Type v} (t : W α β) : WType β :=
   W.fold (S := WType β) (fun | .sup a f => ⟨a, f⟩) t

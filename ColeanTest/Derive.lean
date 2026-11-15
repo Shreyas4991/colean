@@ -113,11 +113,11 @@ noncomputable section
 abbrev idH : Type → Type := fun X => X
 
 example {X Y : Type} (f : X → Y) (a : Str X) :
-    Str.Poly.toL idH ((Str.Poly.fix idH X).map (Str.Poly.fix idH Y) f a).dtor =
-      ⟨(Str.Poly.toL idH a.dtor).1, fun q => f ((Str.Poly.toL idH a.dtor).2.1 q),
-        fun i => (Str.Poly.fix idH X).map (Str.Poly.fix idH Y) f
-          ((Str.Poly.toL idH a.dtor).2.2 i)⟩ :=
-  (Str.Poly.fix idH X).d_map (Str.Poly.fix idH Y) f a
+    Str.Colean.Poly.toL idH ((Str.Colean.Poly.fix idH X).map (Str.Colean.Poly.fix idH Y) f a).dtor =
+      ⟨(Str.Colean.Poly.toL idH a.dtor).1, fun q => f ((Str.Colean.Poly.toL idH a.dtor).2.1 q),
+        fun i => (Str.Colean.Poly.fix idH X).map (Str.Colean.Poly.fix idH Y) f
+          ((Str.Colean.Poly.toL idH a.dtor).2.2 i)⟩ :=
+  (Str.Colean.Poly.fix idH X).d_map (Str.Colean.Poly.fix idH Y) f a
 
 end
 
@@ -126,11 +126,11 @@ end
 section Failing
 
 -- A name the step needs is taken.
-def Bad.Poly.fix : Nat := 0
+def Bad.Colean.Poly.fix : Nat := 0
 
 /--
 warning: `Bad` cannot be nested through: no `Codata.PolyIso` instance was generated. The type itself is not affected.
-generating the fixpoint `DeriveTest.Bad.Poly.fix` failed, an error of the generator (`set_option codata.deriveDetails true` shows it)
+generating the fixpoint `DeriveTest.Bad.Colean.Poly.fix` failed, an error of the generator (`set_option codata.deriveDetails true` shows it)
 -/
 #guard_msgs in
 datatype Bad (α : Type)
@@ -142,7 +142,7 @@ noncomputable example : Bad Nat := .cons 0 .nil
 #check @Bad.rec
 
 run_cmd do
-  if (← Lean.getEnv).contains `DeriveTest.Bad.Poly.S then
+  if (← Lean.getEnv).contains `DeriveTest.Bad.Colean.Poly.S then
     Lean.logError "the failed step was not rolled back"
 
 end Failing

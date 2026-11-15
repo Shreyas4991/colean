@@ -5,8 +5,8 @@ import Colean.Gen.Ctx
 
 *Spec.* Input: the context. Output: the inductive `T.F (params) (X : ∀ j, Type _) : ∀ j, Type _`
 (the constructors with every occurrence `T params idx` replaced by `X idx`), its action on
-functions `T.F.map`, defined by `casesOn`, the computation rules `T.F.map_cᵢ` (simp lemmas,
-proved by `rfl`), and the functor laws `T.F.map_id`, `T.F.map_comp`, proved by `cases` and
+functions `T.F.fmap`, defined by `casesOn`, the computation rules `T.F.fmap_cᵢ` (simp lemmas,
+proved by `rfl`), and the functor laws `T.F.fmap_id`, `T.F.fmap_comp`, proved by `cases` and
 `rfl`, or `simp only` with the computation rules and the laws of `Model/Occ.lean` for a
 constructor with nested arguments.
 -/
@@ -23,7 +23,7 @@ variable (ctx : Ctx)
 def fAt (w : Level) (X : Expr) (idx : Array Expr) : MetaM Expr := do
   ctx.genAt ctx.F [w] (#[X] ++ idx)
 
-/-- `@T.F.map params X Y f idx a`, at the universes `wX`, `wY` of `X`, `Y`. -/
+/-- `@T.F.fmap params X Y f idx a`, at the universes `wX`, `wY` of `X`, `Y`. -/
 def mapAt (wX wY : Level) (X Y f : Expr) (idx : Array Expr) (a : Expr) : MetaM Expr := do
   ctx.genAt ctx.Fmap [wX, wY] (#[X, Y, f] ++ idx ++ #[a])
 
@@ -75,7 +75,7 @@ def genF : TermElabM Unit := do
     ctors := (ctx.ctors.zip ctorTys).toList.map fun (c, t) =>
       { name := ctx.fCtor c, type := t.replaceFVar Fv Fc } }] ctx.ref
 
-/-- `T.F.map` by `casesOn`, and its computation rules `T.F.map_cᵢ`. -/
+/-- `T.F.fmap` by `casesOn`, and its computation rules `T.F.fmap_cᵢ`. -/
 def genMap : TermElabM Unit := do
   let fresh := ctx.freshLevels 2
   let [wX, wY] := fresh | unreachable!
@@ -126,10 +126,10 @@ def lawTactic (lemmas : Array Name) (g : MVarId) : TermElabM Unit := do
       | throwError "internal error: unexpected case {sg.ctorName}"
     if c.hasNest then simpOnly sg.mvarId lemmas else sg.mvarId.refl
 
-/-- `T.F.map_id` and `T.F.map_comp`. -/
+/-- `T.F.fmap_id` and `T.F.fmap_comp`. -/
 def genLaws : TermElabM Unit := do
   let mapCs := ctx.ctors.map ctx.FmapCtor
-  -- `map_id`
+  -- `fmap_id`
   do
     let fresh := ctx.freshLevels 1
     let [wX] := fresh | unreachable!
@@ -146,7 +146,7 @@ def genLaws : TermElabM Unit := do
       #[``id_eq, ``Codata.Occ.map_id, ``Codata.Occ.map_id', ``Codata.IOcc.map_id,
         ``Codata.IOcc.map_id']
     addThm ctx.Fmap_id (← ctx.levelParamsOf fresh #[type]) type value ctx.ref
-  -- `map_comp`
+  -- `fmap_comp`
   let fresh := ctx.freshLevels 3
   let [wX, wY, wZ] := fresh | unreachable!
   let (wX, wY, wZ) :=

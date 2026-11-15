@@ -17,7 +17,7 @@ codatatype Bounded : (n : Nat) → n ≤ 10 → Type
 #check Bounded
 #check @Bounded.step
 #check @Bounded.corec
-#check Bounded.Ix
+#check Bounded.Colean.Ix
 
 /-- Climb while possible, then stay. The result index is a proof, so proof irrelevance
 matches `Nat.le_of_succ_le hn` with the given `h`. -/
@@ -27,12 +27,12 @@ def Bounded.climb (n : Nat) (h : n ≤ 10) : Bounded n h :=
 
 @[simp] theorem Bounded.dtor_climb_of_lt (n : Nat) (h : n ≤ 10) (hn : n + 1 ≤ 10) :
     (Bounded.climb n h).dtor = .step (h := hn) (Bounded.climb (n + 1) hn) := by
-  simp only [Bounded.climb, Bounded.dtor_corec, dite_eq_left hn, Bounded.F.map_step]
+  simp only [Bounded.climb, Bounded.dtor_corec, dite_eq_left hn, Bounded.F.fmap_step]
 
 @[simp] theorem Bounded.dtor_climb_of_eq (h : 10 ≤ 10) :
     (Bounded.climb 10 h).dtor = .stay (Bounded.climb 10 h) := by
   simp only [Bounded.climb, Bounded.dtor_corec, dite_eq_right (by omega : ¬ 10 + 1 ≤ 10),
-    Bounded.F.map_stay]
+    Bounded.F.fmap_stay]
 
 /-- At the top, the only possible step is `stay`: case analysis with the index `10`. -/
 example (h : 10 ≤ 10) (w : Bounded 10 h) : ∃ w', w = Bounded.stay w' := by

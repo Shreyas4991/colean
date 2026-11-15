@@ -34,7 +34,7 @@ universe and `G'` at another (`List.{u}` and `List.{v}`): this is what keeps the
 and `fold` in any universe. The simp lemmas `map_list`, `map_prod`, `map_sum`, `map_comp`, …
 compute `map` through the combinators back to the usual maps (`List.map`, pairs, `Sum.map`,
 composition), the `rel_*` lemmas do the same for `Rel` (`rel_prod`, `rel_comp`, …, down to
-`List.Forall₂` and `Option.Rel` at the leaves, a map on either side moved into the relation,
+`List.Forall₂` and `Option.Rel` at the leaves, `List.Forall₂` of their lists for arrays, a map on either side moved into the relation,
 `rel_map_left`, and a value related to itself related at its members, `rel_self`), and
 `forall_toC_*` turn "for every position" into membership or components; the members of a value
 (`Mem`) are computed by `simp` the same way. The instances of `PolyIso.lean` for products, sums,
@@ -1034,10 +1034,10 @@ end ExistsMem
 
 `Rel o o' R x y` says that the layers of `x` and `y` have one shape and related contents. Through
 `ofC` the two values are substituted away (`rel_iff_ofC`), and every combinator computes by
-definition: `simp` takes the relation through products, sums, functions and composites, down to
-the leaves, whose relations are the library's (`List.Forall₂`, `Option.Rel`), with the generated
-`T.Poly.rel_cᵢ_cⱼ` for a declared type. A map on either side moves into the relation, and a value
-related to itself is a relation at its members (`rel_self`). -/
+definition: `simp` takes the relation through products, sums, functions and composites, down to the
+leaves, whose relations are the library's (`List.Forall₂`, `Option.Rel`), with the generated
+`T.Colean.Poly.rel_cᵢ_cⱼ` for a declared type. A map on either side moves into the relation, and a
+value related to itself is a relation at its members (`rel_self`). -/
 
 section RelGeneric
 
@@ -1242,6 +1242,13 @@ end RelForms
     · have e (q : OptionPos false) : False := nomatch q
       exact ⟨false, fun q => (e q).elim, fun q => (e q).elim, fun q => (e q).elim, rfl, rfl⟩
 
+/-- `Array`: `List.Forall₂` on the lists of the arrays, whose instance is that of their lists
+(core and Mathlib have no relation of arrays), with Mathlib's `simp` lemmas, on literals too
+(`#[a]`). -/
+@[simp] theorem rel_array {X : Type u} {Y : Type u'} {R : X → Y → Prop} (a : Array X)
+    (a' : Array Y) :
+    Rel (ofIso Array) (ofIso Array) R a a' ↔ List.Forall₂ R a.toList a'.toList :=
+  rel_list a.toList a'.toList
 
 end Occ
 

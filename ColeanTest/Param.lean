@@ -4,9 +4,9 @@ import Colean.DataCmd
 
 A `datatype` or `codatatype` whose parameter `α` is used only at parameter positions (as the type of
 a field, under a function type, or nested) gets `PolyIso` and `PolyMap` instances in `α` (step 5,
-`T.Poly.*`), with the `simp` lemmas `T.Poly.map_c` and `T.Poly.mem_c`, so that later
-declarations nest through it. This is what a `mixed_mutual` block does for its runs inside, with
-the parameter standing for the outer types (`Mixed.lean`): here the trees through the forests,
+`T.Colean.Poly.*`), with the `simp` lemmas `T.Colean.Poly.map_c` and `T.Colean.Poly.mem_c`, so that
+later declarations nest through it. This is what a `mixed_mutual` block does for its runs inside,
+with the parameter standing for the outer types (`Mixed.lean`): here the trees through the forests,
 by hand. -/
 
 universe u
@@ -22,10 +22,10 @@ datatype Forest (X : Type u)
   | nil
   | cons (t : X) (f : Forest X)
 
-#check @Forest.Poly.instPolyIso
-#check @Forest.Poly.instPolyIsoEta
-#check @Forest.Poly.map_cons
-#check @Forest.Poly.mem_cons
+#check @Forest.Colean.Poly.instPolyIso
+#check @Forest.Colean.Poly.instPolyIsoEta
+#check @Forest.Colean.Poly.map_cons
+#check @Forest.Colean.Poly.mem_cons
 
 /-- The sum of a forest of numbers, by the fold. -/
 def Forest.sum (f : Forest Nat) : Nat :=
@@ -75,8 +75,8 @@ datatype Node (α : Type u)
   | leaf (f : Bool → α)
   | branch (as : List α) (l r : Node α)
 
-#check @Node.Poly.instPolyIso
-#check @Node.Poly.map_branch
+#check @Node.Colean.Poly.instPolyIso
+#check @Node.Colean.Poly.map_branch
 
 -- Indexed: the instance is at every index.
 datatype Vec (α : Type u) : Nat → Type u
@@ -84,7 +84,7 @@ datatype Vec (α : Type u) : Nat → Type u
   | cons {n : Nat} (a : α) (v : Vec α n) : Vec α (n + 1)
 
 #synth PolyIso (fun α : Type => Vec α 2) _ _
-#check @Vec.Poly.map_cons
+#check @Vec.Colean.Poly.map_cons
 
 -- The parameter in a negative position is not a parameter position: the type is declared as
 -- before, without the instance.
@@ -96,7 +96,7 @@ datatype Neg (α : Type u)
 
 open Lean in
 run_cmd do
-  if (← getEnv).contains `ParamTest.Neg.Poly.instPolyIso then
+  if (← getEnv).contains `ParamTest.Neg.Colean.Poly.instPolyIso then
     throwError "unexpected instance for `Neg`"
 
 end

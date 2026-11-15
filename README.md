@@ -199,14 +199,14 @@ A declaration of a type `T` is processed in four steps.
 
 1. **The functor.** We start from the syntax of your declaration and generate a functor `T.F`:
    an ordinary `inductive` with the same constructors, where every occurrence of `T` is
-   replaced by a variable `X`, together with its action on functions `T.F.map`. The code that
+   replaced by a variable `X`, together with its action on functions `T.F.fmap`. The code that
    does this is small, [`Colean/Gen/Functor.lean`](Colean/Gen/Functor.lean), and you can read
    its output directly:
 
    ```
    #print Stream.F
    -- Stream.F.cons : {α : Type} → {X : Type u_1} → α → X → Stream.F α X
-   #print Stream.F.map
+   #print Stream.F.fmap
    -- fun f a => Stream.F.casesOn a fun head tail => Stream.F.cons head (f tail)
    ```
 
@@ -217,7 +217,7 @@ A declaration of a type `T` is processed in four steps.
 3. **The contract.** Colean proves `T.contract : Codata.Contract T T.F` (or
    `Data.Contract` for `datatype`), defined in [`Colean/Framework.lean`](Colean/Framework.lean).
    For `codatatype`, the contract asks for a destructor `dtor : T → T.F T`, a corecursor with its
-   computation rule `dtor (corec c s) = T.F.map (corec c) (c s)`, and the coinduction principle
+   computation rule `dtor (corec c s) = T.F.fmap (corec c) (c s)`, and the coinduction principle
    for the relation lifting `Rel`. `Rel` is defined once in the same file from `map` alone: it
    is not something the generator can choose. This says exactly that `T` is the final
    coalgebra of `T.F`. Any two types with a contract for the same functor are isomorphic

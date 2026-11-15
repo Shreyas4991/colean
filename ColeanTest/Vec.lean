@@ -17,7 +17,7 @@ codatatype Vec (α : Type u) : Nat → Type u
 #check @Vec.corec
 #check @Vec.bisim
 #check @Vec.casesOn
-#check @Vec.B.cons_v
+#check @Vec.Colean.B.cons_v
 
 /-- The constant vector, by corecursion over the index. -/
 def Vec.const {α : Type u} (a : α) (n : Nat) : Vec α n :=

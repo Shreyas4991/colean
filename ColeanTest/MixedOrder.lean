@@ -116,7 +116,7 @@ def DirB.depth {α : Type u} (d : DirB α) : Nat :=
   DirB.fold (S := Nat)
     (fun | .nil => 0 | .cons e n => max n (EntryB.Open.casesOn e fun _ c _ => c + 1)) d
 
-/-- `simp` computes the fold through the codata entries: `EntryB.Open.Poly.map_mk` pushes the
+/-- `simp` computes the fold through the codata entries: `EntryB.Open.Colean.Poly.map_mk` pushes the
 map into the first version. -/
 example {α : Type u} (a : α) (e : EntryB α) :
     (DirB.cons (EntryB.mk a (DirB.cons (EntryB.mk a .nil e) .nil) e) .nil).depth = 2 := by

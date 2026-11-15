@@ -8,7 +8,8 @@ declared, the runs inside the outermost one open and then closed, as `MutualCmd.
 
 1. The runs, and their names (`mixRuns`): the outermost run under the names the user wrote, a run
    inside it under `Tₘ.Open` (and `Blk.Open` for a block, whose index is `Blk.Ix`), private with
-   the types; none of them declared already (`checkMixNames`).
+   the types; none of them declared already, and no constructor named as a generated declaration
+   (`checkMixNames`).
 2. The section variables of the block, and which declaration mentions which (`mixedVars`, one
    elaboration of the whole block, discarded); from these, the outer runs each run needs
    (`mixReach`), innermost first, and the runs that nest through each.
@@ -64,11 +65,12 @@ def mixRuns (decls : Array DeclStx) : Array MixRun := Id.run do
 
 /-- The names of a mixed block, before anything is declared (`checkNames`): the types, the open
 types `Tₘ.Open` of the runs inside, and for a run of several types, its name, open name and
-index. `ref` is the block's keyword. -/
+index; the constructors of each run (`checkCtorNames`). `ref` is the block's keyword. -/
 def checkMixNames (decls : Array DeclStx) (runs : Array MixRun) (ref : Syntax) :
     TermElabM Unit := do
   checkNames decls none ref
   for run in runs, j in [0:runs.size] do
+    checkCtorNames (run.decls.map (decls[·]!)) (inner := j > 0)
     if j > 0 then
       for n in run.names, d in run.decls do
         checkFree n decls[d]!.T "a type `T` of a run inside the first is declared open, as \
@@ -102,10 +104,9 @@ def checkMixSorts (ctx : Ctx) (decls : Array DeclStx) (runs : Array MixRun)
 
 /-! ### Restating a declaration at the closed types -/
 
-/-- The declarations of the model and of step 5, which a closed type does not restate. -/
-def internalHeads : List String :=
-  ["B", "Shape", "sig", "toC", "ofC", "ofC_toC", "toC_ofC", "ofC_map", "rel_ofC", "casesOnAux",
-    "casesOn_ctor", "recAux", "recPos", "recPos_ctor", "idx", "ShapeP", "Poly"]
+/-- The internals of an open type (the model's, step 5's), under `T.Open.Colean`, which a closed
+type does not restate. -/
+def internalHeads : List String := ["Colean"]
 
 /-- The auxiliary constructions of an inductive type and of its constructors. -/
 def auxSuffixes : List String :=
@@ -331,10 +332,10 @@ def restateRun (decls : Array DeclStx) (run : MixRun) (np : Nat) (xLevels : Arra
   return rules
 
 /-- For each membership instance of a closed type (`MemRule`), the `simp` lemmas `Tⱼ.mem_c` on the
-type's constructors: `x ∈ Tⱼ.c args ↔ …`, the right-hand side the normal form of the default
-`simp` set of the membership through the open types (with the lemmas `Tⱼ.Open.Poly.mem_c` of step
-5), written with the closed memberships. A constructor whose membership `simp` does not rewrite
-gets none. -/
+type's constructors: `x ∈ Tⱼ.c args ↔ …`, the right-hand side the normal form of the default `simp`
+set of the membership through the open types (with the lemmas `Tⱼ.Open.Colean.Poly.mem_c` of step
+5), written with the closed memberships. A constructor whose membership `simp` does not rewrite gets
+none. -/
 def memLemmas (decls : Array DeclStx) (runs : Array MixRun) (closed : Closed) : TermElabM Unit := do
   let ns ← getCurrNamespace
   let simpCtx ← Simp.mkContext (simpTheorems := #[← getSimpTheorems])

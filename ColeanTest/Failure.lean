@@ -15,7 +15,7 @@ set_option maxHeartbeats 3000 in
 codatatype R (α : Type)
   | mk (a : α) (l : List (R α)) (o : Option (R α)) (f : Nat → R α)
 
-#check @R.Poly.instPolyIso
+#check @R.Colean.Poly.instPolyIso
 
 -- A timeout in step 5 is a warning, and the type stays.
 /--
@@ -29,9 +29,9 @@ codatatype R₁ (α : Type)
 
 #check @R₁.mk_inj
 
-/-- error: Unknown constant `FailureTest.R₁.Poly.S` -/
+/-- error: Unknown constant `FailureTest.R₁.Colean.Poly.S` -/
 #guard_msgs in
-#check R₁.Poly.S
+#check R₁.Colean.Poly.S
 
 /-! ### A failed command declares nothing -/
 
@@ -46,8 +46,10 @@ codatatype R₂ (α : Type)
 #guard_msgs in
 #check R₂
 
--- A constructor named like a generated declaration.
-/-- error: (kernel) constant has already been declared 'FailureTest.P.dtor' -/
+-- A constructor named like a generated declaration: refused before anything is declared.
+/--
+error: constructor `dtor` clashes with the generated declaration `FailureTest.P.dtor`; rename the constructor
+-/
 #guard_msgs in
 datatype P | dtor (n : Nat) | nil
 

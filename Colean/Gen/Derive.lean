@@ -3,13 +3,13 @@ import Colean.Gen.Derive.Simp
 /-!
 # Generators on `Expr`, step 5: deriving `PolyIso` for a declared type
 
-*Spec.* Input: a type that is already completely declared, a single type, a family or the types
-of a block, with its context: the analysis of its declaration and its public declarations (`T`,
-`T.F`, `T.dtor`, `T.corec`, `T.fold`, `T.contract`, …). Output: the instances `PolyIso` and
-`PolyMap` for `fun X => T (H₁ X) … (Hₙ X) idx` at every index `idx`, for `H₁`, …, `Hₙ` themselves
-instances (`PolyMap` from `PolyMap` instances of the `Hᵢ`, as the instances of the built-in
-forms), so that later declarations can nest through `T`; and for every constructor `c` the
-`simp` lemmas `T.Poly.map_c` and `T.Poly.mem_c`, the map and membership on `T.c` (see "The simp
+*Spec.* Input: a type that is already completely declared, a single type, a family or the types of a
+block, with its context: the analysis of its declaration and its public declarations (`T`, `T.F`,
+`T.dtor`, `T.corec`, `T.fold`, `T.contract`, …). Output: the instances `PolyIso` and `PolyMap` for
+`fun X => T (H₁ X) … (Hₙ X) idx` at every index `idx`, for `H₁`, …, `Hₙ` themselves instances
+(`PolyMap` from `PolyMap` instances of the `Hᵢ`, as the instances of the built-in forms), so that
+later declarations can nest through `T`; and for every constructor `c` the `simp` lemmas
+`T.Colean.Poly.map_c` and `T.Colean.Poly.mem_c`, the map and membership on `T.c` (see "The simp
 lemmas" below), so that `simp` computes through the instances.
 
 This step is separate from the declaration of the type. It runs after it, nothing in the
@@ -46,42 +46,43 @@ With the holes fixed, the constructors of the presentation are those of `T` with
 arguments split (`VCtor`, `withVCtors`): an argument `p : α × T α` becomes its parts `p.1`, a field
 at a parameter position, and `p.2`, a recursive argument, and through a sum `f : T α ⊕ α` the
 constructor becomes one constructor of the presentation per side, `app_inl` and `app_inr` (with a
-suffix when a name is taken, as are the names of the parts). With indices a nested argument is
-split as well when its positions are at an index only after cases on them (`severalIdx`,
+suffix when a name is taken, as are the names of the parts). With indices a nested argument is split
+as well when its positions are at an index only after cases on them (`severalIdx`,
 `T n × T (n + 1)`, `A × B` in a block). Through sums, at most `maxSplit` constructors of the
-presentation come from one constructor: beyond, the arguments through sums are not split, and
-have a structure in two variables or their indexed structure. A part with both a hole and the
-type under a named type constructor or a function (`p : List (α × T α)`, `k : Nat → α × T α`,
-`p : List (α ⊕ T α)`) has a structure in two variables (`Occ₂`, `Model/Occ2.lean`, a
-`MixField`): its structure in the occurrences alone, the holes constant, gone through by its
-combinators down to parts in the holes (`Occ₂.ofX`, at their structure in the premises) and parts
-in the occurrences (`Occ₂.ofY`). It is data of the presentation with a shape, a position in `P`
-and one in `B`, its layer `Occ₂.toC`, and `T.F.map`, which maps it by its structure in the
-occurrences, is its map in them by `Occ₂.AgreeY` (`ofL_map`). With indices the structure is over
-the index of the presentation (`IOcc₂`, `Model/IOcc2.lean`, `imixOcc`), and in a block a nested
-argument whose positions are at a type of the block only after cases on them inside a named type
-constructor (`p : List (RA α × Nat)`) has one too, with no part in the holes: its positions then
-carry the presentation's index by construction. When its positions are at one index after cases
-(`oneIdx`, the recursor's analysis too), it is the plain structure at that index
-(`IOcc₂.ofOcc₂`, `flatOcc?`, `mixOcc`), and its rules are stated as without indices; `T.F.map` is
-its map by `IOcc₂.AgreeY`, through a sum too (`proveMapFlat`). The layer `T.F (H X) Y` is then
-presented as `Lay P B X Y` (`T.Poly.S`, `T.Poly.P`, `T.Poly.B`, `T.Poly.toL`, `T.Poly.ofL` and
-their laws; `toL` through the products by projections and through the sums by `Sum.casesOn`,
-`ofL` building the pairs and injections, `polyDispatch`, `applyVCtor`), and the generic theorems
-of `Model/Poly.lean` do the rest from the contract (`T.Poly.fix`, the instances
-`T.Poly.instPolyIso`, `T.Poly.instPolyMap`, and when the last parameter is the last hole,
-`T.Poly.instPolyIsoEta` and `T.Poly.instPolyMapEta` for `T a₁ … aₙ₋₁` itself, the latter across
-universes when the universe of that parameter is its own, `u` or `u + 1` say).
+presentation come from one constructor: beyond, the arguments through sums are not split, and have a
+structure in two variables or their indexed structure. A part with both a hole and the type under a
+named type constructor or a function (`p : List (α × T α)`, `k : Nat → α × T α`,
+`p : List (α ⊕ T α)`) has a structure in two variables (`Occ₂`, `Model/Occ2.lean`, a `MixField`):
+its structure in the occurrences alone, the holes constant, gone through by its combinators down to
+parts in the holes (`Occ₂.ofX`, at their structure in the premises) and parts in the occurrences
+(`Occ₂.ofY`). It is data of the presentation with a shape, a position in `P` and one in `B`, its
+layer `Occ₂.toC`, and `T.F.fmap`, which maps it by its structure in the occurrences, is its map in
+them by `Occ₂.AgreeY` (`ofL_map`). With indices the structure is over the index of the presentation
+(`IOcc₂`, `Model/IOcc2.lean`, `imixOcc`), and in a block a nested argument whose positions are at a
+type of the block only after cases on them inside a named type constructor (`p : List (RA α × Nat)`)
+has one too, with no part in the holes: its positions then carry the presentation's index by
+construction. When its positions are at one index after cases (`oneIdx`, the recursor's analysis
+too), it is the plain structure at that index (`IOcc₂.ofOcc₂`, `flatOcc?`, `mixOcc`), and its rules
+are stated as without indices; `T.F.fmap` is its map by `IOcc₂.AgreeY`, through a sum too
+(`proveMapFlat`). The layer `T.F (H X) Y` is then presented as `Lay P B X Y` (`T.Colean.Poly.S`,
+`T.Colean.Poly.P`, `T.Colean.Poly.B`, `T.Colean.Poly.toL`, `T.Colean.Poly.ofL` and their laws; `toL`
+through the products by projections and through the sums by `Sum.casesOn`, `ofL` building the pairs
+and injections, `polyDispatch`, `applyVCtor`), and the generic theorems of `Model/Poly.lean` do the
+rest from the contract (`T.Colean.Poly.fix`, the instances `T.Colean.Poly.instPolyIso`,
+`T.Colean.Poly.instPolyMap`, and when the last parameter is the last hole,
+`T.Colean.Poly.instPolyIsoEta` and `T.Colean.Poly.instPolyMapEta` for `T a₁ … aₙ₋₁` itself, the
+latter across universes when the universe of that parameter is its own, `u` or `u + 1` say).
 
 With indices, the presentation is a family over an index `I`, with the index of a position
-(`T.Poly.idx`) and the signature of the trees of shapes (`T.Poly.sig`): `I` is the packed index of
-a family, and for a block `Blk.Poly.Ix`, the block's index without the parameters that vary
-(`Blk.Ix` takes all the parameters). The layer at `i : I` is `T.F (H X) Y (ι i)` presented as
-`ILay sig P X (fun j => Y (ι j)) i`, with `ι` the identity, or in a block `Blk.Poly.ixIn` into the
-block's index at the premises. The presentation is per block (`Blk.Poly.*`), the instances per
-type, with the type's indices as arguments: `Tₘ.Poly.instPolyIso` for `fun X => Tₘ (H X) idx`
-at the index `⟨idx⟩` (`Blk.Poly.Ix.Tₘ idx`), `Tₘ.Poly.instPolyMap`, and the eta forms for a type of
-a block without indices.
+(`T.Colean.Poly.idx`) and the signature of the trees of shapes (`T.Colean.Poly.sig`): `I` is the
+packed index of a family, and for a block `Blk.Colean.Poly.Ix`, the block's index without the
+parameters that vary (`Blk.Ix` takes all the parameters). The layer at `i : I` is
+`T.F (H X) Y (ι i)` presented as `ILay sig P X (fun j => Y (ι j)) i`, with `ι` the identity, or in a
+block `Blk.Colean.Poly.ixIn` into the block's index at the premises. The presentation is per block
+(`Blk.Colean.Poly.*`), the instances per type, with the type's indices as arguments:
+`Tₘ.Colean.Poly.instPolyIso` for `fun X => Tₘ (H X) idx` at the index `⟨idx⟩`
+(`Blk.Colean.Poly.Ix.Tₘ idx`), `Tₘ.Colean.Poly.instPolyMap`, and the eta forms for a type of a block
+without indices.
 
 `toL` and the positions of its layers are by cases (`casesOn`, `MVarId.cases`, with indices
 `casesPos` for the positions and in a block cases on the index first), `ofL` by cases on the

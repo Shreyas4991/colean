@@ -45,12 +45,12 @@ Tree.dtor_ctor, Tree.ctor_dtor, Tree.ctor_injective, Tree.dtor_node, Tree.ctor_n
 -- `codatatype`
 Tree.corec : (S₁ → Tree.F α S₁ S₂) → (S₂ → Forest.F α S₁ S₂) → S₁ → Tree α
 Tree.dtor_corec :
-  (Tree.corec c₁ c₂ s).dtor = Tree.F.map (Tree.corec c₁ c₂) (Forest.corec c₁ c₂) (c₁ s)
+  (Tree.corec c₁ c₂ s).dtor = Tree.F.fmap (Tree.corec c₁ c₂) (Forest.corec c₁ c₂) (c₁ s)
 Tree.corec_eq :
-  Tree.corec c₁ c₂ s = Tree.ctor (Tree.F.map (Tree.corec c₁ c₂) (Forest.corec c₁ c₂) (c₁ s))
+  Tree.corec c₁ c₂ s = Tree.ctor (Tree.F.fmap (Tree.corec c₁ c₂) (Forest.corec c₁ c₂) (c₁ s))
 Tree.corec_unique (h₁ : S₁ → Tree α) (h₂ : S₂ → Forest α)
-  (hh₁ : ∀ s, (h₁ s).dtor = Tree.F.map h₁ h₂ (c₁ s))
-  (hh₂ : ∀ s, (h₂ s).dtor = Forest.F.map h₁ h₂ (c₂ s)) : h₁ s = Tree.corec c₁ c₂ s
+  (hh₁ : ∀ s, (h₁ s).dtor = Tree.F.fmap h₁ h₂ (c₁ s))
+  (hh₂ : ∀ s, (h₂ s).dtor = Forest.F.fmap h₁ h₂ (c₂ s)) : h₁ s = Tree.corec c₁ c₂ s
 Tree.bisim (R₁ : Tree α → Tree α → Prop) (R₂ : Forest α → Forest α → Prop)
   (H₁ : ∀ x y, R₁ x y → Tree.F.Rel R₁ R₂ x.dtor y.dtor)
   (H₂ : ∀ x y, R₂ x y → Forest.F.Rel R₁ R₂ x.dtor y.dtor) : R₁ x y → x = y
@@ -62,25 +62,24 @@ Tree.fold_ctor, Tree.fold_eq, Tree.fold_unique
 
 A family per type, all in one universe, is a family over the type's indices as declared
 (`S₁ : Nat → Type _` for `Even : Nat → Type`), and so are a step `c₁ : ∀ n, S₁ n → Even.F S₁ S₂ n`
-or an algebra `a₁ : ∀ n, Even.F S₁ S₂ n → S₁ n`, a morphism `h₁ : ∀ n, S₁ n → Even n` and a
-relation `R₁ : ∀ n, Even n → Even n → Prop`. The layer of a type at a family per type,
-`Tree.F α S₁ S₂`, is the block's functor at the families packed into one on `Ix` by cases
-(`Tree_Forest.St S₁ S₂`), a reducible definition, so patterns and dot notation find the block
-functor's constructors through it (`.node a s`, and `exact .cons _ _ _ _ h₁ h₂` for
-`Forest.F.Rel`); so are its map `Tree.F.map f₁ f₂`, with the `simp` rules `Tree.F.map_node`, …
-and the laws `Tree.F.map_id`, `Tree.F.map_comp`, and, for `codatatype`, its lifting
-`Tree.F.Rel R₁ R₂`, with `Tree.F.rel_map`. The destructor per type, which dot notation `t.dtor`
-finds, is the block's `dtor` followed by the map by the identity from `Tree_Forest α` to
-`Tree_Forest.St (Tree α) (Forest α)`, and the constructor per type the block's `ctor` after the
-map back: the two families are one at every constructor of `Ix` by definition, not at a variable
+or an algebra `a₁ : ∀ n, Even.F S₁ S₂ n → S₁ n`, a morphism `h₁ : ∀ n, S₁ n → Even n` and a relation
+`R₁ : ∀ n, Even n → Even n → Prop`. The layer of a type at a family per type, `Tree.F α S₁ S₂`, is
+the block's functor at the families packed into one on `Ix` by cases
+(`Tree_Forest.Colean.St S₁ S₂`), a reducible definition, so patterns and dot notation find the block
+functor's constructors through it (`.node a s`, and `exact .cons _ _ _ _ h₁ h₂` for `Forest.F.Rel`);
+so are its map `Tree.F.fmap f₁ f₂`, with the `simp` rules `Tree.F.fmap_node`, … and the laws
+`Tree.F.fmap_id`, `Tree.F.fmap_comp`, and, for `codatatype`, its lifting `Tree.F.Rel R₁ R₂`, with
+`Tree.F.rel_fmap`. The destructor per type, which dot notation `t.dtor` finds, is the block's `dtor`
+followed by the map by the identity from `Tree_Forest α` to
+`Tree_Forest.Colean.St (Tree α) (Forest α)`, and the constructor per type the block's `ctor` after
+the map back: the two families are one at every constructor of `Ix` by definition, not at a variable
 index. The rules of the block's `dtor`, `ctor` and `fold` are `Tree_Forest.dtor_node`,
 `Tree_Forest.ctor_node`, `Tree_Forest.fold_node`, …, with the block-level names of shared
-constructors (`Even_Odd.dtor_Even_succ`). In `match t.dtor with | .node a cs => …` the field
-`cs` is `Tree_Forest.St (Tree α) (Forest α) .Forest`, a forest by definition and shown as
-`Forest α` (`Gen/Pack.lean`), and `cs.dtor` is `Forest.dtor cs`. A nested argument is mapped by
-the functions per type packed on `Ix` (`Rose.fold_node`, `Rose.F.map_node` for
-`cs : List (Rose α)`), which `simp` takes to the function of the type at the positions
-(`IOcc.map_ofOcc`).
+constructors (`Even_Odd.dtor_Even_succ`). In `match t.dtor with | .node a cs => …` the field `cs` is
+`Tree_Forest.Colean.St (Tree α) (Forest α) .Forest`, a forest by definition and shown as `Forest α`
+(`Gen/Pack.lean`), and `cs.dtor` is `Forest.dtor cs`. A nested argument is mapped by the functions
+per type packed on `Ix` (`Rose.fold_node`, `Rose.F.fmap_node` for `cs : List (Rose α)`), which
+`simp` takes to the function of the type at the positions (`IOcc.map_ofOcc`).
 
 Induction, for a `datatype` block (say `Rose` and `Forest`, the same declarations as `datatype`), is
 either over the block, by `induction x` for `x : Rose_Forest α m` with one motive over `Ix` (the
@@ -98,13 +97,13 @@ positions at several types of the block (`p : Rose α × Forest α`), one hypoth
 `IPolyIso.Mem` per type.
 
 The types get `PolyIso` and `PolyMap` instances at their index of the block, when the parameters
-allow it (step 5, `Gen/Derive.lean`): the presentation is per block, `Tree_Forest.Poly.*`, over
-`Tree_Forest.Poly.Ix`, the block's index without the parameters that vary, and the instances are
-per type, `Tree.Poly.instPolyIso`. A nested argument with positions at one type only after cases
-on them is split through its products and sums (`p : Own α × Nat`), or inside a named type
-constructor has a structure in two variables (`p : List (Own α × Nat)`); at several types inside
-a named type constructor (`List (Rose α × Forest α)`) it gets its instances but not its `simp`
-lemmas, with a warning.
+allow it (step 5, `Gen/Derive.lean`): the presentation is per block, `Tree_Forest.Colean.Poly.*`,
+over `Tree_Forest.Colean.Poly.Ix`, the block's index without the parameters that vary, and the
+instances are per type, `Tree.Colean.Poly.instPolyIso`. A nested argument with positions at one type
+only after cases on them is split through its products and sums (`p : Own α × Nat`), or inside a
+named type constructor has a structure in two variables (`p : List (Own α × Nat)`); at several types
+inside a named type constructor (`List (Rose α × Forest α)`) it gets its instances but not its
+`simp` lemmas, with a warning.
 
 Constructor names shared by several types of the block are qualified in the block-level
 inductives (`Even_succ`, `Odd_succ` in `Even_Odd.F`), and so are the minor premises of the
@@ -116,6 +115,10 @@ The block is analysed and generated by `Gen/` like a single declaration (`Gen/Fr
 
 A `mutual` block mixing `datatype` and `codatatype` is rejected: such a block is a nested fixpoint,
 and the nesting order is a choice, which `mixed_mutual` states.
+
+As with `inductive`, a block whose types share a namespace (`Foo.A`, `Foo.B`) is elaborated
+inside it, so its constructors refer to the types as `A` and `B` too; the types of a block
+without a common namespace (`Qa.X`, `Qb.X`) are referred to by their full names.
 
 Each declaration of a block has its own modifiers, as in `inductive` (`Syntax.lean`): doc comments,
 attributes and `protected` per type and constructor. The types of a block, `mutual` or
@@ -207,6 +210,8 @@ namespace Codata
   if decls.isEmpty then throwUnsupportedSyntax
   unless decls.size == cmds.size do
     throwError "a mutual block must consist of `codatatype` and `datatype` declarations only"
+  if let some (ns, cmds) := Gen.blockNamespace? cmds then
+    return ← Gen.elabInNamespace stx[0] ns (stx.setArg 1 (mkNullNode cmds))
   if decls.size == 1 then
     elabCommand cmds[0]!
     return
@@ -255,6 +260,8 @@ def evalInductionBlockType : Tactic := fun stx => do
   unless decls.size == cmds.size do
     throwError "a `mixed_mutual` block must consist of `codatatype` and `datatype` declarations \
       only"
+  if let some (ns, cmds) := Gen.blockNamespace? cmds then
+    return ← Gen.elabInNamespace stx[0] ns (stx.setArg 1 (mkNullNode cmds))
   if decls.all (·.co == decls[0]!.co) then
     logWarningAt stx[0] m!"all declarations of this `mixed_mutual` block are \
       `{if decls[0]!.co then "codatatype" else "datatype"}`; use `mutual`"

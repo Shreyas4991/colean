@@ -77,9 +77,9 @@ example {α : Type u} (a : α) (n : Nat) :
     ∃ k, y = Tree_Forest.corec (natCoalg a) k) ?_ ⟨rfl, n, rfl⟩
   rintro m _ _ ⟨rfl, k, rfl⟩
   cases m
-  · simp only [Tree_Forest.dtor_corec, fullCoalg, natCoalg, Tree_Forest.F.map_node]
+  · simp only [Tree_Forest.dtor_corec, fullCoalg, natCoalg, Tree_Forest.F.fmap_node]
     exact .node _ _ _ ⟨rfl, _, rfl⟩
-  · simp only [Tree_Forest.dtor_corec, fullCoalg, natCoalg, Tree_Forest.F.map_cons]
+  · simp only [Tree_Forest.dtor_corec, fullCoalg, natCoalg, Tree_Forest.F.fmap_cons]
     exact .cons _ _ _ _ ⟨rfl, _, rfl⟩ ⟨rfl, _, rfl⟩
 
 end

@@ -3,8 +3,8 @@ import Colean.Gen.Derive.Fix
 /-!
 # Generators on `Expr`, step 5: the simp lemmas
 
-`Tₘ.Poly.map_c` and `Tₘ.Poly.mem_c` for every constructor of the presentation (see the section
-below).
+`Tₘ.Colean.Poly.map_c` and `Tₘ.Colean.Poly.mem_c` for every constructor of the presentation (see the
+section below).
 -/
 
 open Lean Meta Elab Term
@@ -20,18 +20,18 @@ variable (ctx : Ctx)
 For every constructor `c` of a type `Tₘ`, two simp lemmas at the premises, so that `simp`
 computes through the instances:
 
-* `Tₘ.Poly.map_c`, the map on the constructor:
+* `Tₘ.Colean.Poly.map_c`, the map on the constructor:
   `(Occ.ofIso fun X => Tₘ (H X) idx).map (Occ.ofIso fun X => Tₘ (H' X) idx) f (Tₘ.c args) =
   Tₘ.c args'`, the arguments mapped by kind: data unchanged, a field at a parameter position by
   the map of its structure in the premises (`(Occ.ofIso H).map (Occ.ofIso H') f a`, which `simp`
   makes `f a` at the identity, `Occ.map_ofIso_id`), a recursive argument by this map, a nested one
   by the map of its structure. The map is stated on the leaf `Occ.ofIso` of the instance, the form
-  in which the generated rules of other types (`fold_c`, `F.map_c`) mention it. `PolyMap.map`
+  in which the generated rules of other types (`fold_c`, `F.fmap_c`) mention it. `PolyMap.map`
   takes the functor implicitly, so `simp` would unify the constructor's arguments first, at `H X`
   for an unknown `H` (`?H ?X =?= T` at the identity premise), and the rule would not apply;
   `Occ.ofIso` and `PolyIso.Mem` take it explicitly. It is `PolyFix.map_eq_of_d` at the constructor
   `ctor ∘ ofL`, after `dtor_c`; the right-hand side is the result by definition.
-* `Tₘ.Poly.mem_c`, membership in the constructor: `PolyIso.Mem (fun X => Tₘ (H X) idx) x
+* `Tₘ.Colean.Poly.mem_c`, membership in the constructor: `PolyIso.Mem (fun X => Tₘ (H X) idx) x
   (Tₘ.c args) ↔ …`, a disjunct per field at a parameter position (membership through its
   structure in the premises) and per recursive argument (membership in it, under a telescope at
   some arguments, through a nested argument in some member of it), `False` without any. It is
@@ -45,7 +45,7 @@ finite depth.
 
 The lemmas are per constructor of the presentation (`VCtor`): with a split argument they are
 stated with its parts, the components `p.1`, `p.2` of a product, and for a sum one lemma per side,
-on the constructor at an injection (`Tm.Poly.map_app_inl` for `Tm.app (Sum.inl t) arg`). An
+on the constructor at an injection (`Tm.Colean.Poly.map_app_inl` for `Tm.app (Sum.inl t) arg`). An
 argument with a structure in two variables is mapped by `Occ₂.map`, in the premise's variable by
 `f` and in the occurrences by the map of the type's leaf, which `simp` computes through the
 combinators (`Occ₂.map_comp`, …); its members are those of its structure in the holes alone, the
@@ -68,9 +68,10 @@ def polyPrime (P : Poly) (X Y e : Expr) : Expr :=
   let e := e.replaceFVars (P.Hs ++ P.insts ++ #[X]) (P.Hs' ++ P.insts' ++ #[Y])
   P.prime (e.instantiateLevelParams [P.fresh[0]!] [P.lx'])
 
-/-- `Tₘ.Poly.instPolyIso premises idx`, the instance of the `m`-th type at its index arguments. -/
+/-- `Tₘ.Colean.Poly.instPolyIso premises idx`, the instance of the `m`-th type at its index
+arguments. -/
 def polyIsoOf (P : Poly) (m : Nat) (idx : Array Expr) : MetaM Expr := do
-  return mkAppN (← polyConst (ctx.tyName m ++ `Poly ++ `instPolyIso)) (P.premises ++ idx)
+  return mkAppN (← polyConst (ctx.tyColean m "Poly" ++ `instPolyIso)) (P.premises ++ idx)
 
 /-- The functor of an instance `PolyIso F Sh Pos`, eta-reduced. -/
 def isoFun (inst : Expr) : MetaM Expr := do
@@ -219,7 +220,7 @@ def freeName (c : Ctor) (names : List Name) : Name :=
 
 /-- The type and index arguments at an index `i` of the presentation that is a constructor
 application: the family at `projs i`, or in a block the type of the constructor of
-`Blk.Poly.Ix` with its arguments. -/
+`Blk.Colean.Poly.Ix` with its arguments. -/
 def polyIdxType (P : Poly) (i : Expr) : MetaM (Nat × Array Expr) := do
   if !ctx.isBlock then return (0, ← ctx.projs i)
   let n := ctx.polyName "Ix"
@@ -289,7 +290,7 @@ def polyNestMap (P : Poly) (X Y f : Expr) (a : ArgInfo) (n : Nest) (σ : Expr �
   mkAppOptM ``Codata.Occ.map #[none, none, none, oF, none, polyPrime P X Y oF, none, none, g, y]
 
 /-- `Tₘ.F (H X) Tₘ idx` of `dtor_c` at the arguments `ys`, with the proof of `dtor_c`, and the
-fixpoint `T.Poly.fix` at `X`, its layer `toL` and its constructor `ctor ∘ ofL` (a function on
+fixpoint `T.Colean.Poly.fix` at `X`, its layer `toL` and its constructor `ctor ∘ ofL` (a function on
 the index of the presentation with indices), with the proof that `d` undoes it if asked. -/
 structure PolyCtorData where
   dtorc : Expr
@@ -346,7 +347,7 @@ def PolyCtorData.dEq (d : PolyCtorData) (capp : Expr) : MetaM (Expr × Expr) := 
   let hD ← mkCongrArg d.toL d.dtorc
   return (dD, ← mkExpectedTypeHint hD (← mkEq dD (d.toL.beta #[d.fc])))
 
-/-- `Tₘ.Poly.map_c`. -/
+/-- `Tₘ.Colean.Poly.map_c`. -/
 def genPolyMapRule (P : Poly) (mi : Nat) : TermElabM Unit := do
   let v := P.vc[mi]!
   let c := v.ctor
@@ -415,11 +416,11 @@ def genPolyMapRule (P : Poly) (mi : Nat) : TermElabM Unit := do
   let xs := P.consts ++ P.Hs ++ P.Hs' ++ P.SR ++ P.insts ++ P.insts' ++ #[X, Y, f] ++ locals
   let (type, value) ← withBinderInfo (P.consts ++ P.Hs ++ P.Hs' ++ P.SR) .implicit do
     return (← mkForallFVars xs stmt, ← mkLambdaFVars xs pf)
-  let n := ctx.tyName c.owner ++ `Poly ++ Name.mkSimple ("map_" ++ c.name.toString)
+  let n := ctx.tyColean c.owner "Poly" ++ Name.mkSimple ("map_" ++ c.name.toString)
   addThm n (← ctx.levelParamsOf P.fresh #[type]) type value ctx.types[c.owner]!.ref
   addSimp n
 
-/-- The disjunct of a nested argument `y` with structure `n` in `Tₘ.Poly.mem_c`:
+/-- The disjunct of a nested argument `y` with structure `n` in `Tₘ.Colean.Poly.mem_c`:
 `∃ t, Mem G t y ∧ Mem (fun X => Tₘ (H X) idx) x t`, or on the packed index
 `∃ p t, IPolyIso.Mem G p t y ∧ …` when its positions are at several indices, also when they are
 at one index only after cases on them, which the cases on the positions of a layer do not see;
@@ -485,7 +486,7 @@ def simpClose (g : MVarId) : TermElabM Unit := do
   if let some (_, g) := r? then
     throwError "internal error: `simp` did not close{indentD (MessageData.ofGoal g)}"
 
-/-- `Tₘ.Poly.mem_c`. -/
+/-- `Tₘ.Colean.Poly.mem_c`. -/
 def genPolyMemRule (P : Poly) (mi : Nat) : TermElabM Unit := do
   let vc := P.vc[mi]!
   let c := vc.ctor
@@ -731,12 +732,12 @@ def genPolyMemRule (P : Poly) (mi : Nat) : TermElabM Unit := do
   let xs := P.consts ++ P.Hs ++ P.SR ++ P.insts ++ #[X, x] ++ locals
   let (type, value) ← withBinderInfo (P.consts ++ P.Hs ++ P.SR) .implicit do
     return (← mkForallFVars xs stmt, ← mkLambdaFVars xs pf)
-  let n := ctx.tyName c.owner ++ `Poly ++ Name.mkSimple ("mem_" ++ c.name.toString)
+  let n := ctx.tyColean c.owner "Poly" ++ Name.mkSimple ("mem_" ++ c.name.toString)
   addThm n (← ctx.levelParamsOf P.fresh #[type]) type value ctx.types[c.owner]!.ref
   addSimp n
 
-/-- The simp lemmas of the instances, `Tₘ.Poly.map_c` and `Tₘ.Poly.mem_c` for every constructor.
-A failure is a warning: these are rolled back, and the instances stay. -/
+/-- The simp lemmas of the instances, `Tₘ.Colean.Poly.map_c` and `Tₘ.Colean.Poly.mem_c` for every
+constructor. A failure is a warning: these are rolled back, and the instances stay. -/
 def genPolySimp (P : Poly) : TermElabM Unit := do
   let s ← saveState
   tryCatchRuntimeEx
@@ -744,7 +745,7 @@ def genPolySimp (P : Poly) : TermElabM Unit := do
       -- Each with its own heartbeat budget, as the parts of the instances.
       let c := P.vc[mi]!.ctor
       let rule (s : String) : MessageData :=
-        m!"`{ctx.tyName c.owner ++ `Poly ++ Name.mkSimple (s ++ c.name.toString)}`"
+        m!"`{ctx.tyColean c.owner "Poly" ++ Name.mkSimple (s ++ c.name.toString)}`"
       withCurrHeartbeats <| stepPhase (rule "map_") <| ctx.genPolyMapRule P mi
       withCurrHeartbeats <| stepPhase (rule "mem_") <| ctx.genPolyMemRule P mi)
     fun e => do

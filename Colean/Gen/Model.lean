@@ -5,7 +5,7 @@ import Colean.Gen.Rel
 
 *Spec.* Input: the context, `T.F` (step 1), the signature and the isomorphism. Output:
 
-* `T := Cotype (T.sig params)` (`Intype` for `datatype`), curried in the indices;
+* `T := Cotype (T.Colean.sig params)` (`Intype` for `datatype`), curried in the indices;
 * for `codatatype`: `T.dtor`, `T.corec` (with a state in any universe), `T.dtor_corec` (simp),
   `T.bisim` (for `T.F.Rel`), and `T.contract : Codata.Contract T F`;
 * for `datatype`: `T.ctor`, `T.fold` (into a family in any universe), `T.fold_ctor` (simp), and
@@ -58,14 +58,14 @@ def fPk (L : Level) : TermElabM Expr := do
     lam `p (← ctx.ixp) fun p => do
       return mkAppN (← ctx.fFam L (← ctx.curryFam X)) (← ctx.projs p)
 
-/-- `@T.F.map params X Y f idx a` on the packed index `p`, for curried families `X`, `Y` and `f`
+/-- `@T.F.fmap params X Y f idx a` on the packed index `p`, for curried families `X`, `Y` and `f`
 on the packed index. -/
 def mapP (wX wY : Level) (X Y f p a : Expr) : TermElabM Expr := do
   ctx.mapAt wX wY X Y (← ctx.curryN f 1) (← ctx.projs p) a
 
 /-! ### The type -/
 
-/-- `T := Cotype (T.sig params)` (or `Intype`), curried. -/
+/-- `T := Cotype (T.Colean.sig params)` (or `Intype`), curried. -/
 def genType : TermElabM Unit := do
   let L ← ctx.tLvl
   let fam ← ctx.modelFam
@@ -200,7 +200,7 @@ def mapFields (L : Level) : TermElabM (Expr × Expr × Expr) := do
   return (map, map_id, map_comp)
 
 /-- `T.contract : Codata.Contract T F`, the model packaged for the framework. Its `bisim` is for
-the canonical lifting, from `T.bisim` for `T.F.Rel`, which contains it by `T.F.rel_map`. -/
+the canonical lifting, from `T.bisim` for `T.F.Rel`, which contains it by `T.F.rel_fmap`. -/
 def genContractDef : TermElabM Unit := do
   let L ← ctx.tLvl
   let famL ← ctx.famP L

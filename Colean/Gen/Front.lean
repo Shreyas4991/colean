@@ -59,8 +59,11 @@ constructor is the type applied to its parameters (and indices), recursive argum
 explicit, no argument type and no index of the result depends on a recursive argument, the
 types being defined do not occur in the domain of a function, and a single index is a type, not a
 proposition. Before anything else, it checks the names (`checkNames`): no type twice in a block,
-no type, block or index of a block declared already, and no two types with one constructor of
-the block's index.
+no type, block or index of a block declared already, no two types with one constructor of the
+block's index, and no constructor twice in a type or named as a type, with the messages of
+`inductive` (`checkCtorDups`); then no constructor named as a declaration the command generates
+for its type or, through the functor's constructor of the same name, for the functor
+(`checkCtorNames`).
 
 The universe of the declared sort does not make the types': theirs is the model's. A declared
 sort with a universe written, without `_`, is kept (`Ctx.written`), and the pipeline checks it
@@ -224,6 +227,98 @@ def blockName (names : Array Name) : Name :=
   let pre := (blockNamespace names).foldl (· ++ ·) .anonymous
   pre ++ Name.mkSimple ("_".intercalate (blockShorts names).toList)
 
+/-- The constructor names of the declarations `decls` and their types, before anything is
+declared, as `inductive` checks them (`checkNoInductiveNameConflicts`, with its messages): no
+constructor twice in a type, and no constructor with the name of a type. -/
+def checkCtorDups (decls : Array DeclStx) : TermElabM Unit := do
+  let mut seen : Std.HashMap Name (Bool × Syntax) := {}
+  for d in decls do
+    seen := seen.insert d.userName (true, d.T)
+  for d in decls do
+    for c in d.ctors do
+      let n := d.userName ++ c.name.getId
+      if let some (isType, prev) := seen[n]? then
+        let kinds := if isType then "a type and a constructor" else "multiple constructors"
+        let msg := m!"Cannot define {kinds} with the same name `{n}`"
+        logErrorAt prev msg
+        throwErrorAt c.name msg
+      seen := seen.insert n (false, c.name)
+
+/-- The name of the constructor `c` of the `m`-th type of a block in the block-level inductives
+(`Ctor.fname`): `c` itself, or `Tₘ_c` when another type of the block has a constructor `c`.
+`shorts` are the names of the types in the block (`blockShorts`), `ctors` the constructor names of
+each type. -/
+def ctorFName (shorts : Array String) (ctors : Array (Array Name)) (m : Nat) (c : Name) : Name :=
+  if (ctors.filter (·.contains c)).size ≥ 2 then Name.mkSimple (shorts[m]! ++ "_" ++ c.toString)
+  else c
+
+/-- The generated declarations `T.s` of a type `T` of a declaration, by `s`, that a constructor
+`T.c` may clash with: the functor `F` and the user-facing declarations of a `codatatype` (`co`)
+or a `datatype`, of a single type (`single`, with the contract, which a block has at the block),
+and of a type of a run inside a `mixed_mutual` block (`inner`, whose open type is `T.Open`).
+These are named by `genName` (primed when `s` is `T`'s name); `typeRuleNames` are those of the
+constructors. -/
+def typeGenNames (co single inner : Bool) : Array String :=
+  #["F", "ctor", "dtor", "dtor_ctor", "ctor_dtor", "ctor_injective", "dtor_injective",
+    "dtor_inj", "casesOn"] ++
+  (if single then #["contract"] else #[]) ++
+  (if co then #["corec", "dtor_corec", "corec_eq", "corec_unique", "bisim", "coinduct"]
+    else #["rec", "fold", "fold_ctor", "fold_eq", "fold_unique"]) ++
+  (if inner then #["Open"] else #[])
+
+/-- The rules `T.s` of the constructors `cs` of a type `T`, by `s`: those every constructor has.
+Not the lemmas of some constructors only (`T.cᵢ_inj`, `T.cᵢ_ne_cⱼ`). -/
+def typeRuleNames (co : Bool) (cs : Array Name) : Array String :=
+  cs.flatMap fun c => let c := c.toString
+    #["dtor_" ++ c, "ctor_" ++ c, "casesOn_" ++ c, "dtor_eq_" ++ c ++ "_iff"] ++
+      (if co then #[] else #["rec_" ++ c, "fold_" ++ c])
+
+/-- The generated declarations `Blk.F.s` of the functor `Blk.F` of a family (a type or a block),
+by `s`, that its constructor `Blk.F.c` for a constructor `c` (`Ctor.fname`) may clash with: its
+map, the laws and the rules of the constructors `fnames`, the auxiliary constructions of an
+inductive type, and for `codatatype` (`co`) the lifting `F.Rel` and its laws. -/
+def functorGenNames (co : Bool) (fnames : Array Name) : Array String :=
+  #["fmap", "fmap_id", "fmap_comp", "rec", "recOn", "casesOn", "noConfusion", "noConfusionType",
+    "ctorIdx", "ctorElim", "ctorElimType"] ++
+  (if co then #["Rel", "rel_fmap", "rel_refl"] else #[]) ++
+  fnames.map ("fmap_" ++ ·.toString)
+
+/-- The constructor names of the declarations `decls`, a single type or the types of a block,
+before anything is declared: a constructor `T.c` must not be a generated declaration of `T`
+(`typeGenNames`, `typeRuleNames`) or the namespace `T.Colean` of its internals, nor its
+constructor `F.c` of the functor one of the functor (`functorGenNames`), nor, for `codatatype`,
+`F.Rel.c` the lemma `F.Rel.mono`. `inner` for a run inside a `mixed_mutual` block, whose closed
+types restate the declarations of the open ones. -/
+def checkCtorNames (decls : Array DeclStx) (inner : Bool) : TermElabM Unit := do
+  let single := decls.size == 1
+  let co := decls[0]!.co
+  let fam := if single then decls[0]!.userName else blockName (decls.map (·.userName))
+  let shorts := blockShorts (decls.map (·.userName))
+  let ctors := decls.map (·.ctors.map (·.name.getId))
+  let fnames := (ctors.mapIdx fun m cs => cs.map (ctorFName shorts ctors m)).flatten
+  let F := genName fam "F"
+  let fNames := functorGenNames co fnames
+  let clash (c : Syntax) (n : Name) (why : MessageData := m!"") : TermElabM Unit :=
+    throwErrorAt c m!"constructor `{c.getId}` clashes with the generated declaration `{n}`{why}; \
+      rename the constructor"
+  for d in decls, cs in ctors, m in [0:decls.size] do
+    let T := d.userName
+    let gen := (typeGenNames co single inner).map (genName T) ++
+      (typeRuleNames co cs).map (T.str ·)
+    for c in d.ctors do
+      let n := T ++ c.name.getId
+      if gen.contains n then clash c.name n
+      if n == coleanNs T then
+        throwErrorAt c.name m!"constructor `{c.name.getId}` clashes with `{n}`, the namespace of \
+          the generated internals; rename the constructor"
+      let fname := ctorFName shorts ctors m c.name.getId
+      if fNames.contains fname.toString then
+        clash c.name (F.str fname.toString)
+          m!": the functor `{F}` has a constructor `{F ++ fname}` for it"
+      if co && fname == `mono then
+        clash c.name (F ++ `Rel.mono)
+          m!": the lifting `{F ++ `Rel}` has a constructor `{F ++ `Rel ++ fname}` for it"
+
 /-- Throw at `ref` if `n`, a name the command declares and the user did not write, is declared
 already; `why` says where the name comes from and how to avoid the clash. -/
 def checkFree (n : Name) (ref : Syntax) (why : MessageData) : TermElabM Unit := do
@@ -249,6 +344,7 @@ def checkNames (decls : Array DeclStx) (blk? : Option Name) (ref : Syntax) : Ter
     if (decls.extract 0 i).any (·.declName == d.declName) then
       throwErrorAt d.T "`{d.T.getId}` is declared twice in this block"
     withRef d.T <| checkNotAlreadyDeclared d.declName
+  checkCtorDups decls
   if let some blk := blk? then
     checkBlockShorts decls
     for n in [blk, blk ++ `Ix] do
@@ -688,7 +784,9 @@ def withCtx (decls : Array DeclStx) (ref : Syntax) (vars : Array Expr) (k : Ctx 
     | none => if isBlock then privateLike names[0]! (blockName (decls.map (·.userName)))
       else names[0]!
   -- The names, before anything is declared; those of a mixed block by `elabMixed`.
-  if mix?.isNone then checkNames decls (if isBlock then some name else none) (keywordOf ref)
+  if mix?.isNone then
+    checkNames decls (if isBlock then some name else none) (keywordOf ref)
+    checkCtorNames decls (inner := false)
   -- As in `inductive`: no `_recApp` annotations on the occurrences of the types.
   withSavedLevelNames <| withRef ref <| Term.withoutErrToSorry <| Term.withoutSavingRecAppSyntax do
   let hdrs ← all.mapM fun d => withRef d.ref do elabHeader allShorts d.ps d.sort?
@@ -923,8 +1021,7 @@ def withCtx (decls : Array DeclStx) (ref : Syntax) (vars : Array Expr) (k : Ctx 
   let fam? := ctx0.famIdx?
   -- Constructor names shared by several types of a block are qualified in the block-level
   -- inductives.
-  let clash (n : Name) : Bool :=
-    ((Array.range decls.size).filter fun m => ctors.any fun c => c.1 == m && c.2.1 == n).size ≥ 2
+  let ctorNames := decls.map (·.ctors.map (·.name.getId))
   let mut out : Array Ctor := #[]
   for (m, cname, _, refs, resRef, c) in ctors, (xs, body) in opened do
     let badRes : MessageData :=
@@ -954,9 +1051,7 @@ def withCtx (decls : Array DeclStx) (ref : Syntax) (vars : Array Expr) (k : Ctx 
       unless a.kind.isData do
         if uidx.any (·.containsFVar a.fvar.fvarId!) then
           throwErrorAt c.ref "the indices of the result type may not depend on a recursive argument"
-    let fname := if clash cname then
-        Name.mkSimple (ownShorts[m]! ++ "_" ++ cname.toString)
-      else cname
+    let fname := ctorFName ownShorts ctorNames m cname
     out := out.push
       { name := cname, fname, owner := m, args, idx := b.wrap m uidx, uidx, ref := c.ref
         nameRef := c.name }

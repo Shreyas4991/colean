@@ -40,7 +40,7 @@ example {X : Type u} {Y : Type u'} (f : X → Y) (b : Box X) :
 @[simp] theorem BStream.dtor_const {α : Type u} (a : α) :
     (BStream.const a).dtor = .cons a ⟨BStream.const a⟩ := by
   rw [BStream.const, BStream.dtor_corec]
-  simp only [BStream.F.map_cons]
+  simp only [BStream.F.fmap_cons]
   rw [Codata.Occ.map_ofIso]
   rfl
 

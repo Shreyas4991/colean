@@ -22,8 +22,8 @@ datatype BinTree
   | node (children : BinTree × BinTree)
 
 #check @BinTree.node
-#check @BinTree.Shape.node
-#check @BinTree.B.node_children
+#check @BinTree.Colean.Shape.node
+#check @BinTree.Colean.B.node_children
 #check @BinTree.rec
 #check @BinTree.fold_node
 
@@ -62,7 +62,7 @@ def Bin.const {α : Type u} (a : α) : Bin α :=
 @[simp] theorem Bin.dtor_const {α : Type u} (a : α) :
     (Bin.const a).dtor = .node a (Bin.const a, Bin.const a) := by
   rw [Bin.const, Bin.dtor_corec]
-  simp only [Bin.F.map_node, Codata.Occ.map_prod, Codata.Occ.map_hole]
+  simp only [Bin.F.fmap_node, Codata.Occ.map_prod, Codata.Occ.map_hole]
 
 /-- Two corecursions with different states are equal: the relation is passed through the pair
 by `rel_prod_intro` and `rel_hole_intro`. -/
@@ -70,7 +70,8 @@ example {α : Type u} (a : α) : Bin.const a = Bin.corec (S := Nat) (fun n => .n
   refine Bin.bisim (fun x y => x = Bin.const a ∧ ∃ n, y = Bin.corec (fun n => .node a (n + 1, n + 2)) n)
     ?_ ⟨rfl, 0, rfl⟩
   rintro _ _ ⟨rfl, n, rfl⟩
-  simp only [Bin.dtor_const, Bin.dtor_corec, Bin.F.map_node, Codata.Occ.map_prod, Codata.Occ.map_hole]
+  simp only [Bin.dtor_const, Bin.dtor_corec, Bin.F.fmap_node, Codata.Occ.map_prod,
+    Codata.Occ.map_hole]
   exact .node _ _ _ (Codata.Occ.rel_prod_intro _ _ _ _ (Codata.Occ.rel_hole_intro ⟨rfl, _, rfl⟩)
     (Codata.Occ.rel_hole_intro ⟨rfl, _, rfl⟩))
 
@@ -82,9 +83,9 @@ codatatype Proc (α : Type u)
   | stop
 
 #check @Proc.act
-#check @Proc.B.act_k
-#check @Proc.B.choice_c
-#check @Proc.F.map_act
+#check @Proc.Colean.B.act_k
+#check @Proc.Colean.B.choice_c
+#check @Proc.F.fmap_act
 #check @Proc.F.Rel.choice
 
 def Proc.loop {α : Type u} : Proc α := Proc.corec (S := Unit) (fun _ => .act fun _ => [(), ()]) ()
@@ -92,21 +93,21 @@ def Proc.loop {α : Type u} : Proc α := Proc.corec (S := Unit) (fun _ => .act f
 theorem Proc.dtor_loop {α : Type u} :
     (Proc.loop : Proc α).dtor = .act fun _ => [Proc.loop, Proc.loop] := by
   rw [Proc.loop, Proc.dtor_corec]
-  simp only [Proc.F.map_act, Codata.Occ.map_pi, Codata.Occ.map_list, List.map_cons, List.map_nil]
+  simp only [Proc.F.fmap_act, Codata.Occ.map_pi, Codata.Occ.map_list, List.map_cons, List.map_nil]
 
 datatype Tm (α : Type u)
   | var (a : α)
   | app (f : Tm α ⊕ α) (arg : Tm α)
 
 #check @Tm.app
-#check @Tm.B.app_f
+#check @Tm.Colean.B.app_f
 #check @Tm.rec
 
 datatype Rose
   | node (children : (n : Nat) × (Fin n → Rose))
 
 #check @Rose.node
-#check @Rose.B.node_children
+#check @Rose.Colean.B.node_children
 #check @Rose.rec
 
 /-! ### A function from a proposition -/
@@ -115,7 +116,7 @@ datatype Guarded
   | mk (n : Nat) (k : 0 < n → List Guarded)
 
 #check @Guarded.mk
-#check @Guarded.B.mk_k
+#check @Guarded.Colean.B.mk_k
 
 /-! ### Occurrences at two indices in one argument -/
 
@@ -124,8 +125,8 @@ datatype Chain : Nat → Type
   | link {n : Nat} (p : Chain n × Chain (n + 1)) : Chain (n + 2)
 
 #check @Chain.link
-#check @Chain.B.link_p
-#check @Chain.idx
+#check @Chain.Colean.B.link_p
+#check @Chain.Colean.idx
 #check @Chain.rec
 
 /-! ### Nesting through a declared type, with hand-written instances -/
@@ -196,7 +197,7 @@ datatype V
   | leaf
   | node (s : Nat ⊕ V)
 
-example {X Y : Type} (f : X → Y) (s : Nat ⊕ X) : V.F.map f (.node s) = .node (s.map id f) := by
+example {X Y : Type} (f : X → Y) (s : Nat ⊕ X) : V.F.fmap f (.node s) = .node (s.map id f) := by
   simp
 
 example (g : V.F Nat → Nat) (s : Nat ⊕ V) :
@@ -207,7 +208,7 @@ codatatype CV
   | leaf
   | node (s : CV ⊕ Nat)
 
-example {X Y : Type} (f : X → Y) (s : X ⊕ Nat) : CV.F.map f (.node s) = .node (s.map f id) := by
+example {X Y : Type} (f : X → Y) (s : X ⊕ Nat) : CV.F.fmap f (.node s) = .node (s.map f id) := by
   simp
 
 -- Indexed: two indices across the sum.

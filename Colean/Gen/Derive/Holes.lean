@@ -263,8 +263,8 @@ namespace Ctx
 
 variable (ctx : Ctx)
 
-/-- `T.Poly.s`. -/
-def polyName (s : String) : Name := .str (.str ctx.name "Poly") s
+/-- `T.Colean.Poly.s`. -/
+def polyName (s : String) : Name := .str (ctx.colean "Poly") s
 
 /-! ### The holes -/
 

@@ -13,7 +13,7 @@ codatatype B (α : Type u)
 
 #check @B.cons
 #check @B.corec
-#check @B.B'.cons_tail
+#check @B.Colean.B.cons_tail
 
 datatype F
   | leaf
@@ -21,13 +21,22 @@ datatype F
 
 #check @F.node
 #check @F.rec
-#check @F.F'.map
+#check @F.F'.fmap
 
 codatatype Shape : Nat → Type
   | mk {n : Nat} (s : Shape (n + 1)) : Shape n
 
 #check @Shape.mk
 #check @Shape.bisim
+
+/-! The internals of a type `Colean` are under `Colean.Colean'`. -/
+
+datatype Colean
+  | leaf
+  | node (l r : Colean)
+
+#check @Colean.node
+#check @Colean.Colean'.Shape.node
 
 /-! ### Binders users refer to by name
 

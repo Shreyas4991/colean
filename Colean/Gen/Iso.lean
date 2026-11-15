@@ -6,10 +6,10 @@ import Colean.Gen.Signature
 *Spec.* Input: the context, `T.F` and the signature. Output: the isomorphism between `F` and the
 signature's layers, for a family `X` on the packed index:
 
-* `T.toC : T.F params X' idx → (T.sig params).Obj X ⟨idx⟩` and `T.ofC` back, where `X'` is `X`
-  curried (`curryFam`);
-* their laws `T.ofC_toC`, `T.toC_ofC`, `T.ofC_map`, and for `codatatype` `T.rel_ofC` (stated with
-  `T.F.Rel`, `Gen/Rel.lean`).
+* `T.Colean.toC : T.F params X' idx → (T.Colean.sig params).Obj X ⟨idx⟩` and `T.Colean.ofC` back,
+  where `X'` is `X` curried (`curryFam`);
+* their laws `T.Colean.ofC_toC`, `T.Colean.toC_ofC`, `T.Colean.ofC_map`, and for `codatatype`
+  `T.Colean.rel_ofC` (stated with `T.F.Rel`, `Gen/Rel.lean`).
 
 `toC` is by cases on `F`; the children of a layer are by cases on the position (`casesPos`), at
 its shape `Shape.c d` and the constructor's index, in general position: the position is
@@ -47,10 +47,10 @@ def eqProof (eq : Expr) (hs : Array Expr) : MetaM Expr := do
       return ← if heq == hheq then pure h else if heq then mkHEqOfEq h else mkEqOfHEq h
   throwError "internal error: no proof of{indentExpr eq}"
 
-/-- `MVarId.cases` on a position `b : T.B params idx s` whose shape `s` is a constructor
+/-- `MVarId.cases` on a position `b : T.Colean.B params idx s` whose shape `s` is a constructor
 application, in general position: `b` is eliminated at variables (`generalizeIndices`), and in
 each case the equation of the shapes is solved first, by the heterogeneous `noConfusion` of
-`T.Shape`, which closes the cases of other shapes and gives the equations of the shapes'
+`T.Colean.Shape`, which closes the cases of other shapes and gives the equations of the shapes'
 arguments; once these are substituted, the equations of the indices hold by definition. So the
 indices need not be patterns: `cases`, which solves them first, fails on `n' * 2 = n * 2` for a
 constructor of `T (n * 2)`. -/
@@ -129,18 +129,18 @@ def mkOfC (o hole sh : Expr) (snd : Expr → TermElabM Expr) : TermElabM Expr :=
     mkLambdaFVars #[q] (← snd q)
   return mkApp f (mkApp4 (.const ``Sigma.mk D.getAppFn.constLevels!) α β sh fn)
 
-/-- `(b : T.B params idx s) → X (T.idx b)`, the type of the children of a layer (`X ()` without
-indices). -/
+/-- `(b : T.Colean.B params idx s) → X (T.Colean.idx b)`, the type of the children of a layer
+(`X ()` without indices). -/
 def childTy (X : Expr) (idx : Array Expr) (s : Expr) : TermElabM Expr := do
   withLocalDeclD `b (← ctx.bAt idx s) fun b => do
     let i ← if ctx.idxed then ctx.idxAt idx s b else pure (mkConst ``Unit.unit)
     mkForallFVars #[b] (mkApp X i)
 
-/-- `@T.toC params X idx a`, for `X` at universe `w`. -/
+/-- `@T.Colean.toC params X idx a`, for `X` at universe `w`. -/
 def toCAt (w : Level) (X : Expr) (idx : Array Expr) (a : Expr) : MetaM Expr := do
   ctx.genAt ctx.toC [w] (#[X] ++ idx ++ #[a])
 
-/-- `@T.ofC params X idx z`, for `X` at universe `w`. -/
+/-- `@T.Colean.ofC params X idx z`, for `X` at universe `w`. -/
 def ofCAt (w : Level) (X : Expr) (idx : Array Expr) (z : Expr) : MetaM Expr := do
   ctx.genAt ctx.ofC [w] (#[X] ++ idx ++ #[z])
 
@@ -199,7 +199,7 @@ def layer (c : Ctor) (w : Level) (X : Expr) (ys : Array Expr) : TermElabM Expr :
 def withFamX (n : Name) (w : Level) (k : Expr → TermElabM α) : TermElabM α := do
   withLocalDecl n .implicit (← mkArrow (← ctx.ixp) (mkSort w.succ)) k
 
-/-- `T.toC`. -/
+/-- `T.Colean.toC`. -/
 def genToC : TermElabM Unit := do
   let fresh := ctx.freshLevels 1
   let w := ctx.holeLevel (.param fresh[0]!)
@@ -248,7 +248,7 @@ def ofCBody (c : Ctor) (w : Level) (X ch : Expr) (sargs : Array Expr) : TermElab
     ty := ty.bindingBody!.instantiate1 v
   return fn
 
-/-- `T.ofC`, by cases on the shape. -/
+/-- `T.Colean.ofC`, by cases on the shape. -/
 def genOfC : TermElabM Unit := do
   let fresh := ctx.freshLevels 1
   let w := ctx.holeLevel (.param fresh[0]!)
@@ -287,7 +287,7 @@ def inProof (hs : Array Expr) (e : Expr) : Expr :=
   e.replaceFVars ctx.params (hs.extract 0 ctx.params.size)
 
 /-- After `cases` on a layer `z : σ.Obj X ⟨idx⟩` (one goal, its fields the shape and the
-children): `cases` on the shape, its type stated as `T.Shape params idx` first so that its
+children): `cases` on the shape, its type stated as `T.Colean.Shape params idx` first so that its
 indices are the index variables. `k` gets each constructor's goal, with the substitution. -/
 def casesLayer (hs : Array Expr) (g : MVarId) (z : Expr) (idx : Array Expr)
     (k : Ctor → CasesSubgoal → TermElabM Unit) : TermElabM FVarSubst := do
@@ -303,7 +303,8 @@ def casesLayer (hs : Array Expr) (g : MVarId) (z : Expr) (idx : Array Expr)
   return sg.subst
 
 /-- Close `g : A = Obj.mk s c` where `A` reduces to `Obj.mk s' c'`: by `funext`, cases on the
-position (`casesPos`), and `rfl`. The position's type is stated as `T.B params idx s` first. -/
+position (`casesPos`), and `rfl`. The position's type is stated as `T.Colean.B params idx s` first.
+-/
 def finishLayer (hs : Array Expr) (g : MVarId) : TermElabM Unit := g.withContext do
   let some (_, _, rhs) := (← instantiateMVars (← g.getType)).eq?
     | throwError "internal error: expected an equation"
@@ -323,7 +324,7 @@ def finishLayer (hs : Array Expr) (g : MVarId) : TermElabM Unit := g.withContext
   let g ← g.replaceLocalDeclDefEq b.fvarId! (ctx.inProof hs (← ctx.bAt idx s))
   for sg in ← casesPos g b.fvarId! do sg.mvarId.refl
 
-/-- `T.ofC_toC`, `T.toC_ofC`, `T.ofC_map`. -/
+/-- `T.Colean.ofC_toC`, `T.Colean.toC_ofC`, `T.Colean.ofC_map`. -/
 def genIsoLaws : TermElabM Unit := do
   let np := ctx.params.size
   let pI ← ctx.packI

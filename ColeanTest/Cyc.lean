@@ -18,7 +18,7 @@ codatatype Cyc : (n : Nat) → Fin (n + 1) → Type
 #check @Cyc.corec
 #check @Cyc.bisim
 #check @Cyc.casesOn
-#check Cyc.Ix
+#check Cyc.Colean.Ix
 
 /-- Always forward. -/
 def Cyc.forward (n : Nat) (i : Fin (n + 1)) : Cyc n i :=

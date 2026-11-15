@@ -8,18 +8,17 @@ generator: the parameters, the types being defined, the index binders, the const
 their arguments classified (`ArgKind`: data, plain recursive, recursive under a telescope,
 nested with its occurrence structure), and the names of the generated declarations.
 
-*Free variables.* A context lives inside one `TermElabM` run, in the continuation of
-`Gen.withCtx`: the parameters, the index binders and the arguments of every constructor are free
-variables of the local context, and every `Expr` of the context is over them. A generator builds
-types and values with these variables directly (`mkAppN F (params ++ …)`) and closes a
-declaration once, with `mkForallFVars`/`mkLambdaFVars`, choosing binder infos per declaration
-(`withBinderInfo`): the parameters have the binder infos the user wrote in the generated types,
-the types `T`, `Tₘ` and the auxiliary ones (`T.F`, `T.Shape`, `T.B`, `T.sig`, `Blk.Ix`, …), as in
+*Free variables.* A context lives inside one `TermElabM` run, in the continuation of `Gen.withCtx`:
+the parameters, the index binders and the arguments of every constructor are free variables of the
+local context, and every `Expr` of the context is over them. A generator builds types and values
+with these variables directly (`mkAppN F (params ++ …)`) and closes a declaration once, with
+`mkForallFVars`/`mkLambdaFVars`, choosing binder infos per declaration (`withBinderInfo`): the
+parameters have the binder infos the user wrote in the generated types, the types `T`, `Tₘ` and the
+auxiliary ones (`T.F`, `T.Colean.Shape`, `T.Colean.B`, `T.Colean.sig`, `Blk.Ix`, …), as in
 `inductive` and its auxiliary constructions, and are implicit in the other definitions and in the
 lemmas. The arguments of different constructors coexist in the local context; they are never
-elaborated against, so their names do not capture anything. The section variables the
-declaration uses are the first parameters (`nVars` of them), as with `inductive`, with their own
-binder infos.
+elaborated against, so their names do not capture anything. The section variables the declaration
+uses are the first parameters (`nVars` of them), as with `inductive`, with their own binder infos.
 
 *Occurrences.* During the analysis the types being defined are local variables
 `T : ∀ params idx, Type uT` (as in Lean's `inductive`), at a placeholder universe `uT` that is a
@@ -46,8 +45,8 @@ exist, the statements are written with the closed types of the runs inside (`clo
 
 *Universes.* A generated declaration has the user's universes that occur in it, in the order
 declared, then universes of its own named `u_1`, `u_2`, … (`freshLevels`), as Lean names them. A
-declaration with a motive or a state (`T.rec`, `T.casesOn`, `T.recPos`, `T.fold`, `T.corec`, and
-their rules) has the universe of the motive or the state first, named as Lean names that of
+declaration with a motive or a state (`T.rec`, `T.casesOn`, `T.Colean.recPos`, `T.fold`, `T.corec`,
+and their rules) has the universe of the motive or the state first, named as Lean names that of
 `T.rec`: `u`, or else the first of `u_1`, `u_2`, … that the user's universes leave free
 (`motiveLevels`, `elimLevelParamsOf`). The user's universes include those the headers leave to the
 command (`Type _`, an auto-bound `Sort _`), which become universe parameters `u_1`, … as with
@@ -520,14 +519,13 @@ def nestAt (n : Nest) (lvl : Level) (σ : Expr → Expr) : Expr :=
 
 /-! ### Names -/
 
-/-- The generated declaration `T.s`. Inside its own namespace `T.T` would shadow the type `T`,
-so a generated name equal to the type's name is primed (`B.B'` for `codatatype B`). Which of these
-names are `protected` is `protectedGen` (`Gen/Decl.lean`). -/
-def gen (s : String) : Name :=
-  let last := match ctx.name with
-    | .str _ s' => s'
-    | _ => ""
-  .str ctx.name (if last == s then s ++ "'" else s)
+/-- The generated declaration `T.s`, primed when `s` is the type's name (`genName`,
+`Gen/Decl.lean`). Which of these names are `protected` is `protectedGen` (`Gen/Decl.lean`). -/
+def gen (s : String) : Name := genName ctx.name s
+
+/-- The internal declaration `T.Colean.s` (`coleanNs`): one that no user-facing statement mentions
+and no user calls. -/
+def colean (s : String) : Name := .str (coleanNs ctx.name) s
 
 /-- `T.F`, the functor. -/
 def F : Name := ctx.gen "F"
@@ -538,35 +536,37 @@ def nF (s : String) : Name := .str ctx.F s
 /-- `T.F.c`, the constructor of `F` for `c`. -/
 def fCtor (c : Ctor) : Name := ctx.F ++ c.fname
 
-def Fmap : Name := ctx.nF "map"
-def FmapCtor (c : Ctor) : Name := ctx.nF ("map_" ++ c.fname.toString)
-def Fmap_id : Name := ctx.nF "map_id"
-def Fmap_comp : Name := ctx.nF "map_comp"
+/-- The functor's action on functions `T.F.fmap`, its rules and laws, and the lifting `T.F.Rel`. -/
+def Fmap : Name := ctx.nF "fmap"
+def FmapCtor (c : Ctor) : Name := ctx.nF ("fmap_" ++ c.fname.toString)
+def Fmap_id : Name := ctx.nF "fmap_id"
+def Fmap_comp : Name := ctx.nF "fmap_comp"
 def Rel : Name := ctx.nF "Rel"
-def Frel_map : Name := ctx.nF "rel_map"
+def Frel_map : Name := ctx.nF "rel_fmap"
 /-- `T.F.Rel.c`. -/
 def relCtor (c : Ctor) : Name := ctx.Rel ++ c.fname
 
-/-- The signature: `T.Shape`, `T.B`, `T.Ix`, `T.idx`, `T.ShapeP`, `T.sig`. -/
-def Shape : Name := ctx.gen "Shape"
-def B : Name := ctx.gen "B"
-def Ix : Name := ctx.gen "Ix"
-def idxN : Name := ctx.gen "idx"
-def ShapeP : Name := ctx.gen "ShapeP"
-def sig : Name := ctx.gen "sig"
-/-- `T.Shape.c`. -/
+/-- The signature: `T.Colean.Shape`, `T.Colean.B`, `T.Colean.Ix`, `T.Colean.idx`,
+`T.Colean.ShapeP`, `T.Colean.sig`. -/
+def Shape : Name := ctx.colean "Shape"
+def B : Name := ctx.colean "B"
+def Ix : Name := ctx.colean "Ix"
+def idxN : Name := ctx.colean "idx"
+def ShapeP : Name := ctx.colean "ShapeP"
+def sig : Name := ctx.colean "sig"
+/-- `T.Colean.Shape.c`. -/
 def shapeCtor (c : Ctor) : Name := ctx.Shape ++ c.fname
-/-- `T.B.c_x`, the positions of the argument `x` of `c`. -/
+/-- `T.Colean.B.c_x`, the positions of the argument `x` of `c`. -/
 def bCtor (c : Ctor) (a : ArgInfo) : Name :=
   ctx.B ++ Name.mkSimple (c.fname.toString ++ "_" ++ a.name.toString)
 
-/-- The isomorphism and the model. -/
-def toC : Name := ctx.gen "toC"
-def ofC : Name := ctx.gen "ofC"
-def ofC_toC : Name := ctx.gen "ofC_toC"
-def toC_ofC : Name := ctx.gen "toC_ofC"
-def ofC_map : Name := ctx.gen "ofC_map"
-def rel_ofC : Name := ctx.gen "rel_ofC"
+/-- The isomorphism (internal) and the model. -/
+def toC : Name := ctx.colean "toC"
+def ofC : Name := ctx.colean "ofC"
+def ofC_toC : Name := ctx.colean "ofC_toC"
+def toC_ofC : Name := ctx.colean "toC_ofC"
+def ofC_map : Name := ctx.colean "ofC_map"
+def rel_ofC : Name := ctx.colean "rel_ofC"
 def dtor : Name := ctx.gen "dtor"
 def corec : Name := ctx.gen "corec"
 def dtor_corec : Name := ctx.gen "dtor_corec"
@@ -575,9 +575,10 @@ def contract : Name := ctx.gen "contract"
 def ctor : Name := ctx.gen "ctor"
 def fold : Name := ctx.gen "fold"
 def fold_ctor : Name := ctx.gen "fold_ctor"
-def recAux : Name := ctx.gen "recAux"
-def recPos : Name := ctx.gen "recPos"
-def recPos_ctor : Name := ctx.gen "recPos_ctor"
+/-- The model's recursor and its rule (internal). -/
+def recAux : Name := ctx.colean "recAux"
+def recPos : Name := ctx.colean "recPos"
+def recPos_ctor : Name := ctx.colean "recPos_ctor"
 def recN : Name := ctx.gen "rec"
 
 /-- The framework. -/
@@ -609,6 +610,8 @@ def tyGenP (m : Nat) (s : String) : Name :=
     | .str _ l => l
     | _ => ""
   .str n (if last == s then s ++ "'" else s)
+/-- The internal declaration `Tₘ.Colean.s` of the `m`-th type (`coleanNs`). -/
+def tyColean (m : Nat) (s : String) : Name := .str (coleanNs (ctx.tyName m)) s
 
 /-- A binder name users may refer to (`motive := …`, `S := …`): plain, unless the declaration
 uses it (`plainOr`). -/

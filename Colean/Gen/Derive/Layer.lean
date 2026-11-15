@@ -3,9 +3,10 @@ import Colean.Gen.Derive.Pres
 /-!
 # Generators on `Expr`, step 5: the layer
 
-`T.Poly.toL` and `T.Poly.ofL` between `T.F (H X) Y` and the layer of the presentation, and their
-laws `T.Poly.ofL_toL`, `T.Poly.toL_ofL`, `T.Poly.ofL_map`, without and with indices: the
-declarations of the layer take the index of the presentation, given as `is`, `#[i]` or `#[]`.
+`T.Colean.Poly.toL` and `T.Colean.Poly.ofL` between `T.F (H X) Y` and the layer of the presentation,
+and their laws `T.Colean.Poly.ofL_toL`, `T.Colean.Poly.toL_ofL`, `T.Colean.Poly.ofL_map`, without
+and with indices: the declarations of the layer take the index of the presentation, given as `is`,
+`#[i]` or `#[]`.
 -/
 
 open Lean Meta Elab Term
@@ -22,7 +23,7 @@ variable (ctx : Ctx)
 def polyF (P : Poly) (X Y : Expr) (w : Level) : MetaM Expr := do
   return mkAppN (← ctx.constWith ctx.F [w]) (ctx.polyParams P P.Hs X |>.push Y)
 
-/-- `Lay (T.Poly.P psB) (T.Poly.B psB) X Y`. -/
+/-- `Lay (T.Colean.Poly.P psB) (T.Colean.Poly.B psB) X Y`. -/
 def polyLay (P : Poly) (X Y : Expr) : MetaM Expr := do
   mkAppOptM ``Codata.Lay #[none, ← ctx.polyP P, ← ctx.polyB P, X, Y]
 
@@ -37,7 +38,7 @@ def polyLayFam (P : Poly) (Hs : Array Expr) (X Y : Expr) : TermElabM Expr := do
   if !ctx.isBlock && ctx.k == 1 then return Y
   lam `j P.I fun j => do return mkAppN Y (← ctx.projs (← ctx.polyIota P Hs X j))
 
-/-- `ILay (T.Poly.sig psB) (T.Poly.P psB) X (fun j => Y (ι j)) i`. -/
+/-- `ILay (T.Colean.Poly.sig psB) (T.Colean.Poly.P psB) X (fun j => Y (ι j)) i`. -/
 def polyILay (P : Poly) (X Y i : Expr) : TermElabM Expr := do
   mkAppOptM ``Codata.ILay
     #[← ctx.polySig P, ← ctx.polyP P, X, ← ctx.polyLayFam P P.Hs X Y, i]
@@ -46,11 +47,12 @@ def polyILay (P : Poly) (X Y i : Expr) : TermElabM Expr := do
 def polyFI (P : Poly) (X Y i : Expr) (w : Level) : TermElabM Expr := do
   return mkAppN (← ctx.polyF P X Y w) (← ctx.projs (← ctx.polyIota P P.Hs X i))
 
-/-- `T.Poly.idx psB i s b`, the index of the child at `b`. -/
+/-- `T.Colean.Poly.idx psB i s b`, the index of the child at `b`. -/
 def polyIdxAt (P : Poly) (i s b : Expr) : MetaM Expr := do
   return mkAppN (← polyConst (ctx.polyName "idx")) (P.psB ++ #[i, s, b])
 
-/-- `(b : T.Poly.B psB i s) → Y (ι (T.Poly.idx b))`, the children of a layer at `i` and `s`. -/
+/-- `(b : T.Colean.Poly.B psB i s) → Y (ι (T.Colean.Poly.idx b))`, the children of a layer at `i`
+and `s`. -/
 def polyKidsTy (P : Poly) (X Y i s : Expr) : TermElabM Expr := do
   let layY ← ctx.polyLayFam P P.Hs X Y
   withLocalDeclD `b (mkApp2 (← ctx.polyB P) i s) fun b => do
@@ -95,7 +97,7 @@ parameter position, also when the type has indices. -/
 def mkOfCPlain (o hole sh : Expr) (snd : Expr → TermElabM Expr) : TermElabM Expr :=
   ({ ctx with idx := #[] } : Ctx).mkOfC o hole sh snd
 
-/-- `T.Poly.toL premises X Y a` (`ofL`, …): a declaration of this step over the premises, at
+/-- `T.Colean.Poly.toL premises X Y a` (`ofL`, …): a declaration of this step over the premises, at
 the universes `y` of `Y` (and `y'`) given by `σ`. -/
 def polyAt (P : Poly) (s : String) (σ : List (Name × Level)) (args : Array Expr) : MetaM Expr := do
   return mkAppN (← polyConst (ctx.polyName s) σ) (P.premises ++ args)
@@ -358,7 +360,7 @@ partial def polyDestructure (P : Poly) (mr : Nat) (g : MVarId) (ys : Array Expr)
   go g (v.tpls.toList.zip ys.toList) #[] #[]
 
 /-- The type `T.F (H X) Y idx…` of `a` once the index of the presentation is split into its
-components: the indices reduced, `⟨i₁, i₂⟩.1` to `i₁`, in a block `ι (Blk.Poly.Ix.Tₘ idx)` to
+components: the indices reduced, `⟨i₁, i₂⟩.1` to `i₁`, in a block `ι (Blk.Colean.Poly.Ix.Tₘ idx)` to
 `Blk.Ix.Tₘ idx`, so that cases on `a` see them. -/
 def polyWhnfIdx (ty : Expr) : MetaM Expr := do
   let np := ctx.params.size + 1
@@ -382,9 +384,9 @@ def polyToLBlock (P : Poly) (X Y : Expr) (g : MVarId) (i : FVarId) : TermElabM U
         throwError "internal error: ill-typed layer{indentExpr v}"
       sg.mvarId.assign v
 
-/-- `T.Poly.toL` and `T.Poly.ofL`, between `T.F (H X) Y` and the layer `Lay P B X Y`; with indices
-at an index `i` of the presentation, between `T.F (H X) Y (ι i)` and the layer at `i`. `toL` is by
-cases on `F` (in a block `polyToLBlock`), `ofL` by cases on the shape. -/
+/-- `T.Colean.Poly.toL` and `T.Colean.Poly.ofL`, between `T.F (H X) Y` and the layer `Lay P B X Y`;
+with indices at an index `i` of the presentation, between `T.F (H X) Y (ι i)` and the layer at `i`.
+`toL` is by cases on `F` (in a block `polyToLBlock`), `ofL` by cases on the shape. -/
 def genPolyLayer (P : Poly) : TermElabM Unit := do
   withLocalDecl `X .implicit (mkSort P.lx.succ) fun X => do
   withLocalDecl `Y .implicit (← ctx.polyYType P X P.ly) fun Y => do
@@ -620,9 +622,9 @@ partial def agreeRewrite (P : Poly) (ι? : Option Expr) (g : MVarId) : MetaM MVa
   let r ← g.rewrite tgt (← mkAppM mapOfC #[← instantiateMVars h])
   agreeRewrite P ι? (← g.replaceTargetEq r.eNew r.eqProof)
 
-/-- `T.Poly.ofL_toL`, `T.Poly.toL_ofL`, `T.Poly.ofL_map`; with indices at an index `i` of the
-presentation, `cases` on `a` after `polyCasesIdx`, the positions by `casesPos`, and the indexed
-structures of the nested arguments. -/
+/-- `T.Colean.Poly.ofL_toL`, `T.Colean.Poly.toL_ofL`, `T.Colean.Poly.ofL_map`; with indices at an
+index `i` of the presentation, `cases` on `a` after `polyCasesIdx`, the positions by `casesPos`, and
+the indexed structures of the nested arguments. -/
 def genPolyLaws (P : Poly) : TermElabM Unit := do
   let hasLayer (m : Nat) : Bool :=
     P.vc[m]!.ctor.hasNest || !P.fields[m]!.isEmpty || !(P.mixAt m).isEmpty

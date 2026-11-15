@@ -18,8 +18,8 @@ codatatype Diag : Nat → Nat → Type
 #check @Diag.stop
 #check @Diag.casesOn
 
-example {n m : Nat} (x : Diag.F (Diag) n m) : Diag.F.map (fun _ _ t => t) x = x :=
-  Diag.F.map_id x
+example {n m : Nat} (x : Diag.F (Diag) n m) : Diag.F.fmap (fun _ _ t => t) x = x :=
+  Diag.F.fmap_id x
 
 /-- Off the diagonal, only `stop` is possible. -/
 example (d : Diag 2 3) : d = Diag.stop := by

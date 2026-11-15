@@ -34,23 +34,23 @@ noncomputable section
 datatype P2 (α β : Type u)
   | mk (p : α × β)
 
-/-- info: P2.Poly.instPolyIso -/
+/-- info: P2.Colean.Poly.instPolyIso -/
 #guard_msgs in
 #synth PolyIso (fun X : Type => P2 X Nat) _ _
 
-/-- info: P2.Poly.instPolyIsoEta ℕ -/
+/-- info: P2.Colean.Poly.instPolyIsoEta ℕ -/
 #guard_msgs in
 #synth PolyIso (P2 Nat) _ _
 
 /--
-info: @P2.Poly.map_mk : ∀ {H₁ H₂ : Type u_2 → Type u_1} {H'₁ H'₂ : Type u_3 → Type u_8} {S₁ : Type u_4} {R₁ : S₁ → Type u_5}
+info: @P2.Colean.Poly.map_mk : ∀ {H₁ H₂ : Type u_2 → Type u_1} {H'₁ H'₂ : Type u_3 → Type u_8} {S₁ : Type u_4} {R₁ : S₁ → Type u_5}
   {S₂ : Type u_6} {R₂ : S₂ → Type u_7} [inst₁ : PolyIso H₁ S₁ R₁] [inst₂ : PolyIso H₂ S₂ R₂]
   [inst'₁ : PolyIso H'₁ S₁ R₁] [inst'₂ : PolyIso H'₂ S₂ R₂] {X : Type u_2} {Y : Type u_3} (f : X → Y) (p : H₁ X × H₂ X),
   (Occ.ofIso fun X => P2 (H₁ X) (H₂ X)).map (Occ.ofIso fun X => P2 (H'₁ X) (H'₂ X)) f (P2.mk p) =
     P2.mk (((Occ.ofIso H₁).prod (Occ.ofIso H₂)).map ((Occ.ofIso H'₁).prod (Occ.ofIso H'₂)) f p)
 -/
 #guard_msgs(whitespace := lax) in
-#check @P2.Poly.map_mk
+#check @P2.Colean.Poly.map_mk
 
 datatype ThroughP2
   | leaf
@@ -91,14 +91,14 @@ datatype ThroughP3
   | leaf
   | mk (x : P3 Nat ThroughP3 ThroughP3)
 
-/-- info: P3.Poly.instPolyIso -/
+/-- info: P3.Colean.Poly.instPolyIso -/
 #guard_msgs in
 #synth PolyIso (fun X : Type => P3 X X Nat) _ _
 
 datatype PU (α : Type u) (β : Type v)
   | mk (p : α × List β)
 
-/-- info: PU.Poly.instPolyIso -/
+/-- info: PU.Colean.Poly.instPolyIso -/
 #guard_msgs in
 #synth PolyIso (fun X : Type => PU X X) _ _
 
@@ -129,7 +129,7 @@ datatype Fn (A : Type) (α : Type u)
 datatype K (α β : Type)
   | mk (x : Fn α β)
 
-/-- info: K.Poly.instPolyIsoEta -/
+/-- info: K.Colean.Poly.instPolyIsoEta -/
 #guard_msgs in
 #synth PolyIso (K Nat) _ _
 
@@ -160,7 +160,7 @@ codatatype C (α : Type u)
   | mk (a : A α) (c : C α)
 end
 
-/-- info: B.Open.Poly.instPolyIso -/
+/-- info: B.Open.Colean.Poly.instPolyIso -/
 #guard_msgs in
 #synth PolyIso (fun X : Type => B.Open X X) _ _
 
@@ -185,7 +185,7 @@ codatatype C (α : Type)
   | mk (a : α → A α) (c : C α)
 end
 
-/-- info: B.Open.Poly.instPolyIsoEta -/
+/-- info: B.Open.Colean.Poly.instPolyIsoEta -/
 #guard_msgs in
 #synth PolyIso (fun X : Type => B.Open Nat X) _ _
 
@@ -207,7 +207,7 @@ codatatype PairStr (α : Type u)
   | mk (p : α × PairStr α)
 
 /--
-info: @PairStr.Poly.map_mk : ∀ {H : Type u_2 → Type u_1} {H' : Type u_3 → Type u_6} {S : Type u_4} {R : S → Type u_5}
+info: @PairStr.Colean.Poly.map_mk : ∀ {H : Type u_2 → Type u_1} {H' : Type u_3 → Type u_6} {S : Type u_4} {R : S → Type u_5}
   [inst : PolyIso H S R] [inst' : PolyIso H' S R] {X : Type u_2} {Y : Type u_3} (f : X → Y) (p : H X × PairStr (H X)),
   (Occ.ofIso fun X => PairStr (H X)).map (Occ.ofIso fun X => PairStr (H' X)) f (PairStr.mk p) =
     PairStr.mk
@@ -215,16 +215,16 @@ info: @PairStr.Poly.map_mk : ∀ {H : Type u_2 → Type u_1} {H' : Type u_3 → 
         (Occ.ofIso fun X => PairStr (H X)).map (Occ.ofIso fun X => PairStr (H' X)) f p.2)
 -/
 #guard_msgs(whitespace := lax) in
-#check @PairStr.Poly.map_mk
+#check @PairStr.Colean.Poly.map_mk
 
 /--
-info: @PairStr.Poly.mem_mk : ∀ {H : Type u_2 → Type u_1} {S : Type u_3} {R : S → Type u_4} [inst : PolyIso H S R]
+info: @PairStr.Colean.Poly.mem_mk : ∀ {H : Type u_2 → Type u_1} {S : Type u_3} {R : S → Type u_4} [inst : PolyIso H S R]
   {X : Type u_2} (x : X) (p : H X × PairStr (H X)),
   PolyIso.Mem (fun X => PairStr (H X)) x (PairStr.mk p) ↔
     PolyIso.Mem H x p.1 ∨ PolyIso.Mem (fun X => PairStr (H X)) x p.2
 -/
 #guard_msgs(whitespace := lax) in
-#check @PairStr.Poly.mem_mk
+#check @PairStr.Colean.Poly.mem_mk
 
 example (f : Nat → Nat) (a : Nat) (s : PairStr Nat) :
     (Occ.ofIso PairStr).map (Occ.ofIso PairStr) f (PairStr.mk (a, s)) =
@@ -256,13 +256,13 @@ datatype Tm (α : Type u)
   | app (f : Tm α ⊕ α) (arg : Tm α)
 
 /--
-info: @Tm.Poly.mem_app_inr : ∀ {H : Type u_2 → Type u_1} {S : Type u_3} {R : S → Type u_4} [inst : PolyIso H S R]
+info: @Tm.Colean.Poly.mem_app_inr : ∀ {H : Type u_2 → Type u_1} {S : Type u_3} {R : S → Type u_4} [inst : PolyIso H S R]
   {X : Type u_2} (x : X) (f_inr : H X) (arg : Tm (H X)),
   PolyIso.Mem (fun X => Tm (H X)) x (Tm.app (Sum.inr f_inr) arg) ↔
     PolyIso.Mem H x f_inr ∨ PolyIso.Mem (fun X => Tm (H X)) x arg
 -/
 #guard_msgs(whitespace := lax) in
-#check @Tm.Poly.mem_app_inr
+#check @Tm.Colean.Poly.mem_app_inr
 
 datatype ThroughTm
   | leaf
@@ -314,14 +314,14 @@ example (x a b : Nat) :
 codatatype VStr (α : Type u) : Nat → Type u
   | mk {n : Nat} (p : α × VStr α n) : VStr α (n + 1)
 
-/-- info: VStr.Poly.instPolyIso 3 -/
+/-- info: VStr.Colean.Poly.instPolyIso 3 -/
 #guard_msgs in
 #synth PolyIso (fun X : Type => VStr X 3) _ _
 
 codatatype VL (α : Type u) : Nat → Type u
   | mk {n : Nat} (p : α × List (VL α n)) : VL α (n + 1)
 
-/-- info: VL.Poly.instPolyIso 3 -/
+/-- info: VL.Colean.Poly.instPolyIso 3 -/
 #guard_msgs in
 #synth PolyIso (fun X : Type => VL X 3) _ _
 
@@ -374,7 +374,7 @@ datatype QB (α : Type u)
 end
 
 /--
-info: @QA.Poly.map_mk : ∀ {H : Type u_2 → Type u_1} {H' : Type u_3 → Type u_6} {S : Type u_4} {R : S → Type u_5}
+info: @QA.Colean.Poly.map_mk : ∀ {H : Type u_2 → Type u_1} {H' : Type u_3 → Type u_6} {S : Type u_4} {R : S → Type u_5}
   [inst : PolyIso H S R] [inst' : PolyIso H' S R] {X : Type u_2} {Y : Type u_3} (f : X → Y) (a : H X)
   (p : QA (H X) × QB (H X)),
   (Occ.ofIso fun X => QA (H X)).map (Occ.ofIso fun X => QA (H' X)) f (QA.mk a p) =
@@ -383,7 +383,7 @@ info: @QA.Poly.map_mk : ∀ {H : Type u_2 → Type u_1} {H' : Type u_3 → Type 
         (Occ.ofIso fun X => QB (H X)).map (Occ.ofIso fun X => QB (H' X)) f p.2)
 -/
 #guard_msgs(whitespace := lax) in
-#check @QA.Poly.map_mk
+#check @QA.Colean.Poly.map_mk
 
 datatype ThroughQB
   | leaf
@@ -441,13 +441,13 @@ datatype Chain2 (α : Type u) : Nat → Type u
   | link {n : Nat} (p : Chain2 α n × Chain2 α (n + 1)) : Chain2 α (n + 2)
 
 /--
-info: @Chain2.Poly.mem_link : ∀ {H : Type u_2 → Type u_1} {S : Type u_3} {R : S → Type u_4} [inst : PolyIso H S R]
+info: @Chain2.Colean.Poly.mem_link : ∀ {H : Type u_2 → Type u_1} {S : Type u_3} {R : S → Type u_4} [inst : PolyIso H S R]
   {X : Type u_2} (x : X) {n : ℕ} (p : Chain2 (H X) n × Chain2 (H X) (n + 1)),
   PolyIso.Mem (fun X => Chain2 (H X) (n + 2)) x (Chain2.link p) ↔
     PolyIso.Mem (fun X => Chain2 (H X) n) x p.1 ∨ PolyIso.Mem (fun X => Chain2 (H X) (n + 1)) x p.2
 -/
 #guard_msgs(whitespace := lax) in
-#check @Chain2.Poly.mem_link
+#check @Chain2.Colean.Poly.mem_link
 
 example (f : Nat → Nat) (a b : Nat) :
     (Occ.ofIso fun X => Chain2 X 2).map (Occ.ofIso fun X => Chain2 X 2) f

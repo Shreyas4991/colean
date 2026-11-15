@@ -3,7 +3,7 @@ import Colean.Gen.Derive.Layer
 /-!
 # Generators on `Expr`, step 5: the fixpoint and the instances
 
-`T.Poly.fix`, from the contract by the theorems of `Model/Poly.lean`, and the instances
+`T.Colean.Poly.fix`, from the contract by the theorems of `Model/Poly.lean`, and the instances
 `PolyIso`, `PolyMap` of the types, with their eta forms.
 -/
 
@@ -28,7 +28,7 @@ def checkStateLevel (w : Level) : MetaM Unit := do
       fixpoint needs `{if ctx.co then "corec" else "fold"}` on states in `{← sort w}`, its trees \
       of shapes"
 
-/-- With indices, `T.Poly.fix (X) : IPolyFix P tree X (fun i => T (H X) (ι i))`: `icoFix`
+/-- With indices, `T.Colean.Poly.fix (X) : IPolyFix P tree X (fun i => T (H X) (ι i))`: `icoFix`
 (`iinFix`), whose `corec` (`fold`) on states over the index of the presentation is the type's on
 the states `Along ι St` (`Over ι St`) over its own index, and the bisimulation (induction)
 principle from the contract along `ι` (`ico_bisim`, `iin_ind`). The proof arguments are `rw` on
@@ -135,7 +135,7 @@ def genIPolyFix (P : Poly) : TermElabM Unit := do
   let value ← instantiateMVars value
   ctx.addPolyDef P "fix" (P.premises.push X) (← inferType value) value
 
-/-- `T.Poly.fix (X) : PolyFix P tree X (T (H X))`, from the public declarations of the type:
+/-- `T.Colean.Poly.fix (X) : PolyFix P tree X (T (H X))`, from the public declarations of the type:
 `coFix` (`inFix` for `datatype`), its proof arguments by `rw` on goal metavariables, and the
 bisimulation (induction) principle from the contract (`co_bisim`, `in_ind`). -/
 def genPolyFix (P : Poly) : TermElabM Unit := do
@@ -202,8 +202,8 @@ def genPolyFix (P : Poly) : TermElabM Unit := do
   let value ← instantiateMVars value
   ctx.addPolyDef P "fix" (P.premises.push X) (← inferType value) value
 
-/-- `T.Poly.fix` at the premises `Hs` (with their instances `insts`) and `X`, at the universes
-`σ`. -/
+/-- `T.Colean.Poly.fix` at the premises `Hs` (with their instances `insts`) and `X`, at the
+universes `σ`. -/
 def polyFixAt (P : Poly) (σ : List (Name × Level)) (Hs insts : Array Expr) (X : Expr) :
     MetaM Expr := do
   return mkAppN (← polyConst (ctx.polyName "fix") σ) (P.consts ++ Hs ++ P.SR ++ insts |>.push X)
@@ -216,12 +216,13 @@ def addPolyInstance (P : Poly) (n : Name) (xs : Array Expr) (type value : Expr) 
   addDef n (← ctx.levelParamsOf P.fresh #[type, value]) type value ctx.ref
   registerInstance n .global (eval_prio default)
 
-/-- When the last parameter is the last hole, the instances `T.Poly.instPolyIsoEta`,
-`T.Poly.instPolyMapEta` for `T a₁ … aₙ₋₁` itself, a type `T` without indices: `fun X => T a X` is
-`T a`, the instances at the identity in the last parameter, the other holes constant. -/
+/-- When the last parameter is the last hole, the instances `T.Colean.Poly.instPolyIsoEta`,
+`T.Colean.Poly.instPolyMapEta` for `T a₁ … aₙ₋₁` itself, a type `T` without indices:
+`fun X => T a X` is `T a`, the instances at the identity in the last parameter, the other holes
+constant. -/
 def genPolyEta (P : Poly) (T : Name) : TermElabM Unit := do
-  let isoN := T ++ `Poly ++ `instPolyIso
-  let mapN := T ++ `Poly ++ `instPolyMap
+  let isoN := coleanNs T ++ `Poly ++ `instPolyIso
+  let mapN := coleanNs T ++ `Poly ++ `instPolyMap
   let some last := ctx.params.back? | return
   unless P.holes.back? == some last do return
   let others := P.holes.pop
@@ -256,7 +257,7 @@ def genPolyEta (P : Poly) (T : Name) : TermElabM Unit := do
   -- The functors `fun X => T a X` of the types, eta-reduced.
   let etaType (ty : Expr) : Expr :=
     mkAppN ty.getAppFn (ty.getAppArgs.modify 0 Expr.eta |>.modify 1 Expr.eta)
-  ctx.addPolyInstance P (T ++ `Poly ++ `instPolyIsoEta) (P.consts ++ others)
+  ctx.addPolyInstance P (coleanNs T ++ `Poly ++ `instPolyIsoEta) (P.consts ++ others)
     (etaType (← whnfR (← inferType isoE))) isoE
   -- Across universes only when the universe of the last parameter is its own: a level in one
   -- universe parameter (`u`, `u + 1`, `max u 1`) that no other parameter's type mentions.
@@ -285,15 +286,15 @@ def genPolyEta (P : Poly) (T : Name) : TermElabM Unit := do
   let mapE := mkAppN (← polyConst mapN σm)
     (P.consts ++ etaHs ++ etaHs' ++ etaSR ++ insts ++ insts' ++ maps)
   let mapTy ← whnfR (← inferType mapE)
-  ctx.addPolyInstance P (T ++ `Poly ++ `instPolyMapEta) (P.consts ++ others)
+  ctx.addPolyInstance P (coleanNs T ++ `Poly ++ `instPolyMapEta) (P.consts ++ others)
     (etaType mapTy) mapE
 
 /-- For each type `Tₘ` (the type, the family, or the types of a block) at its indices `idx`, which
-are arguments of the instances: `Tₘ.Poly.instPolyIso` for `fun X => Tₘ (H X) idx`, at the trees of
-shapes (with indices at its index `i` of the presentation, `⟨idx⟩` or `Blk.Poly.Ix.Tₘ idx`), and
-`Tₘ.Poly.instPolyMap`; when the last parameter is the last hole, for a type without indices, the
-instances `Tₘ.Poly.instPolyIsoEta`, `Tₘ.Poly.instPolyMapEta` for `Tₘ a₁ … aₙ₋₁` itself
-(`genPolyEta`). -/
+are arguments of the instances: `Tₘ.Colean.Poly.instPolyIso` for `fun X => Tₘ (H X) idx`, at the
+trees of shapes (with indices at its index `i` of the presentation, `⟨idx⟩` or
+`Blk.Colean.Poly.Ix.Tₘ idx`), and `Tₘ.Colean.Poly.instPolyMap`; when the last parameter is the last
+hole, for a type without indices, the instances `Tₘ.Colean.Poly.instPolyIsoEta`,
+`Tₘ.Colean.Poly.instPolyMapEta` for `Tₘ a₁ … aₙ₋₁` itself (`genPolyEta`). -/
 def genPolyInstances (P : Poly) : TermElabM Unit := do
   let fam := if ctx.co then ``Codata.Signature.Cotype else ``Codata.Signature.Intype
   for m in [0:ctx.types.size] do
@@ -316,8 +317,8 @@ def genPolyInstances (P : Poly) : TermElabM Unit := do
       return mkAppN Tc (ctx.polyParams P P.Hs X ++ t.idx)
     let funT' ← lam `X (mkSort P.lx'.succ) fun X =>
       return mkAppN (P.prime Tc) (ctx.polyParams P P.Hs' X ++ t.idx)
-    let isoN := t.name ++ `Poly ++ `instPolyIso
-    let mapN := t.name ++ `Poly ++ `instPolyMap
+    let isoN := coleanNs t.name ++ `Poly ++ `instPolyIso
+    let mapN := coleanNs t.name ++ `Poly ++ `instPolyMap
     -- `PolyIso`
     do
       let equiv ← lam `X (mkSort P.lx.succ) (bi := .implicit) fun X => do
