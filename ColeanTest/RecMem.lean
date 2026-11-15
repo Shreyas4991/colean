@@ -2,10 +2,11 @@ import Colean.MutualCmd
 
 /-! # Test: induction hypotheses of nested arguments by membership
 
-The recursor states the hypothesis of a nested argument `c` by membership, for the functor of
-its type, `∀ t, PolyIso.Mem (fun X => G X) t c → motive t`, and the `simp` lemmas of
-`PolyIso.lean` turn it into the container's own membership or into components. Through lists,
-options, a product, a declared type, in families at one index or at several, and in a block. -/
+The recursor states the hypothesis of a nested argument `c` by membership: through `List`,
+`Option` and `Array` by their own, `∀ t, t ∈ c → motive t`, and otherwise for the functor of its
+type, `∀ t, PolyIso.Mem (fun X => G X) t c → motive t`, which the `simp` lemmas of
+`PolyIso.lean` turn into components. Through lists, options, a product, a declared type, in
+families at one index or at several, and in a block. -/
 
 universe u
 
@@ -23,9 +24,7 @@ datatype Rose (α : Type u)
 /--
 info: @Rose.rec : {α : Type u_2} →
   {motive : Rose α → Sort u_1} →
-    ((a : α) →
-        (cs : List (Rose α)) →
-          ((t : Rose α) → PolyIso.Mem (fun X => List X) t cs → motive t) → motive (Rose.node a cs)) →
+    ((a : α) → (cs : List (Rose α)) → ((t : Rose α) → t ∈ cs → motive t) → motive (Rose.node a cs)) →
       (t : Rose α) → motive t
 -/
 #guard_msgs in
@@ -33,7 +32,7 @@ info: @Rose.rec : {α : Type u_2} →
 
 /--
 info: @Rose.rec_node : ∀ {α : Type u_2} {motive : Rose α → Sort u_1} (a : α) (cs : List (Rose α))
-  (node : (a : α) → (cs : List (Rose α)) → ((t : Rose α) → PolyIso.Mem (fun X => List X) t cs → motive t) → motive (Rose.node a cs)),
+  (node : (a : α) → (cs : List (Rose α)) → ((t : Rose α) → t ∈ cs → motive t) → motive (Rose.node a cs)),
   Rose.rec node (Rose.node a cs) = node a cs fun t _ => Rose.rec node t
 -/
 #guard_msgs(whitespace := lax) in
@@ -43,7 +42,7 @@ info: @Rose.rec_node : ∀ {α : Type u_2} {motive : Rose α → Sort u_1} (a : 
 which `List.attach` gives with their proofs. -/
 def Rose.size {α : Type u} : Rose α → Nat :=
   Rose.rec (motive := fun _ => Nat) fun _ cs ih =>
-    (cs.attach.map fun x => ih x.1 ((PolyIso.mem_list _ _).mpr x.2)).sum + 1
+    (cs.attach.map fun x => ih x.1 x.2).sum + 1
 
 @[simp] theorem Rose.size_node {α : Type u} (a : α) (cs : List (Rose α)) :
     (Rose.node a cs).size = (cs.map Rose.size).sum + 1 := by
@@ -59,7 +58,6 @@ def Rose.size' {α : Type u} (t : Rose α) : Nat :=
 theorem Rose.size_eq {α : Type u} (t : Rose α) : t.size = t.size' := by
   induction t with
   | node a cs ih =>
-    simp only [PolyIso.mem_list] at ih
     rw [Rose.size_node, Rose.size', Rose.fold_node, Occ.map_list]
     exact congrArg (· + 1) (congrArg List.sum (List.map_congr_left ih))
 
@@ -72,8 +70,7 @@ datatype OTree
 info: @OTree.rec : {motive : OTree → Sort u_1} →
   ((n : ℕ) →
       (l r : Option OTree) →
-        ((t : OTree) → PolyIso.Mem (fun X => Option X) t l → motive t) →
-          ((t : OTree) → PolyIso.Mem (fun X => Option X) t r → motive t) → motive (OTree.node n l r)) →
+        ((t : OTree) → t ∈ l → motive t) → ((t : OTree) → t ∈ r → motive t) → motive (OTree.node n l r)) →
     (t : OTree) → motive t
 -/
 #guard_msgs in
@@ -82,11 +79,44 @@ info: @OTree.rec : {motive : OTree → Sort u_1} →
 /-- The sum of the labels. -/
 def OTree.sum : OTree → Nat :=
   OTree.rec (motive := fun _ => Nat) fun n l r ihl ihr =>
-    n + (l.attach.map fun x => ihl x.1 ((PolyIso.mem_option _ _).mpr x.2)).getD 0 +
-      (r.attach.map fun x => ihr x.1 ((PolyIso.mem_option _ _).mpr x.2)).getD 0
+    n + (l.attach.map fun x => ihl x.1 x.2).getD 0 +
+      (r.attach.map fun x => ihr x.1 x.2).getD 0
 
 example : (OTree.node 1 (some (.node 2 none none)) none).sum = 3 := by
   simp [OTree.sum]
+
+/-! ### Through `Array`, and through a composite -/
+
+datatype ATree
+  | node (cs : Array ATree)
+
+/--
+info: @ATree.rec : {motive : ATree → Sort u_1} →
+  ((cs : Array ATree) → ((t : ATree) → t ∈ cs → motive t) → motive (ATree.node cs)) → (t : ATree) → motive t
+-/
+#guard_msgs in
+#check @ATree.rec
+
+/-- Induction: the hypothesis by the array's membership. -/
+theorem ATree.fold_unit (t : ATree) : ATree.fold (S := Unit) (fun _ => ()) t = () := by
+  induction t with
+  | node cs ih =>
+    have : ∀ t ∈ cs, ATree.fold (S := Unit) (fun _ => ()) t = () := ih
+    rfl
+
+-- A list of options is a composite: the hypothesis is by `PolyIso.Mem` of its functor, which
+-- `simp` computes (`PolyIso.mem_comp`, `mem_list`, `mem_option`).
+datatype LOTree
+  | node (cs : List (Option LOTree))
+
+/--
+info: @LOTree.rec : {motive : LOTree → Sort u_1} →
+  ((cs : List (Option LOTree)) →
+      ((t : LOTree) → PolyIso.Mem (fun X => List (Option X)) t cs → motive t) → motive (LOTree.node cs)) →
+    (t : LOTree) → motive t
+-/
+#guard_msgs in
+#check @LOTree.rec
 
 /-! ### Through a product -/
 
@@ -165,9 +195,7 @@ datatype LT : Nat → Type
 /--
 info: @LT.rec : {motive : (j₁ : ℕ) → LT j₁ → Sort u_1} →
   motive 0 LT.leaf →
-    ({n : ℕ} →
-        (cs : List (LT n)) →
-          ((t : LT n) → PolyIso.Mem (fun X => List X) t cs → motive n t) → motive (n + 1) (LT.node cs)) →
+    ({n : ℕ} → (cs : List (LT n)) → ((t : LT n) → t ∈ cs → motive n t) → motive (n + 1) (LT.node cs)) →
       {i₁ : ℕ} → (t : LT i₁) → motive i₁ t
 -/
 #guard_msgs in
@@ -176,7 +204,7 @@ info: @LT.rec : {motive : (j₁ : ℕ) → LT j₁ → Sort u_1} →
 /-- The number of leaves. -/
 def LT.leaves : {n : Nat} → LT n → Nat :=
   @LT.rec (fun _ _ => Nat) 1 fun cs ih =>
-    (cs.attach.map fun x => ih x.1 ((PolyIso.mem_list _ _).mpr x.2)).sum
+    (cs.attach.map fun x => ih x.1 x.2).sum
 
 @[simp] theorem LT.leaves_node {n : Nat} (cs : List (LT n)) :
     (LT.node cs).leaves = (cs.map LT.leaves).sum := by
@@ -187,7 +215,7 @@ example : (LT.node [LT.leaf, LT.leaf]).leaves = 2 := by simp [LT.leaves]
 /-- The same count, with a right fold for the sum. -/
 def LT.leaves' : {n : Nat} → LT n → Nat :=
   @LT.rec (fun _ _ => Nat) 1 fun cs ih =>
-    (cs.attach.map fun x => ih x.1 ((PolyIso.mem_list _ _).mpr x.2)).foldr (· + ·) 0
+    (cs.attach.map fun x => ih x.1 x.2).foldr (· + ·) 0
 
 @[simp] theorem LT.leaves'_node {n : Nat} (cs : List (LT n)) :
     (LT.node cs).leaves' = (cs.map LT.leaves').foldr (· + ·) 0 := by
@@ -198,7 +226,6 @@ theorem LT.leaves_eq {n : Nat} (t : LT n) : t.leaves = t.leaves' := by
   induction t with
   | leaf => simp [LT.leaves, LT.leaves']
   | node cs ih =>
-    simp only [PolyIso.mem_list] at ih
     rw [LT.leaves_node, LT.leaves'_node, List.map_congr_left ih]
     rfl
 
@@ -243,10 +270,9 @@ end
 info: @Tm.rec : {motive_1 : Tm → Sort u_1} →
   {motive_2 : Bd → Sort u_1} →
     ((n : ℕ) → motive_1 (Tm.num n)) →
-      ((args : List Tm) → ((t : Tm) → PolyIso.Mem (fun X => List X) t args → motive_1 t) → motive_1 (Tm.add args)) →
+      ((args : List Tm) → ((t : Tm) → t ∈ args → motive_1 t) → motive_1 (Tm.add args)) →
         ((b : Bd) → (body : Tm) → motive_2 b → motive_1 body → motive_1 (Tm.bind b body)) →
-          ((val : Option Tm) → ((t : Tm) → PolyIso.Mem (fun X => Option X) t val → motive_1 t) → motive_2 (Bd.mk val)) →
-            (t : Tm) → motive_1 t
+          ((val : Option Tm) → ((t : Tm) → t ∈ val → motive_1 t) → motive_2 (Bd.mk val)) → (t : Tm) → motive_1 t
 -/
 #guard_msgs in
 #check @Tm.rec
@@ -254,9 +280,9 @@ info: @Tm.rec : {motive_1 : Tm → Sort u_1} →
 /-- The number of numerals. -/
 def Tm.nums : Tm → Nat :=
   Tm.rec (motive_2 := fun _ => Nat) (fun _ => 1)
-    (fun args ih => (args.attach.map fun x => ih x.1 ((PolyIso.mem_list _ _).mpr x.2)).sum)
+    (fun args ih => (args.attach.map fun x => ih x.1 x.2).sum)
     (fun _ _ b t => b + t)
-    (fun val ih => (val.attach.map fun x => ih x.1 ((PolyIso.mem_option _ _).mpr x.2)).getD 0)
+    (fun val ih => (val.attach.map fun x => ih x.1 x.2).getD 0)
 
 example : (Tm.add [.num 1, .bind (.mk (some (.num 2))) (.num 3)]).nums = 3 := by
   simp [Tm.nums, List.map_attach_eq_pmap]

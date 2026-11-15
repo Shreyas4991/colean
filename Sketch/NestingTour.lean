@@ -806,21 +806,19 @@ theorem URose.size_pos {α : Type u} (t : URose α) : 0 < t.size := by
   cases t with
   | node a cs => simp
 
-/-! The recursor states the induction hypothesis of a nested argument by membership, for the
-functor of the argument's type: `∀ t, PolyIso.Mem (fun X => List X) t cs → motive t` here,
-`PolyIso.Mem (fun X => X × Option X) t children` for `UTree` below, and by `IPolyIso.Mem` at an
-index when the positions of a family's argument are at several indices (at one index, also
-through a product or a sum, `T n × T n`, `T n ⊕ T n`, it is by `PolyIso.Mem` at that index). The
-`simp` lemmas of `PolyIso.lean` turn membership into the container's own (`mem_list`,
-`mem_option`) or into components (`mem_prod`, `mem_sum`, `mem_comp`, …), so a function by the
-recursor can use `List.attach`. -/
+/-! The recursor states the induction hypothesis of a nested argument by membership: through
+`List`, `Option` and `Array` by their own, `∀ t, t ∈ cs → motive t` here, and otherwise for the
+functor of the argument's type, `PolyIso.Mem (fun X => X × Option X) t children` for `UTree`
+below, and by `IPolyIso.Mem` at an index when the positions of a family's argument are at
+several indices (at one index, also through a product or a sum, `T n × T n`, `T n ⊕ T n`, it is
+by `PolyIso.Mem` at that index). The `simp` lemmas of `PolyIso.lean` turn membership into the
+container's own (`mem_list`, `mem_option`) or into components (`mem_prod`, `mem_sum`,
+`mem_comp`, …), so a function by the recursor can use `List.attach`. -/
 
 /--
 info: @URose.rec : {α : Type u_2} →
   {motive : URose α → Sort u_1} →
-    ((a : α) →
-        (cs : List (URose α)) →
-          ((t : URose α) → PolyIso.Mem (fun X => List X) t cs → motive t) → motive (URose.node a cs)) →
+    ((a : α) → (cs : List (URose α)) → ((t : URose α) → t ∈ cs → motive t) → motive (URose.node a cs)) →
       (t : URose α) → motive t
 -/
 #guard_msgs in
@@ -829,7 +827,7 @@ info: @URose.rec : {α : Type u_2} →
 /-- The number of nodes again, by the recursor. -/
 def URose.size' {α : Type u} : URose α → Nat :=
   URose.rec (motive := fun _ => Nat) fun _ cs ih =>
-    (cs.attach.map fun x => ih x.1 ((PolyIso.mem_list _ _).mpr x.2)).sum + 1
+    (cs.attach.map fun x => ih x.1 x.2).sum + 1
 
 /-- The rule `URose.rec_node` gives the hypothesis as `fun t _ => URose.rec … t`. -/
 @[simp] theorem URose.size'_node {α : Type u} (a : α) (cs : List (URose α)) :
@@ -840,7 +838,6 @@ def URose.size' {α : Type u} : URose α → Nat :=
 theorem URose.size'_eq {α : Type u} (t : URose α) : t.size' = t.size := by
   induction t with
   | node a cs ih =>
-    simp only [PolyIso.mem_list] at ih
     rw [URose.size'_node, URose.size_node, List.map_congr_left ih]
 
 codatatype UTree (α : Type u)

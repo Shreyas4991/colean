@@ -25,7 +25,7 @@ Theory, in dependency order:
 - `Model/Cotype.lean`: signatures, the container functor `Obj`, the encoding, the greatest fixpoint `IsWf`, `Cotype`, its contract pieces and the transport theorems to a functor `F ≃ Obj`.
 - `Model/Intype.lean`: the least fixpoint `IsFin`, `Intype`, the dependent recursor by well-founded recursion, fold, and the transports.
 - `Model/Poly.lean`: a least or greatest fixpoint of a layer polynomial in a parameter is polynomial in that parameter: trees of shapes, `Path`, `PolyFix`, `coFix`, `inFix`; for a family, at every index (`ILay`, `IPath`, `IPolyFix`, `icoFix`, `iinFix`), on the total space of the plain case. The map through a right inverse of the destructor (`map_eq_of_d`) and membership in one step (`exists_val_iff`), for the `simp` lemmas of step 5.
-- `Model/Occ.lean`: occurrence structures `Occ`/`IOcc`, internal to the command: their combinators, laws and computation lemmas (`simp`, for `IOcc` as for `Occ`; the map through a sum at any value as `Sum.map`, `map_sum`), the relation of two values through the combinators down to the leaves (`rel_prod`, …, `rel_list` as `List.Forall₂`, `rel_option` as `Option.Rel`), a map on either side moved into it and a value related to itself (`rel_map_left`, `rel_self`, `simp`), the members of a value (`Occ.Mem`, `simp` through the combinators), and the map of an indexed structure at one index as the plain one's (`IOcc.map_flat_sum`, …); the leaves are `Occ.ofIso F`, from the `PolyIso` instances, and the instances of the built-in forms are the combinators by definition (`Occ.ofIso_prod`, …, `simp` lemmas but for the identity's).
+- `Model/Occ.lean`: occurrence structures `Occ`/`IOcc`, internal to the command: their combinators, laws and computation lemmas (`simp`, for `IOcc` as for `Occ`; the map through a sum at any value as `Sum.map`, `map_sum`), the relation of two values through the combinators down to the leaves (`rel_prod`, …, `rel_list` as `List.Forall₂`, `rel_option` as `Option.Rel`, `rel_array` as `List.Forall₂` of the arrays' lists), a map on either side moved into it and a value related to itself (`rel_map_left`, `rel_self`, `simp`), the members of a value (`Occ.Mem`, `simp` through the combinators), and the map of an indexed structure at one index as the plain one's (`IOcc.map_flat_sum`, …); the leaves are `Occ.ofIso F`, from the `PolyIso` instances, and the instances of the built-in forms are the combinators by definition (`Occ.ofIso_prod`, …, `simp` lemmas but for the identity's).
 - `Model/Occ2.lean`: occurrence structures in two variables `Occ₂`, `G X Y ≃ Lay PX PY X Y` with the layer of `Model/Poly.lean`, for a field with a parameter and the recursion in one argument: combinators, laws, the computation of the map, `AgreeY`, the agreement of its map in `Y` with that of the structure in `Y` alone, and membership in each variable (`MemX`, `MemY`, `simp` through the combinators down to the parts in one variable, whose members are `Occ.Mem`).
 - `Model/CCPO.lean`: the order of approximation on a coinductive type with a bottom layer, from a contract and a presentation of its functor as a container (`Contract.Container`): `Approx`, its unfolding and coinduction, the supremum of a chain by `corec` (`csup`), Lean's `Lean.Order.CCPO` (`Contract.ccpo`), the monotonicity of the constructor; the order on a nested argument through its occurrence structure (`Occ.order`) and the monotonicity for it of the maps and constructors of the library's leaves and of the pairs of a product, for `partial_fixpoint` (step 6).
 - `Model/IOcc2.lean`: the same over a family, `IOcc₂`, the recursive variable a family over an index, each position in it at its index (the layer of `ILay`), for families and blocks: combinators, among them a plain structure at one index (`ofOcc₂`), laws, the map, `AgreeY` with the indexed structure in `Y` alone read along a map of the indices, and membership, a member in `Y` with its index.
@@ -45,12 +45,16 @@ Generators, on `Expr`, in dependency order. `Syntax.lean` holds the command synt
 - `Gen/Pack.lean`: the display of the packing `Blk.St` of a block's families at a constructor of `Blk.Ix`, as the family it packs there (a delaborator, for the attribute `colean_pack`).
 - `Gen/Derive.lean`: step 5, separate from the pipeline (see below), in parts under `Gen/Derive/`, each on the ones before: the holes and the structures of the fields (`Holes.lean`), the presentation (`Pres.lean`), the layer `toL`, `ofL` and its laws (`Layer.lean`), the fixpoint and the instances (`Fix.lean`), the `simp` lemmas (`Simp.lean`); `Derive.lean` runs them.
 - `Gen/CCPO.lean`: step 6, run by the attribute `with_ccpo` (`CodataCmd.lean`), separate from the pipeline (below).
-- `Gen/Command.lean`: the pipeline, and what comes after it as after `inductive`: the doc comments, `protected` constructors and the info trees (`finishDecls`), then the attributes (`applyDeclAttrs`). `CodataCmd.lean`, `DataCmd.lean`: the commands; `MutualCmd.lean`: `mutual` blocks of them, and `mixed_mutual` blocks, and the refusal of plain `induction` on a type of a `datatype` block (`evalInductionBlockType`).
+- `Gen/Command.lean`: the pipeline, before it a dotted name's namespace (`elabInNamespace`), and what comes after it as after `inductive`: the doc comments, `protected` constructors and the info trees (`finishDecls`), then the attributes (`applyDeclAttrs`). `CodataCmd.lean`, `DataCmd.lean`: the commands; `MutualCmd.lean`: `mutual` blocks of them, and `mixed_mutual` blocks, and the refusal of plain `induction` on a type of a `datatype` block (`evalInductionBlockType`).
 - `Gen/Mixed.lean`: a `mixed_mutual` block: its runs, the pipeline on each, the closed types of the runs inside, their membership instances, and their interface restated at the closed types.
 
 ## The generators
 
-The commands read the user's syntax only to elaborate it. `Gen/Front.lean` elaborates a
+The commands read the user's syntax only to elaborate it. A declaration with a dotted name
+`Foo.T`, and a block whose types share a namespace, are elaborated inside that namespace, named
+relative to it, as Lean's `expandNamespacedDeclaration` and `expandMutualNamespace` do for
+`inductive` (`elabDecl`, `blockNamespace?`, `Gen/Command.lean`): the constructors refer to the
+type as `T` or `Foo.T`. `Gen/Front.lean` elaborates a
 declaration as Lean's `inductive` does: first its modifiers, as `inductiveSyntaxToView` does
 (`Term.expandDeclId` names the type, private for a `private` one, and binds the universe names of
 `T.{u}`; `unsafe`, `partial`, `meta` and `deriving` are rejected); then the parameters and the declared sort, then the types being
@@ -130,7 +134,11 @@ user-facing classes. Its induction hypothesis for a nested argument `c` is by me
 `∀ t, PolyIso.Mem (fun X => G X) t c → motive t`, with the argument's type `G` as a function of
 the occurrences and, as its instance, the occurrence structure of the argument read as an
 instance (`isoOf`): a leaf is `Occ.ofIso` of its instance, and the instances of the built-in
-forms are the combinators by definition. In a family the hypothesis is by `IPolyIso.Mem` at an
+forms are the combinators by definition. When `G` is `List`, `Option` or `Array` with its
+instance (at one index, in a family or a block too), the hypothesis is by their own membership,
+`∀ t, t ∈ c → motive t`: the lemmas `PolyIso.mem_list`, `mem_option`, `mem_array` say which
+(`stdMemLemmas`), and convert it (`memIffIH`). A composite (`List (Option T)`), a product, a sum,
+a function or a user's type keeps `PolyIso.Mem`, which `simp` computes. In a family the hypothesis is by `IPolyIso.Mem` at an
 index unless every position is at one index (the index of a position at variables mentions
 neither the shape nor the position, or does after cases on it through products, functions and
 dependent pairs, `T n × T n`, or on the value through sums reached through products and dependent
@@ -153,8 +161,8 @@ such an instance, a leaf or a built-in form (`Occ.ofIso_prod`, …).
 `T.recPos` is the recursor of the model, with the hypotheses at the positions of the structures.
 `T.rec` is `T.recPos` at minor premises that turn these hypotheses into membership
 (`PolyIso.memRec`, by `Classical.choose`, with no proof in between since the instance is the
-structure), and its rules `T.rec_cᵢ` are `T.recPos_ctor` followed by `PolyIso.memRec_pos` at
-each nested argument.
+structure; through `List`, `Option` and `Array` then by `PolyIso.mem_list`, …), and its rules
+`T.rec_cᵢ` are `T.recPos_ctor` followed by `PolyIso.memRec_pos` at each nested argument.
 
 ## Known boundary violations
 

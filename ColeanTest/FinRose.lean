@@ -46,15 +46,13 @@ def Rose.mirror {α : Type u} (t : Rose α) : Rose α :=
     (Rose.node a cs).mirror = .node a (cs.map Rose.mirror).reverse := by
   simp [Rose.mirror]
 
-/-- Induction with a nested list: the hypothesis holds at every member of the list, which
-`PolyIso.mem_list` turns into the list's own membership. -/
+/-- Induction with a nested list: the hypothesis holds at every member of the list, by the
+list's own membership. -/
 theorem Rose.mirror_mirror {α : Type u} (t : Rose α) : t.mirror.mirror = t := by
   induction t with
   | node a cs ih =>
-    have ih' : ∀ x ∈ cs, x.mirror.mirror = x := fun x hx =>
-      ih x ((Codata.PolyIso.mem_list x cs).mpr hx)
     simp only [Rose.mirror_node, List.map_reverse, List.reverse_reverse, List.map_map]
-    exact congrArg (Rose.node a) ((List.map_congr_left fun x hx => ih' x hx).trans (List.map_id cs))
+    exact congrArg (Rose.node a) ((List.map_congr_left fun x hx => ih x hx).trans (List.map_id cs))
 
 -- Binary trees with optional subtrees.
 datatype BinTree (α : Type u)

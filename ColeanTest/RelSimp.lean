@@ -248,6 +248,19 @@ example {α : Type u} {X Y : Type v} (R : X → Y → Prop) (a : α) (x₁ x₂ 
     Bin.F.Rel R (.node a (x₁, x₂)) (.node a (y₁, y₂)) := by
   simp [h₁, h₂]
 
+-- Through `Array`: `List.Forall₂` on the lists of the arrays (`Occ.rel_array`).
+codatatype Proc (α : Type)
+  | done
+  | arr (ps : Array (Proc α))
+
+example {α : Type} {X Y : Type} (R : X → Y → Prop) (a : X) (c : Y) :
+    Proc.F.Rel (α := α) R (.arr #[a]) (.arr #[c]) ↔ R a c := by
+  simp
+
+example {α : Type} {X Y : Type} (R : X → Y → Prop) (ps : Array X) (qs : Array Y) :
+    Proc.F.Rel (α := α) R (.arr ps) (.arr qs) ↔ List.Forall₂ R ps.toList qs.toList := by
+  simp
+
 /-! ### Nested through a declared type
 
 The premise is the relation of `CoList`'s structure as a leaf. On a variable, a map on either side

@@ -11,7 +11,9 @@ import Colean.Gen.Framework
   carrying an induction hypothesis per recursive argument: `motive _ x` for a plain one,
   `∀ ys, motive _ (k ys)` under a telescope, and for a nested argument `c` one by membership,
   `∀ t, PolyIso.Mem (fun X => G X) t c → motive _ t`, with the argument's type `G` as a function
-  of the occurrences and the instance of `PolyIso.lean` that is its occurrence structure; when
+  of the occurrences and the instance of `PolyIso.lean` that is its occurrence structure, and
+  through `List`, `Option` and `Array` by their own membership, `∀ t, t ∈ c → motive _ t`
+  (`stdMemLemmas`, converted by `PolyIso.mem_list`, …); when
   its positions are at several indices of a family, `∀ j t, IPolyIso.Mem G j t c → motive j t`.
   When they are at one index only after cases on them, through a product (`T n × T n`,
   `T n × Nat`), or on the value through a sum (`T n ⊕ T n`, `oneIdx`), the hypothesis is by
@@ -21,7 +23,8 @@ import Colean.Gen.Framework
   structure, `∀ q, motive _ ((toC o c).2 q)`: it is `Signature.rec_of` at the packed index, the
   minor premises assembled by cases on `F T i` (`T.recAux`), with its computation rule
   `T.recPos_ctor` (propositional: the generic recursor is by well-founded recursion). `T.rec` is
-  `T.recPos` with the hypotheses turned into membership by `PolyIso.memRec`.
+  `T.recPos` with the hypotheses turned into membership by `PolyIso.memRec`, and through `List`,
+  `Option` and `Array` into theirs by `PolyIso.mem_list`, … (`memIffIH`).
 
 The minor premises are stated with the constructors `T.cᵢ`, so this runs after them.
 -/
@@ -157,6 +160,29 @@ structure NestMem where
   bridged : Bool := false
   /-- The argument's indexed occurrence structure, for these cases. -/
   occ : Expr := default
+  /-- When the functor and its instance are those of `List`, `Option` or `Array`: the lemma
+  `PolyIso.mem_list` (`mem_option`, `mem_array`), `Mem F t c ↔ t ∈ c`. The recursor states the
+  hypothesis by `t ∈ c` then, converted by the lemma (`recMemProp`). -/
+  memIff? : Option Name := none
+
+/-- The lemmas `PolyIso.Mem F x c ↔ x ∈ c` of the leaves with a membership of their own, by
+which the recursor states its hypotheses through them (`NestMem.memIff?`). -/
+def stdMemLemmas : Array Name :=
+  #[``Codata.PolyIso.mem_list, ``Codata.PolyIso.mem_option, ``Codata.PolyIso.mem_array]
+
+/-- The lemma of `stdMemLemmas` for the functor `fn`, its instance `inst` and the members' type
+`elem`, if there is one: the functor up to unfolding, the instance up to instances. -/
+def stdMemLemma? (fn inst elem : Expr) : MetaM (Option Name) := do
+  for n in stdMemLemmas do
+    let ok ← withoutModifyingState do
+      let (_, _, ty) ← forallMetaTelescope (← inferType (← mkConstWithFreshMVarLevels n))
+      let some (lhs, _) := ty.iff? | return false
+      let args := lhs.getAppArgs
+      unless args.size == 7 do return false
+      isDefEq args[0]! fn <&&> isDefEq args[4]! elem <&&>
+        withReducibleAndInstances (isDefEq args[3]! inst)
+    if ok then return some n
+  return none
 
 /-- The application of a family-level motive at index arguments. -/
 def motiveApp (motive : Expr) (idx : Array Expr) (x : Expr) : TermElabM Expr :=
@@ -361,7 +387,8 @@ def nestMem (a : ArgInfo) (n : Nest) (σ : Expr → Expr) (bridge := true) (anyS
     let fn ← withLocalDeclD `X (mkSort L.succ) fun X => do
       mkLambdaFVars #[X] (ctx.replaceOccU ty (fun _ _ => X) L)
     let inst ← isoOf o (if ctx.idxed then .flat else .plain)
-    return { idx? := some (ctx.wrap m idx), fn, inst, elem, bridged, occ := o }
+    let memIff? ← stdMemLemma? fn inst elem
+    return { idx? := some (ctx.wrap m idx), fn, inst, elem, bridged, occ := o, memIff? }
   else
     let J := ctx.J
     let fn ← withLocalDeclD `X (← mkArrow J (mkSort L.succ)) fun X => do
@@ -383,14 +410,26 @@ def memProp (nm : NestMem) (y t : Expr) (js : Array Expr) : TermElabM Expr := do
       #[none, nm.fn, none, none, none, nm.inst, nm.elem, ← ctx.pack js, t, y]
     withUnfolding <| mkAppOptM ``Codata.IPolyIso.Mem args
 
-/-- Run `k` on the variables of a hypothesis by membership of `y`: the member `t` (after the
-indices `js`, without a single one) and the membership `h`. -/
+/-- The lemma `lem` of `NestMem.memIff?` at `t` and `y`: `Mem F t y ↔ t ∈ y`. -/
+def memIffAt (lem : Name) (y t : Expr) : TermElabM Expr :=
+  withUnfolding <| mkAppM lem #[t, y]
+
+/-- The membership of the recursor's hypotheses, at one index: `t ∈ y` through `List`, `Option`
+and `Array` (`NestMem.memIff?`), `memProp` otherwise. -/
+def recMemProp (nm : NestMem) (y t : Expr) : TermElabM Expr := do
+  let some lem := nm.memIff? | ctx.memProp nm y t #[]
+  let some (_, rhs) := (← inferType (← memIffAt lem y t)).iff?
+    | throwError "internal error: `{lem}` is not an equivalence"
+  return ctx.foldTy rhs
+
+/-- Run `k` on the variables of a hypothesis by membership of `y` of the recursor: the member
+`t` (after the indices `js`, without a single one) and the membership `h` (`recMemProp`). -/
 def withMember (nm : NestMem) (y : Expr) (k : Array Expr → Expr → Expr → TermElabM α)
     (h : Name := `h) : TermElabM α := do
   match nm.idx? with
   | some _ =>
     withLocalDeclD `t nm.elem fun t => do
-    withLocalDeclD h (← ctx.memProp nm y t #[]) fun h => k #[] t h
+    withLocalDeclD h (← ctx.recMemProp nm y t) fun h => k #[] t h
   | none =>
     ctx.withJs fun js => do
     withLocalDeclD `t (← ctx.tAt js) fun t => do
@@ -442,15 +481,23 @@ def memPosTy (nm : NestMem) (y motive : Expr) : TermElabM Expr := do
     #[nm.fn, none, none, nm.inst, nm.elem, y, motive]
   return (← whnf (← inferType r)).bindingDomain!
 
+/-- A hypothesis `r` by `PolyIso.Mem` through `List`, `Option` or `Array` as one by `t ∈ y`:
+`fun t h => r t ((PolyIso.mem_list t y).mpr h)` (`NestMem.memIff?`); `r` itself otherwise. -/
+def memIffIH (nm : NestMem) (y r : Expr) : TermElabM Expr := do
+  let some lem := nm.memIff? | return r
+  ctx.withMember nm y fun _ t h => do
+    mkLambdaFVars #[t, h] (mkApp2 r t (← mkAppM ``Iff.mpr #[← memIffAt lem y t, h]))
+
 /-- The hypothesis by membership of `y`, from the one at the positions of its structure, `ih`:
-`PolyIso.memRec ih`, curried over the indices with `IPolyIso.memRec`. -/
+`PolyIso.memRec ih` (through `List`, `Option` and `Array` by `t ∈ y`, `memIffIH`), curried over
+the indices with `IPolyIso.memRec`. -/
 def memOfPos (nm : NestMem) (y : Expr) (app : Array Expr → Expr → TermElabM Expr) (ih : Expr) :
     TermElabM Expr := do
   let motive ← ctx.memMotive nm app
   if nm.idx?.isSome then
     let ih ← if nm.bridged then bridgeIH nm.occ y (← memPosTy nm y motive) ih else pure ih
     let args : Array (Option Expr) := #[nm.fn, none, none, nm.inst, nm.elem, y, motive, ih]
-    withUnfolding <| mkAppOptM ``Codata.PolyIso.memRec args
+    ctx.memIffIH nm y (← withUnfolding <| mkAppOptM ``Codata.PolyIso.memRec args)
   else
     let args : Array (Option Expr) :=
       #[none, nm.fn, none, none, none, nm.inst, nm.elem, y, motive, ih]
@@ -467,20 +514,22 @@ def memVal (nm : NestMem) (y : Expr) (recAt : Array Expr → Expr → TermElabM 
     mkLambdaFVars (js ++ #[t, h]) (← recAt (nm.idx?.getD js) t)
 
 /-- `memOfPos` of the hypothesis at the positions given by `recAt` is `memVal`: from
-`PolyIso.memRec_pos`, curried over the indices. -/
+`PolyIso.memRec_pos`, under `memIffIH`, curried over the indices. -/
 def memValEq (nm : NestMem) (y : Expr) (recAt : Array Expr → Expr → TermElabM Expr)
     (ihPos : Expr) : TermElabM Expr := do
   let g ← ctx.memMotive nm fun idx t => recAt idx t
   if nm.idx?.isSome then
     let args : Array (Option Expr) := #[nm.fn, none, none, nm.inst, nm.elem, y, none, g]
     let e ← withUnfolding <| mkAppOptM ``Codata.PolyIso.memRec_pos args
-    if !nm.bridged then return e
+    let some (FTy, lhs, _) := (← inferType e).eq? | throwError "internal error: not an equation"
     -- `memRec (bridgeIH ihPos) = memRec (fun q => g …)` first, from the hypothesis at the
     -- positions `ihPos`, by cases on the positions (and on the value through sums).
-    let some (_, lhs, _) := (← inferType e).eq? | throwError "internal error: not an equation"
-    let f := lhs.appArg!
-    let hb ← bridgeEq nm.occ y (← inferType f) ihPos f
-    mkEqTrans (← mkCongrArg lhs.appFn! hb) e
+    let e ← if !nm.bridged then pure e else
+      let f := lhs.appArg!
+      let hb ← bridgeEq nm.occ y (← inferType f) ihPos f
+      mkEqTrans (← mkCongrArg lhs.appFn! hb) e
+    if nm.memIff?.isNone then return e
+    mkCongrArg (← lam `F FTy fun F => ctx.memIffIH nm y F) e
   else
     let args : Array (Option Expr) :=
       #[none, nm.fn, none, none, none, nm.inst, nm.elem, y, none, g]

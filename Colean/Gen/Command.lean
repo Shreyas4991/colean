@@ -22,8 +22,10 @@ declares nothing. Each step has its own heartbeat budget. Then, separately, the 
 `Gen/Derive.lean`), whose failure is only a warning. Last, the internals are made `protected`
 (`protectGenerated`, `Gen/Decl.lean`), as `inductive` protects its own.
 
-Around the pipeline, as `inductive` does around its declarations: before it, the modifiers
-(`prepareDecls`, `Gen/Front.lean`); after it, the doc comments, `protected` on constructors and
+Around the pipeline, as `inductive` does around its declarations: before it, a declaration with
+a dotted name `Foo.T`, or a block whose types share a namespace, is elaborated inside that
+namespace (`elabDecl`, `blockNamespace?`), and the modifiers are elaborated (`prepareDecls`,
+`Gen/Front.lean`); after it, the doc comments, `protected` on constructors and
 the info trees of the names the user wrote (`finishDecls`), and last, outside the all-or-nothing
 run, the attributes of the types and constructors (`applyDeclAttrs`).
 -/
@@ -156,8 +158,65 @@ def elabDecls (decls : Array DeclStx) (ref : Syntax) : CommandElabM Unit :=
       return decls
     applyDeclAttrs decls
 
-/-- Elaborate a `codatatype` or `datatype` declaration. -/
+/-! ### Dotted names
+
+As Lean's `expandNamespacedDeclaration` and `expandMutualNamespace` (`Lean.Elab.Declaration`) do
+for `inductive`, a declaration `datatype Foo.T …` is elaborated as `datatype T …` inside
+`namespace Foo`, and a block whose types share a namespace inside it, their names relative to it.
+So the constructors refer to a type by its name in that namespace (`T`, or `Foo.T`), and see the
+other declarations of `Foo` as inside it. This is done by the elaborators, not by macros: Lean's
+`mutual` expands the macros of its declarations one by one (`expandMutualElement`). -/
+
+/-- The name a `codatatype` or `datatype` declaration `stx` declares, as written. -/
+private def declIdName? (stx : Syntax) : Option Name := do
+  let d ← DeclStx.read? stx
+  return (expandDeclIdCore d.declId).1
+
+/-- The declaration `stx` with the name in its `declId` replaced by `n`, at the same position. -/
+private def setDeclIdName (stx : Syntax) (n : Name) : Syntax :=
+  let declId := stx[2]
+  let idStx := (mkIdent n).raw.setInfo declId.getHeadInfo
+  stx.setArg 2 (if declId.isIdent then idStx else declId.setArg 0 idStx)
+
+/-- The namespace of a declaration `stx` written with a dotted name `Foo.T`, and the declaration
+named `T` (`expandDeclNamespace?`); none for an atomic name or one under `_root_`. -/
+private def declNamespace? (stx : Syntax) : Option (Name × Syntax) := do
+  let n ← declIdName? stx
+  if (`_root_).isPrefixOf n then none
+  let v := extractMacroScopes n
+  match v.name with
+  | .str .anonymous _ => none
+  | .str pre s => some (pre, setDeclIdName stx { v with name := .mkSimple s }.review)
+  | _ => none
+
+open Lean.Parser.Command.InternalSyntax in
+/-- Elaborate the command `stx` inside `namespace ns`, as `expandNamespacedDeclaration` does,
+local attributes and section variables staying visible (`end_local_scope`). -/
+def elabInNamespace (ref : Syntax) (ns : Name) (stx : Syntax) : CommandElabM Unit := do
+  let nsId := mkIdentFrom ref ns
+  let cmd ← withRef ref
+    `(namespace $nsId $(endLocalScopeSyntax ns.getNumParts):command $(⟨stx⟩) end $nsId)
+  elabCommand cmd
+
+/-- The common namespace of the declarations `cmds` of a block, and the declarations named
+relative to it (`expandMutualNamespace`): none if a declaration has an atomic name, or their
+namespaces have no common prefix. -/
+def blockNamespace? (cmds : Array Syntax) : Option (Name × Array Syntax) := do
+  let nss ← cmds.mapM fun c => (·.1) <$> declNamespace? c
+  let common := nss[1:].foldl (init := nss[0]!.components) fun acc n =>
+    (acc.zip n.components).takeWhile (fun (a, b) => a == b) |>.map (·.1)
+  if common.isEmpty then none
+  let pre := common.foldl (· ++ ·) .anonymous
+  let cmds ← cmds.mapM fun c => do
+    let v := extractMacroScopes (← declIdName? c)
+    return setDeclIdName c { v with name := v.name.replacePrefix pre .anonymous }.review
+  return (pre, cmds)
+
+/-- Elaborate a `codatatype` or `datatype` declaration; one with a dotted name `Foo.T` inside
+`namespace Foo`, as `inductive` does. -/
 def elabDecl (stx : Syntax) : CommandElabM Unit := do
+  if let some (ns, stx') := declNamespace? stx then
+    return ← elabInNamespace stx[1] ns stx'
   let some d := DeclStx.read? stx | throwUnsupportedSyntax
   elabDecls #[d] stx
 

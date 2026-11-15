@@ -732,7 +732,8 @@ example : (Pa.mk (.mk .nil)).depth = 2 := by simp [Pa.depth]
 end PerType
 
 /-! The hypothesis of a nested argument is by membership, at the motive of the type of its
-members: `∀ t, PolyIso.Mem (fun X => List X) t fs → motive_2 t` for a list of forests. When the
+members: `∀ t, t ∈ fs → motive_2 t` for a list of forests (by `PolyIso.Mem` of the argument's
+functor where it is not a list, an option or an array). When the
 positions of an argument are at several types of the block, through a product or a sum, it is
 by `IPolyIso.Mem` at the block's index, one hypothesis per type of the argument. -/
 
@@ -748,11 +749,8 @@ end
 /--
 info: @Tr.rec : {motive_1 : Tr → Sort u_1} →
   {motive_2 : Fo → Sort u_1} →
-    ((n : ℕ) →
-        (fs : List Fo) → ((t : Fo) → PolyIso.Mem (fun X => List X) t fs → motive_2 t) → motive_1 (Tr.node n fs)) →
-      ((t : Tr) →
-          (next : Option Fo) →
-            motive_1 t → ((t : Fo) → PolyIso.Mem (fun X => Option X) t next → motive_2 t) → motive_2 (Fo.mk t next)) →
+    ((n : ℕ) → (fs : List Fo) → ((t : Fo) → t ∈ fs → motive_2 t) → motive_1 (Tr.node n fs)) →
+      ((t : Tr) → (next : Option Fo) → motive_1 t → ((t : Fo) → t ∈ next → motive_2 t) → motive_2 (Fo.mk t next)) →
         (t : Tr) → motive_1 t
 -/
 #guard_msgs in
@@ -762,9 +760,9 @@ info: @Tr.rec : {motive_1 : Tr → Sort u_1} →
 -- their memberships.
 def Tr.sum : Tr → Nat :=
   Tr.rec (motive_2 := fun _ => Nat)
-    (fun n fs ih => n + (fs.attach.map fun x => ih x.1 ((PolyIso.mem_list _ _).mpr x.2)).sum)
+    (fun n fs ih => n + (fs.attach.map fun x => ih x.1 x.2).sum)
     (fun _ next t ih =>
-      t + (next.attach.map fun x => ih x.1 ((PolyIso.mem_option _ _).mpr x.2)).getD 0)
+      t + (next.attach.map fun x => ih x.1 x.2).getD 0)
 
 example : (Tr.node 1 [.mk (.node 2 []) none]).sum = 3 := by
   simp [Tr.sum, List.map_attach_eq_pmap]

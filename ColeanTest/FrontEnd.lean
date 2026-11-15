@@ -309,7 +309,7 @@ datatype Qc.X
   | mk (x : Qc_X)
 end
 
--- In a mixed block, the names generated from a type's name join its components by `_`.
+-- In a mixed block too, the types are declared in their common namespace.
 mixed_mutual
 codatatype Foo.Tree (α : Type)
   | node (a : α) (cs : Foo.Forest α)
@@ -318,8 +318,86 @@ datatype Foo.Forest (α : Type)
   | cons (t : Foo.Tree α) (f : Foo.Forest α)
 end
 
-/-- info: FrontEndTest.Foo.Forest.instMembershipFoo_Tree {α : Type} : Membership (Foo.Tree α) (Foo.Forest α) -/
-#guard_msgs in #check Foo.Forest.instMembershipFoo_Tree
+/-- info: FrontEndTest.Foo.Forest.instMembershipTree {α : Type} : Membership (Foo.Tree α) (Foo.Forest α) -/
+#guard_msgs in #check Foo.Forest.instMembershipTree
+
+/-! ### Dotted names, as `inductive`
+
+A declaration `datatype Baz.Qux …` is elaborated inside `namespace Baz`, so the constructors
+refer to the type as `Qux` or `Baz.Qux`, in their arguments and in their result type, and see
+the declarations of `Baz` by their short names; a block whose types share a namespace is
+elaborated inside it. -/
+
+section
+set_option autoImplicit false
+
+def Baz.Label := Nat
+
+datatype Baz.Qux
+  | leaf
+  | mk (t : Qux)
+  | mk₂ (t : Baz.Qux) (l : Label) : Qux
+
+/-- info: FrontEndTest.Baz.Qux.mk₂ (t : Baz.Qux) (l : Baz.Label) : Baz.Qux -/
+#guard_msgs in #check Baz.Qux.mk₂
+
+codatatype Baz.CoQux (α : Type)
+  | mk (a : α) (t : CoQux α) : Baz.CoQux α
+
+/-- info: FrontEndTest.Baz.CoQux.mk {α : Type} (a : α) (t : Baz.CoQux α) : Baz.CoQux α -/
+#guard_msgs in #check Baz.CoQux.mk
+
+-- A nested occurrence by the short name, and the recursor.
+datatype Baz.RoseQ
+  | node (cs : List RoseQ)
+
+/--
+info: @Baz.RoseQ.rec : {motive : Baz.RoseQ → Sort u_1} →
+  ((cs : List Baz.RoseQ) → ((t : Baz.RoseQ) → t ∈ cs → motive t) → motive (Baz.RoseQ.node cs)) →
+    (t : Baz.RoseQ) → motive t
+-/
+#guard_msgs in #check @Baz.RoseQ.rec
+
+mutual
+datatype Ns.T
+  | mk (u : U)
+  | nil
+datatype Ns.U
+  | mk (t : Ns.T) : U
+end
+
+/-- info: FrontEndTest.Ns.T_U (m : Ns.T_U.Ix) : Type -/
+#guard_msgs in #check Ns.T_U
+
+/-- info: FrontEndTest.Ns.T.mk (u : Ns.U) : Ns.T -/
+#guard_msgs in #check Ns.T.mk
+
+mixed_mutual
+codatatype Ns.CoT
+  | node (f : CoF)
+datatype Ns.CoF
+  | nil
+  | cons (t : CoT) (f : Ns.CoF)
+end
+
+/-- info: FrontEndTest.Ns.CoT.node (f : Ns.CoF) : Ns.CoT -/
+#guard_msgs in #check Ns.CoT.node
+
+-- Without a common namespace, the types are referred to by their full names, as in `inductive`.
+/--
+error: Unknown identifier `V`
+
+Note: It is not possible to treat `V` as an implicitly bound variable here because the `autoImplicit` option is set to `false`.
+-/
+#guard_msgs in
+mutual
+datatype Ns₁.S
+  | mk (v : V)
+datatype Ns₂.V
+  | mk (s : Ns₁.S)
+end
+
+end
 
 /-! ### A single index that is a proposition -/
 

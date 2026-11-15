@@ -43,7 +43,8 @@ A presentation says what the members of a value are: those at its positions (`Po
 `IPolyIso.Mem` at an index). The recursor of a `datatype` states the induction hypothesis of a
 nested argument `c : G T` with it, `∀ t, PolyIso.Mem (fun X => G X) t c → motive t`, and the
 `simp` lemmas of this file turn membership into the containers' own (`mem_list`, …) or into
-components (`mem_prod`, …).
+components (`mem_prod`, …); through `List`, `Option` and `Array` alone the recursor states it
+with their own membership, `∀ t, t ∈ c → motive t`, converted by these lemmas.
 
 Products, sums, functions and dependent pairs of functors with instances have instances too, so
 every argument type with occurrences has one, `fun X => List (X × Nat)` say: they are the

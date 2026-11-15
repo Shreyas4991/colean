@@ -32,7 +32,8 @@ generated. The command then produces, from the generic theory (`Framework.lean`,
 * the dependent recursor `T.rec : {motive : ∀ i, T i → Sort v} → minors → ∀ {i} (t : T i),
   motive i t`, with one minor premise per constructor carrying an induction hypothesis for each
   recursive argument (`∀ ys, motive _ (k ys)` under a telescope; for a nested argument `c`, by
-  membership, `∀ t, PolyIso.Mem (fun X => G X) t c → motive _ t`, also when its positions are at
+  membership, `∀ t, PolyIso.Mem (fun X => G X) t c → motive _ t` (through `List`, `Option` and
+  `Array` by theirs, `∀ t, t ∈ c → motive _ t`), also when its positions are at
   one index only after cases on them, or `IPolyIso.Mem` at an index when they are at several
   indices), registered as the `induction` eliminator, and its
   computation rules `T.rec_ctorᵢ` as simp lemmas, with the hypothesis of a nested argument
