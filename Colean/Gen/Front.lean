@@ -62,8 +62,9 @@ proposition. Before anything else, it checks the names (`checkNames`): no type t
 no type, block or index of a block declared already, no two types with one constructor of the
 block's index, and no constructor twice in a type or named as a type, with the messages of
 `inductive` (`checkCtorDups`); then no constructor named as a declaration the command generates
-for its type or, through the functor's constructor of the same name, for the functor
-(`checkCtorNames`).
+for its type, from its name or another constructor's or none, or, through the functor's
+constructor of the same name, for the functor, and no two declarations generated from
+constructors with one name (`checkCtorNames`).
 
 The universe of the declared sort does not make the types': theirs is the model's. A declared
 sort with a universe written, without `_`, is kept (`Ctx.written`), and the pipeline checks it
@@ -266,12 +267,73 @@ def typeGenNames (co single inner : Bool) : Array String :=
     else #["rec", "fold", "fold_ctor", "fold_eq", "fold_unique"]) ++
   (if inner then #["Open"] else #[])
 
+/-- The name `n` of a type in the namespace `ns`, as a string for a generated name: its
+components joined by `_` (`Foo_Tree` for `Foo.Tree`), without the private prefix. -/
+def nameIn (ns n : Name) : String :=
+  "_".intercalate (((privateToUserName n).replacePrefix ns .anonymous).components.map
+    (·.toString (escape := false)))
+
 /-- The rules `T.s` of the constructors `cs` of a type `T`, by `s`: those every constructor has.
-Not the lemmas of some constructors only (`T.cᵢ_inj`, `T.cᵢ_ne_cⱼ`). -/
+The lemmas of some constructors only (`T.cᵢ_inj`, `T.cᵢ_ne_cⱼ`) are among `ctorGenNames`. -/
 def typeRuleNames (co : Bool) (cs : Array Name) : Array String :=
   cs.flatMap fun c => let c := c.toString
     #["dtor_" ++ c, "ctor_" ++ c, "casesOn_" ++ c, "dtor_eq_" ++ c ++ "_iff"] ++
       (if co then #[] else #["rec_" ++ c, "fold_" ++ c])
+
+/-- A declaration generated from constructors: its name, what it is, the constructor it is
+named after first, and whether the generator takes the name even when another of these has it
+(`unique`), rather than another name (the membership lemmas) or none (the one-step lemmas of
+the lifting, `dtor_eq_cᵢ_iff`). -/
+structure CtorGen where
+  name : Name
+  what : MessageData
+  ref : Syntax
+  unique : Bool := true
+
+/-- The declarations generated from the constructors `cs` of a type `T` (`CtorGen`): the rules
+every constructor has (`typeRuleNames`); injectivity `T.cᵢ_inj` of a constructor that may have
+arguments (not one written without binders or type) and disjointness `T.cᵢ_ne_cⱼ` of two
+constructors (of every two, where `genCtors` has it of those whose results meet); for
+`codatatype` (`co`) the one-step lemmas `L.rel_cᵢ_cⱼ` of the lifting of the layer `L` (`T.F`, or
+`Tₘ.F` per type of a block, where `genRelSteps` has them of those whose results meet); in a type
+of a run inside a `mixed_mutual` block (`inner`), the membership lemmas `T.mem_cᵢ` (`T.mem_cᵢ_O`
+when that name is taken) and instances `T.instMembershipO` through the types `O` of `others`
+(`memLemmas`, `memInstances`, `Gen/Mixed.lean`, `O` named in the namespace `ns`). -/
+def ctorGenNames (T : Name) (co inner : Bool) (cs : Array CtorStx) (ns : Name)
+    (others : Array Name) : Array CtorGen := Id.run do
+  let ctor (c : Name) : MessageData := m!"`{T ++ c}`"
+  let L := genName T "F"
+  let shorts := others.map (nameIn ns)
+  let mut out := #[]
+  for cstx in cs do
+    let c := cstx.name.getId
+    let ref := cstx.name.raw
+    let s := c.toString
+    for r in typeRuleNames co #[c] do
+      out := out.push { name := T.str r, what := m!"a rule of {ctor c}", ref
+                        unique := !r.startsWith "dtor_eq_" }
+    unless cstx.binders.isEmpty && cstx.type?.isNone do
+      out := out.push { name := T.str (s ++ "_inj"), what := m!"injectivity of {ctor c}", ref }
+    for c' in cs do
+      let c' := c'.name.getId
+      if c != c' then
+        out := out.push { name := T.str (s ++ "_ne_" ++ c'.toString), ref
+                          what := m!"disjointness of {ctor c} and {ctor c'}" }
+      if co then
+        out := out.push { name := L.str s!"rel_{c}_{c'}", ref, unique := false
+                          what := m!"one step of `{L ++ `Rel}` at {ctor c} and {ctor c'}" }
+    if inner then
+      out := out.push { name := T.str ("mem_" ++ s), what := m!"membership in {ctor c}", ref
+                        unique := false }
+      for o in shorts do
+        out := out.push { name := T.str ("mem_" ++ s ++ "_" ++ o), ref, unique := false
+                          what := m!"membership in {ctor c}" }
+  if inner then
+    let d₀ := (cs[0]?.map (·.name.raw)).getD .missing
+    for o in shorts do
+      out := out.push { name := T.str ("instMembership" ++ o), ref := d₀
+                        what := m!"membership of `{o}` in `{T}`" }
+  return out
 
 /-- The generated declarations `Blk.F.s` of the functor `Blk.F` of a family (a type or a block),
 by `s`, that its constructor `Blk.F.c` for a constructor `c` (`Ctor.fname`) may clash with: its
@@ -285,13 +347,21 @@ def functorGenNames (co : Bool) (fnames : Array Name) : Array String :=
 
 /-- The constructor names of the declarations `decls`, a single type or the types of a block,
 before anything is declared: a constructor `T.c` must not be a generated declaration of `T`
-(`typeGenNames`, `typeRuleNames`) or the namespace `T.Colean` of its internals, nor its
-constructor `F.c` of the functor one of the functor (`functorGenNames`), nor, for `codatatype`,
-`F.Rel.c` the lemma `F.Rel.mono`. `inner` for a run inside a `mixed_mutual` block, whose closed
-types restate the declarations of the open ones. -/
-def checkCtorNames (decls : Array DeclStx) (inner : Bool) : TermElabM Unit := do
+(`typeGenNames`, `typeRuleNames`), one generated from another constructor or from itself
+(`ctorGenNames`), or the namespace `T.Colean` of its internals, nor its constructor `F.c` of the
+functor one of the functor (`functorGenNames`, and the one-step lemmas `F.rel_cᵢ_cⱼ` of a single
+`codatatype`), nor, for `codatatype`, `F.Rel.c` the lemma `F.Rel.mono`; the map's rule at a
+constructor must not be its law (`F.fmap_id` for `id`, in a block per type `Tₘ.F.fmap_id` too);
+and no declaration generated from constructors may be a fixed one (`T.dtor_inj` for a
+constructor `inj`) or have the name of another (`T.b_ne_ne_b`, from `b` and `ne_b` and from
+`b_ne` and `b`), unless the generator gives one of them another name or none (`CtorGen.unique`).
+`inner` for a run inside a `mixed_mutual` block, whose closed types restate the declarations of
+the open ones, `others` the full names of the block's types outside the run. -/
+def checkCtorNames (decls : Array DeclStx) (inner : Bool) (others : Array Name := #[]) :
+    TermElabM Unit := do
   let single := decls.size == 1
   let co := decls[0]!.co
+  let ns ← getCurrNamespace
   let fam := if single then decls[0]!.userName else blockName (decls.map (·.userName))
   let shorts := blockShorts (decls.map (·.userName))
   let ctors := decls.map (·.ctors.map (·.name.getId))
@@ -303,11 +373,13 @@ def checkCtorNames (decls : Array DeclStx) (inner : Bool) : TermElabM Unit := do
       rename the constructor"
   for d in decls, cs in ctors, m in [0:decls.size] do
     let T := d.userName
-    let gen := (typeGenNames co single inner).map (genName T) ++
-      (typeRuleNames co cs).map (T.str ·)
+    let fixed := (typeGenNames co single inner).map (genName T)
+    let gen := fixed ++ (typeRuleNames co cs).map (T.str ·)
+    let derived := ctorGenNames T co inner d.ctors ns others
     for c in d.ctors do
       let n := T ++ c.name.getId
       if gen.contains n then clash c.name n
+      if let some g := derived.find? (·.name == n) then clash c.name n m!" ({g.what})"
       if n == coleanNs T then
         throwErrorAt c.name m!"constructor `{c.name.getId}` clashes with `{n}`, the namespace of \
           the generated internals; rename the constructor"
@@ -315,9 +387,33 @@ def checkCtorNames (decls : Array DeclStx) (inner : Bool) : TermElabM Unit := do
       if fNames.contains fname.toString then
         clash c.name (F.str fname.toString)
           m!": the functor `{F}` has a constructor `{F ++ fname}` for it"
+      if let some g := derived.find? (·.name == F ++ fname) then
+        clash c.name (F ++ fname)
+          m!" ({g.what}): the functor `{F}` has a constructor `{F ++ fname}` for it"
       if co && fname == `mono then
         clash c.name (F ++ `Rel.mono)
           m!": the lifting `{F ++ `Rel}` has a constructor `{F ++ `Rel ++ fname}` for it"
+      -- The map's rule at the constructor named as its law (`F.fmap_id` for `id`; in a block,
+      -- per type, `Tₘ.F.fmap_id`).
+      if let some law := [`id, `comp].find? (· == c.name.getId) then
+        let layer := if fname == c.name.getId then F else genName T "F"
+        let rule := layer.str ("fmap_" ++ law.toString)
+        clash c.name rule m!", a law of `{layer ++ `fmap}`: the rule of `{layer ++ `fmap}` at \
+          `{n}` would have this name too"
+    -- A declaration generated from constructors named as a fixed one (`T.dtor_inj` for a
+    -- constructor `inj`), or as another one generated from constructors (`T.b_ne_ne_b`, from
+    -- `b` and `ne_b` and from `b_ne` and `b`).
+    let mut seen : Std.HashMap Name CtorGen := {}
+    for g in derived do
+      if g.unique && fixed.contains g.name then
+        throwErrorAt g.ref m!"constructor `{g.ref.getId}` clashes with the generated declaration \
+          `{g.name}`: {g.what} would have this name too; rename the constructor"
+      if let some g' := seen[g.name]? then
+        if g.unique || g'.unique then
+          throwErrorAt g.ref m!"constructors `{g'.ref.getId}` and `{g.ref.getId}` give two \
+            generated declarations the name `{g.name}`: {g'.what}, and {g.what}; rename one of \
+            them"
+      else seen := seen.insert g.name g
 
 /-- Throw at `ref` if `n`, a name the command declares and the user did not write, is declared
 already; `why` says where the name comes from and how to avoid the clash. -/

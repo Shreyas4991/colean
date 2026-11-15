@@ -33,6 +33,8 @@ and it has no other argument (`| stop {n : Nat} : T n`).
 This step is separate from the declaration, as step 5 is: it runs on a declared type when the
 attribute `with_ccpo` is applied to it (`CodataCmd.lean`), reads only the environment, and changes
 nothing the declaration generated. A failure is an error of the attribute, and restores the state.
+A constructor named as a declaration of the order (`T.bot_eq`, or `T.monotone_d` for a constructor
+`d` with a recursive argument, `hasRecField`) is refused before anything is declared.
 The pieces of the order (`K`, the bottom layer `e`, the container `C`, the proof that the bottom has
 no positions, the lifting `T.F.Rel` with `T.F.rel_fmap` and `T.Colean.rel_ofC`) are elaborated from
 short terms on the generated constants (`mkCIdent`), so that unification adapts the plain type's
@@ -86,6 +88,15 @@ def kindOf (X ty : Expr) : MetaM Kind := do
     if !doms && body.getAppFn == X && !(body.getAppArgs.any (·.containsFVar X.fvarId!)) then
       return .recur
     return .nest
+
+/-- Whether the constructor `c` of `T.F`, at the parameters `ps`, has a field that mentions the
+family: the constructors that may get a monotonicity lemma (`genMonotone`). -/
+def hasRecField (c : Name) (ps : Array Expr) : MetaM Bool := do
+  let fty ← instantiateForall (← inferType (← mkConstWithFreshMVarLevels c)) ps
+  let .forallE _ XTy _ _ := fty | return false
+  withLocalDeclD `X XTy fun X => do
+    forallTelescope (fty.bindingBody!.instantiate1 X) fun as _ =>
+      as.anyM fun a => return !((← kindOf X (← inferType a)) matches .data)
 
 variable (T : Name)
 
@@ -264,13 +275,21 @@ def genCCPO (bot? : Option Name) : TermElabM Unit := do
   let some (.inductInfo finfo) := env.find? FN
     | fail m!"`{.ofConstName T}` is a type of an inner run of a `mixed_mutual` block, which is not \
         supported"
-  -- A constructor named as a declaration of the order: `T.c` is the constructor `c`. Those of
-  -- the monotonicity lemmas are checked by `genMonotone`.
-  for c in finfo.ctors do
-    let c := c.componentsRev.head!
+  -- A constructor named as a declaration of the order: `T.c` is the constructor `c`. That of a
+  -- monotonicity lemma `T.monotone_d` is refused for every constructor `d` with a recursive
+  -- field, and `genMonotone` checks the name again, against the user's declarations too.
+  let shorts := finfo.ctors.map (·.componentsRev.head!)
+  let monos ← finfo.ctors.filterM (hasRecField · ps)
+  for c in shorts do
     if [`instCCPO, `approx_iff, `approx_coind, `bot_eq].contains c then
       fail m!"constructor `{c}` clashes with the declaration `{T ++ c}` of the order; rename the \
         constructor"
+    for d in monos do
+      let d := d.componentsRev.head!
+      let name := T ++ (`monotone).appendAfter ("_" ++ d.toString)
+      if T ++ c == name then
+        fail m!"constructor `{c}` clashes with the declaration `{name}` of the order, the \
+          monotonicity lemma of `{T ++ d}`; rename the constructor"
   if env.contains (T ++ `instCCPO) then
     fail m!"the order of `{.ofConstName T}` is already declared"
   -- The bottom constructor, at every index, and its arguments there.

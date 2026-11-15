@@ -36,12 +36,6 @@ open Lean Meta Elab Term Command
 
 namespace Codata.Gen
 
-/-- The name `n` of a type in the namespace `ns`, as a string for a generated name: its
-components joined by `_` (`Foo_Tree` for `Foo.Tree`), without the private prefix. -/
-def nameIn (ns n : Name) : String :=
-  "_".intercalate (((privateToUserName n).replacePrefix ns .anonymous).components.map
-    (·.toString (escape := false)))
-
 /-- The runs of a block, `decls`, with their names: those of the types, private or not, and of
 the blocks after them (`blockName`), as private as they are. -/
 def mixRuns (decls : Array DeclStx) : Array MixRun := Id.run do
@@ -65,12 +59,15 @@ def mixRuns (decls : Array DeclStx) : Array MixRun := Id.run do
 
 /-- The names of a mixed block, before anything is declared (`checkNames`): the types, the open
 types `Tₘ.Open` of the runs inside, and for a run of several types, its name, open name and
-index; the constructors of each run (`checkCtorNames`). `ref` is the block's keyword. -/
+index; the constructors of each run (`checkCtorNames`, with the types outside the run, through
+which a run inside has membership instances). `ref` is the block's keyword. -/
 def checkMixNames (decls : Array DeclStx) (runs : Array MixRun) (ref : Syntax) :
     TermElabM Unit := do
   checkNames decls none ref
   for run in runs, j in [0:runs.size] do
-    checkCtorNames (run.decls.map (decls[·]!)) (inner := j > 0)
+    let others := ((Array.range decls.size).filter (!run.decls.contains ·)).map
+      (decls[·]!.declName)
+    checkCtorNames (run.decls.map (decls[·]!)) (inner := j > 0) others
     if j > 0 then
       for n in run.names, d in run.decls do
         checkFree n decls[d]!.T "a type `T` of a run inside the first is declared open, as \
