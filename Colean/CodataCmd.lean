@@ -63,8 +63,9 @@ constructions: after `open T` these are not `bisim`, …, only `T.bisim` and dot
 `protectedGen` (`Gen/Decl.lean`) has the list. The type, the constructors, the eliminators
 `T.rec`, `T.casesOn` (as Lean leaves them), `T.fold`, `T.corec`, `T.dtor`, and the lemmas are not
 protected. A constructor named as a generated declaration (`dtor`, `fold_eq`, `fmap`, the functor
-having a constructor of each name) is refused before anything is declared (`checkCtorNames`,
-`Gen/Front.lean`).
+having a constructor of each name, or `a_inj`, `a_ne_b` named after other constructors), and
+constructors that give two generated declarations one name, are refused before anything is
+declared (`checkCtorNames`, `Gen/Front.lean`).
 
 With indices (`codatatype T (params) : (i₁ : I₁) → I₂ → Type u`, constructors
 `ctorᵢ … : T params idx₁ idx₂`), the same declarations are generated in their indexed form:

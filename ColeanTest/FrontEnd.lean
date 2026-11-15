@@ -659,7 +659,9 @@ The internals are under `T.Colean` (`T.Colean.B`, the positions, `T.Colean.Shape
 `T.Colean.toC`, `T.Colean.Poly.*`), and the functor's action on functions is `T.F.fmap`, so
 constructors may have these names. A constructor named like a generated declaration of its type,
 or of the functor, which has a constructor of the same name, is refused before anything is
-declared; so is a constructor declared twice, with the message of `inductive`. -/
+declared, also one generated from another constructor (`a_inj`, `a_ne_b`, `F.rel_a_b`, the
+membership lemmas of a mixed block), and so are constructors that give two generated declarations
+one name; so is a constructor declared twice, with the message of `inductive`. -/
 
 datatype Letter
   | A
@@ -776,6 +778,91 @@ end
 
 example : CB.fmap .stop ≠ CB.contract := by simp
 
+-- A lemma generated from another constructor: injectivity, disjointness, a rule.
+/--
+error: constructor `a_inj` clashes with the generated declaration `FrontEndTest.C7.a_inj` (injectivity of `FrontEndTest.C7.a`); rename the constructor
+-/
+#guard_msgs in
+codatatype C7
+  | a (t : C7)
+  | a_inj
+
+/--
+error: constructor `a_ne_b` clashes with the generated declaration `FrontEndTest.Cmd.a_ne_b` (disjointness of `FrontEndTest.Cmd.a` and `FrontEndTest.Cmd.b`); rename the constructor
+-/
+#guard_msgs in
+datatype Cmd
+  | a
+  | b
+  | a_ne_b
+
+/--
+error: constructor `fold_a` clashes with the generated declaration `FrontEndTest.Cmd.fold_a`; rename the constructor
+-/
+#guard_msgs in
+datatype Cmd
+  | a
+  | fold_a
+
+-- The functor's constructor named as a one-step lemma of the lifting, or as a rule of the map.
+/--
+error: constructor `rel_a_b` clashes with the generated declaration `FrontEndTest.Cmd.F.rel_a_b` (one step of `FrontEndTest.Cmd.F.Rel` at `FrontEndTest.Cmd.a` and `FrontEndTest.Cmd.b`): the functor `FrontEndTest.Cmd.F` has a constructor `FrontEndTest.Cmd.F.rel_a_b` for it; rename the constructor
+-/
+#guard_msgs in
+codatatype Cmd
+  | a (c : Cmd)
+  | b
+  | rel_a_b
+
+/--
+error: constructor `fmap_a` clashes with the generated declaration `FrontEndTest.Cmd.F.fmap_a`: the functor `FrontEndTest.Cmd.F` has a constructor `FrontEndTest.Cmd.F.fmap_a` for it; rename the constructor
+-/
+#guard_msgs in
+datatype Cmd
+  | a (n : Nat)
+  | fmap_a
+
+-- A rule of a constructor named as a fixed declaration: of the type, or a law of the map.
+/--
+error: constructor `inj` clashes with the generated declaration `FrontEndTest.Cmd.dtor_inj`: a rule of `FrontEndTest.Cmd.inj` would have this name too; rename the constructor
+-/
+#guard_msgs in
+datatype Cmd
+  | inj (n : Nat)
+
+/--
+error: constructor `id` clashes with the generated declaration `FrontEndTest.Cmd.F.fmap_id`, a law of `FrontEndTest.Cmd.F.fmap`: the rule of `FrontEndTest.Cmd.F.fmap` at `FrontEndTest.Cmd.id` would have this name too; rename the constructor
+-/
+#guard_msgs in
+codatatype Cmd
+  | id (c : Cmd)
+  | stop
+
+-- Two generated declarations with one name.
+/--
+error: constructors `b` and `b_ne` give two generated declarations the name `FrontEndTest.Cmd.b_ne_ne_b`: disjointness of `FrontEndTest.Cmd.b` and `FrontEndTest.Cmd.ne_b`, and disjointness of `FrontEndTest.Cmd.b_ne` and `FrontEndTest.Cmd.b`; rename one of them
+-/
+#guard_msgs in
+datatype Cmd
+  | b
+  | b_ne
+  | ne_b
+
+-- Names close to the generated ones, and `a_inj` next to an `a` without arguments, which has
+-- no injectivity lemma.
+datatype Near
+  | a (n : Nat)
+  | a_in
+  | b
+  | ne_b
+  | inj_a
+  | c
+  | c_inj
+
+example : Near.a 1 ≠ Near.a_in := by simp
+example (m n : Nat) : Near.a m = Near.a n ↔ m = n := Near.a_inj m n
+example : Near.c ≠ Near.c_inj := by simp
+
 -- In a `mixed_mutual` block, the closed type of an inner run restates the open type as `T.Open`.
 /--
 error: constructor `Open` clashes with the generated declaration `FrontEndTest.XF.Open`; rename the constructor
@@ -787,6 +874,33 @@ codatatype XT
 datatype XF
   | nil
   | Open (t : XT)
+end
+
+-- And the membership lemmas of its constructors and its instances of membership.
+/--
+error: constructor `mem_cons` clashes with the generated declaration `FrontEndTest.XF.mem_cons` (membership in `FrontEndTest.XF.cons`); rename the constructor
+-/
+#guard_msgs in
+mixed_mutual
+codatatype XT
+  | node (f : XF)
+datatype XF
+  | nil
+  | cons (t : XT) (f : XF)
+  | mem_cons
+end
+
+/--
+error: constructor `instMembershipXT` clashes with the generated declaration `FrontEndTest.XF.instMembershipXT` (membership of `XT` in `FrontEndTest.XF`); rename the constructor
+-/
+#guard_msgs in
+mixed_mutual
+codatatype XT
+  | node (f : XF)
+datatype XF
+  | nil
+  | cons (t : XT) (f : XF)
+  | instMembershipXT
 end
 
 /--

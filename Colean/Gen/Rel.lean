@@ -25,10 +25,11 @@ of the nested arguments rewritten with the hypotheses on them, then the witnesse
 positions by cases in general position (`casesPos`); for the one-step lemmas, cases on the
 hypothesis in general position (`casesRel`) and the hypotheses one way, the equations substituted
 and the constructor the other; `Rel.mono` by cases and the constructor at the premises mapped;
-`rel_refl` is `rel_fmap` at the identity rewritten by `fmap_id`. A one-step lemma whose name a
-constructor of `F` takes (`T.F.rel_a_b` for a constructor `rel_a_b`) is not generated; the other
-names of `F` and `F.Rel` are refused as constructor names before anything is declared
-(`checkCtorNames`, `Gen/Front.lean`).
+`rel_refl` is `rel_fmap` at the identity rewritten by `fmap_id`. The names of `F` and `F.Rel`,
+the one-step lemmas among them (`T.F.rel_a_b` for a constructor `rel_a_b`), are refused as
+constructor names before anything is declared (`checkCtorNames`, `Gen/Front.lean`); a one-step
+lemma whose name another one takes (`rel_a_b_c`, at `a` and `b_c` and at `a_b` and `c`) is not
+generated.
 -/
 
 open Lean Meta Elab Term

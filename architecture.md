@@ -137,9 +137,19 @@ per run of a mixed block, in `checkMixNames`): "constructor `dtor` clashes with 
 declaration `Cmd.dtor`; rename the constructor". The names checked are the fixed ones of the type
 (`typeGenNames`) and of the functor (`functorGenNames`), the namespace `T.Colean`, and the rules
 every constructor has (`T.dtor_cᵢ`, `T.ctor_cᵢ`, `T.casesOn_cᵢ`, `T.dtor_eq_cᵢ_iff`, `T.rec_cᵢ`,
-`T.fold_cᵢ`, `T.F.fmap_cᵢ`); not those of some constructors only (`T.cᵢ_inj`, `T.cᵢ_ne_cⱼ`,
-`T.F.rel_cᵢ_cⱼ`, the membership lemmas `Tₘ.mem_cᵢ` of a mixed block). `with_ccpo` refuses a
-constructor named as a declaration of the order the same way (`Gen/CCPO.lean`).
+`T.fold_cᵢ`, `T.F.fmap_cᵢ`), and those of some constructors, conservatively (`ctorGenNames`):
+`T.cᵢ_inj` of every constructor written with arguments or a type, `T.cᵢ_ne_cⱼ` of every two
+constructors, `T.F.rel_cᵢ_cⱼ` of every two of a single `codatatype` (on the functor's
+constructor), and in a type of a run inside a mixed block its membership lemmas `Tₘ.mem_cᵢ` and
+instances `Tₘ.instMembershipO`: "constructor `a_inj` clashes with the generated declaration
+`C7.a_inj` (injectivity of `C7.a`); rename the constructor". A rule of a constructor named as a
+fixed declaration is refused at that constructor (`T.dtor_inj` for `inj`, `T.F.fmap_id` for
+`id`), and so are two declarations generated from constructors with one name (`T.b_ne_ne_b`
+from `b` and `ne_b` and from `b_ne` and `b`), unless the generator then gives one another name
+or none (the membership lemmas, the one-step lemmas of the lifting, `T.dtor_eq_cᵢ_iff`). Step 5's
+names are under `T.Colean`, and cannot clash with a constructor. `with_ccpo` refuses a
+constructor named as a declaration of the order the same way (`Gen/CCPO.lean`), before it
+declares anything: `T.monotone_cᵢ` for every constructor with a recursive argument.
 
 As `inductive` protects its auxiliary constructions (`recOn`, `noConfusion`, `below`, `brecOn`,
 `ctorIdx`, …, which the inductive types generated here, `T.F`, `T.Colean.Shape`, `T.Colean.B`,

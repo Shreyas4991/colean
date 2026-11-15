@@ -523,6 +523,18 @@ error: with_ccpo: constructor `monotone_next` clashes with the declaration `CCPO
 /-- error: Unknown constant `CCPOTest.Ord₂.instCCPO` -/
 #guard_msgs in #check Ord₂.instCCPO
 
+-- A constructor without a recursive argument has no monotonicity lemma, so its name is free.
+codatatype Ord₃
+  | stop
+  | monotone_leaf
+  | leaf (n : Nat)
+  | next (o : Ord₃)
+
+attribute [with_ccpo] Ord₃
+
+/-- info: CCPOTest.Ord₃.monotone_leaf : Ord₃ -/
+#guard_msgs in #check Ord₃.monotone_leaf
+
 end
 
 end CCPOTest
