@@ -5,8 +5,8 @@ import Colean.Gen.Derive.Holes
 
 The local variables of the generated declarations (`Poly`), the index of the presentation
 (`genPolyIx`), the constructors of the presentation with their split arguments (`VCtor`,
-`withVCtors`), and its shapes, positions, index and signature (`T.Poly.S`, `T.Poly.P`,
-`T.Poly.B`, `T.Poly.idx`, `T.Poly.sig`).
+`withVCtors`), and its shapes, positions, index and signature (`T.Colean.Poly.S`, `T.Colean.Poly.P`,
+`T.Colean.Poly.B`, `T.Colean.Poly.idx`, `T.Colean.Poly.sig`).
 -/
 
 open Lean Meta Elab Term
@@ -121,10 +121,10 @@ structure Poly where
   /-- The user's universes of the holes and their primed versions, for `H'`. -/
   primes : List (Name × Level)
   /-- With indices, the index of the presentation: the packed index `J` over the constants, or in
-  a block `Blk.Poly.Ix consts`, the block's index without the holes. -/
+  a block `Blk.Colean.Poly.Ix consts`, the block's index without the holes. -/
   I : Expr := Lean.mkConst ``Unit
   /-- An index of the analysis as an index of the presentation: in a block, `Blk.Ix.Tₘ params`
-  becomes `Blk.Poly.Ix.Tₘ consts`. -/
+  becomes `Blk.Colean.Poly.Ix.Tₘ consts`. -/
   toPolyIdx : Expr → Expr := id
   deriving Inhabited
 
@@ -141,7 +141,7 @@ def ly' : Level := P.lvl 3
 /-- `S₁ R₁ S₂ R₂ …`. -/
 def SR : Array Expr := (P.Ss.zip P.Rs).flatMap fun (s, r) => #[s, r]
 
-/-- The parameters of `T.Poly.S`, `P`, `B`. -/
+/-- The parameters of `T.Colean.Poly.S`, `P`, `B`. -/
 def psB : Array Expr := P.consts ++ P.SR
 
 /-- The premises of `toL`, `ofL`, `fix`, …: `{consts} (H…) {S R…} [insts]`. -/
@@ -176,13 +176,13 @@ def polyConst (n : Name) (σ : List (Name × Level) := []) : MetaM Expr := do
   let ci ← getConstInfo n
   return .const n (ci.levelParams.map fun p => (σ.lookup p).getD (.param p))
 
-/-- Add the definition `T.Poly.s` of type `type` and value `value`, closed over `xs`
+/-- Add the definition `T.Colean.Poly.s` of type `type` and value `value`, closed over `xs`
 (`Poly.close`). -/
 def addPolyDef (P : Poly) (s : String) (xs : Array Expr) (type value : Expr) : TermElabM Unit := do
   let (type, value) ← P.close xs type value
   addDef (ctx.polyName s) (← ctx.levelParamsOf P.fresh #[type, value]) type value ctx.ref
 
-/-- Add the theorem `T.Poly.s` of statement `stmt` and proof `pf`, closed over `xs`
+/-- Add the theorem `T.Colean.Poly.s` of statement `stmt` and proof `pf`, closed over `xs`
 (`Poly.close`). -/
 def addPolyThm (P : Poly) (s : String) (xs : Array Expr) (stmt pf : Expr) : TermElabM Unit := do
   let (type, value) ← P.close xs stmt pf
@@ -191,16 +191,16 @@ def addPolyThm (P : Poly) (s : String) (xs : Array Expr) (stmt pf : Expr) : Term
 /-! ### Indices
 
 With indices, the presentation is a family over the index `P.I`: the packed index `J` of a family,
-or for a block `Blk.Poly.Ix consts`, the block's index `Blk.Ix params` without the parameters that
-vary, which it takes although its constructors do not use them. The family of the type at the
+or for a block `Blk.Colean.Poly.Ix consts`, the block's index `Blk.Ix params` without the parameters
+that vary, which it takes although its constructors do not use them. The family of the type at the
 premises lives over its own index `I'` (`J`, or `Blk.Ix (H X)`), read along `ι : P.I → I'`, the
-identity or `Blk.Poly.ixIn`. -/
+identity or `Blk.Colean.Poly.ixIn`. -/
 
 /-- The index of the presentation of the family-level index arguments `idx`. -/
 def polyIdx (P : Poly) (idx : Array Expr) : MetaM Expr := return P.toPolyIdx (← ctx.pack idx)
 
 /-- `ι j`, the index `j` of the presentation as an index of the family at the premises `Hs` and
-`X`: `j`, or in a block `Blk.Poly.ixIn params j`. -/
+`X`: `j`, or in a block `Blk.Colean.Poly.ixIn params j`. -/
 def polyIota (P : Poly) (Hs : Array Expr) (X j : Expr) : MetaM Expr := do
   if !ctx.isBlock then return j
   return mkApp (mkAppN (← polyConst (ctx.polyName "ixIn")) (ctx.polyParams P Hs X)) j
@@ -212,9 +212,10 @@ def famLevel (Y : Expr) : MetaM Level := do
     let some v := l.dec | throwError "internal error: not a family of types{indentExpr Y}"
     return v
 
-/-- In a block, `Blk.Poly.Ix consts`, the block's index without the holes, with a constructor per
-type whose arguments are that type's indices, and `Blk.Poly.ixIn params` into `Blk.Ix params`;
-returns `P` with the index of the presentation and the translation of the block's index. -/
+/-- In a block, `Blk.Colean.Poly.Ix consts`, the block's index without the holes, with a constructor
+per type whose arguments are that type's indices, and `Blk.Colean.Poly.ixIn params` into
+`Blk.Ix params`; returns `P` with the index of the presentation and the translation of the block's
+index. -/
 def genPolyIx (P : Poly) : TermElabM Poly := do
   let name := ctx.polyName "Ix"
   let lvls ← ctx.types.foldlM (init := #[]) fun acc t => do
@@ -410,11 +411,11 @@ def withPolyShapes (P : Poly) (m : Nat) (bi : BinderInfo) (k : Array Expr → Te
       let f := (P.mixAt m)[j]!
       return (c.args[f.k]!.name.appendAfter "_s", bi, f.sh)) fun mshs => k (nshs ++ fshs ++ mshs)
 
-/-- `T.Poly.S.c psB plain shapes`. -/
+/-- `T.Colean.Poly.S.c psB plain shapes`. -/
 def polySCtor (P : Poly) (m : Nat) (args : Array Expr) : MetaM Expr := do
   return mkAppN (← polyConst (ctx.polyName "S" ++ P.vc[m]!.ctor.fname)) (P.psB ++ args)
 
-/-- `T.Poly.S psB`, `T.Poly.P psB s`, `T.Poly.B psB s`. -/
+/-- `T.Colean.Poly.S psB`, `T.Colean.Poly.P psB s`, `T.Colean.Poly.B psB s`. -/
 def polyS (P : Poly) : MetaM Expr := return mkAppN (← polyConst (ctx.polyName "S")) P.psB
 def polyP (P : Poly) : MetaM Expr := return mkAppN (← polyConst (ctx.polyName "P")) P.psB
 def polyB (P : Poly) : MetaM Expr := return mkAppN (← polyConst (ctx.polyName "B")) P.psB
@@ -451,9 +452,10 @@ def polyInductive (P : Poly) (name : Name) (idx : Bool)
     name, type := ty
     ctors := cs.toList.map fun (n, t) => { name := n, type := t.replaceFVar Iv Ic } }] ctx.ref
 
-/-- `T.Poly.S`, `T.Poly.P` (a position per field at a parameter position, with a position of its
-structure), `T.Poly.B` (a position per recursive argument, as in `T.B`); an argument with a
-structure in two variables has one of each, with a position of either kind of its structure. -/
+/-- `T.Colean.Poly.S`, `T.Colean.Poly.P` (a position per field at a parameter position, with a
+position of its structure), `T.Colean.Poly.B` (a position per recursive argument, as in
+`T.Colean.B`); an argument with a structure in two variables has one of each, with a position of
+either kind of its structure. -/
 def genPolyShapes (P : Poly) : TermElabM Unit := do
   let ms := Array.range P.vc.size
   -- With indices, the index of the presentation of the result of the `m`-th constructor.
@@ -499,8 +501,8 @@ def genPolyShapes (P : Poly) : TermElabM Unit := do
     return rs ++ (← (Array.range (P.mixAt m).size).mapM fun j => mixCtor Iv m j "B")
 
 /-- The index of the child at a position, from the arguments `bargs` of its constructor in
-`T.Poly.B` (the plain data, the shapes, the extra arguments), as `posIdx` for `T.B`. A field at a
-parameter position occurs in no index (`refineHoles`). -/
+`T.Colean.Poly.B` (the plain data, the shapes, the extra arguments), as `posIdx` for `T.Colean.B`. A
+field at a parameter position occurs in no index (`refineHoles`). -/
 def polyPosIdx (P : Poly) (m : Nat) (a : ArgInfo) (bargs : Array Expr) : MetaM Expr := do
   let c := P.vc[m]!.ctor
   let plain := polyPlain P m
@@ -525,8 +527,9 @@ def polyPosIdx (P : Poly) (m : Nat) (a : ArgInfo) (bargs : Array Expr) : MetaM E
   | .data => throwError "internal error: a data argument has no position"
 
 /-- The index of the child at a position in `Y` of the `j`-th argument with a structure in two
-variables of the `m`-th constructor, from the arguments `bargs` of its constructor in `T.Poly.B`
-(the plain data, the shapes, the position of the structure): the index of that position. -/
+variables of the `m`-th constructor, from the arguments `bargs` of its constructor in
+`T.Colean.Poly.B` (the plain data, the shapes, the position of the structure): the index of that
+position. -/
 def polyMixIdx (P : Poly) (m j : Nat) (bargs : Array Expr) : MetaM Expr := do
   let c := P.vc[m]!.ctor
   let f := (P.mixAt m)[j]!
@@ -538,7 +541,7 @@ def polyMixIdx (P : Poly) (m j : Nat) (bargs : Array Expr) : MetaM Expr := do
   let i := np + c.nests.size + P.fields[m]!.size + j
   return (mkApp2 (σ pidx) bargs[i]! bargs.back!).headBeta
 
-/-- With indices, `T.Poly.idx`, the index of the child at a position, by cases. -/
+/-- With indices, `T.Colean.Poly.idx`, the index of the child at a position, by cases. -/
 def genPolyIdx (P : Poly) : TermElabM Unit := do
   let B ← ctx.polyB P
   withLocalDecl `i .implicit P.I fun i => do
@@ -570,11 +573,12 @@ def genPolyIdx (P : Poly) : TermElabM Unit := do
     return (← mkForallFVars xs P.I, ← mkLambdaFVars xs value)
   addDef (ctx.polyName "idx") (← ctx.levelParamsOf P.fresh #[type, value]) type value ctx.ref
 
-/-- `T.Poly.sig psB`, the signature of the presentation: the index `P.I`, `S`, `B` and `idx`. -/
+/-- `T.Colean.Poly.sig psB`, the signature of the presentation: the index `P.I`, `S`, `B` and `idx`.
+-/
 def polySig (P : Poly) : MetaM Expr :=
   return mkAppN (← polyConst (ctx.polyName "sig")) P.psB
 
-/-- With indices, `T.Poly.sig`, reducible as `T.sig`. -/
+/-- With indices, `T.Colean.Poly.sig`, reducible as `T.Colean.sig`. -/
 def genPolySig (P : Poly) : TermElabM Unit := do
   let S ← ctx.polyS P
   let B ← ctx.polyB P

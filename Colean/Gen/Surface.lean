@@ -18,9 +18,9 @@ tactic proofs from what exists:
   Disjointness is stated where reducible unification finds where the result indices of the two
   constructors meet, with the arguments of one at which they meet those of the other
   (`withMeet`), and not otherwise;
-* the case analysis `T.casesOn` (by cases on `F` after `dtor`, cast along `ctor_dtor`; the
-  `cases` eliminator, and for `codatatype`, which has no induction, the `induction` one, so that
-  `induction` does not unfold the type to its encoding), `T.casesOnAux`, `T.casesOn_ctor` and the
+* the case analysis `T.casesOn` (by cases on `F` after `dtor`, cast along `ctor_dtor`; the `cases`
+  eliminator, and for `codatatype`, which has no induction, the `induction` one, so that `induction`
+  does not unfold the type to its encoding), `T.Colean.casesOnAux`, `T.Colean.casesOn_ctor` and the
   simp lemmas `T.casesOn_cᵢ`;
 * for `datatype`, the computation rules `T.rec_cᵢ` and `T.fold_cᵢ` (simp lemmas), the hypothesis of
   a nested argument given as `fun t _ => T.rec … t` on its members; in a block the rules of the
@@ -32,11 +32,11 @@ tactic proofs from what exists:
 * in a block, the interface of a single type for each type, with a family per type of the block
   where the block-level declarations take one family over `Blk.Ix`, as Lean's mutual recursors
   have a motive per type (`genLayers`, `genTypeLambek`, `genTypeCorecs`, `genTypeFolds`):
-  `Blk.St`, packing a family per type into one on `Blk.Ix` by cases; the layer
-  `Tₘ.F params S₁ … Sₖ idx`, its map `Tₘ.F.map f₁ … fₖ` with the rules `Tₘ.F.map_cᵢ`, and for
+  `Blk.Colean.St`, packing a family per type into one on `Blk.Ix` by cases; the layer
+  `Tₘ.F params S₁ … Sₖ idx`, its map `Tₘ.F.fmap f₁ … fₖ` with the rules `Tₘ.F.fmap_cᵢ`, and for
   `codatatype` its lifting `Tₘ.F.Rel R₁ … Rₖ`, the block's at the packed families (reducible, so
   patterns and dot notation find the block functor's constructors), with the laws
-  `Tₘ.F.map_id`, `Tₘ.F.map_comp` and `Tₘ.F.rel_map`; the destructor `Tₘ.dtor` into the layer at
+  `Tₘ.F.fmap_id`, `Tₘ.F.fmap_comp` and `Tₘ.F.rel_fmap`; the destructor `Tₘ.dtor` into the layer at
   the types and the constructor `Tₘ.ctor` out of it, with Lambek's lemma `Tₘ.dtor_ctor`,
   `Tₘ.ctor_dtor`, `Tₘ.ctor_injective` and the rules `Tₘ.dtor_cᵢ`, `Tₘ.ctor_cᵢ`; for `codatatype`,
   `Tₘ.corec c₁ … cₖ`, `Tₘ.dtor_corec`, `Tₘ.corec_eq`, `Tₘ.corec_unique`,
@@ -61,23 +61,23 @@ tactic proofs from what exists:
 The names the user wrote get their info trees, and the types and constructors their doc
 comments, once everything is declared (`finishDecls`, `Gen/Command.lean`).
 
-The constructors, their lemmas and `casesOn` are per type, with the types `Tₘ` in their
-statements; in a block, `Tₘ.casesOnAux` is by `cases` on a goal metavariable, which discards the
+The constructors, their lemmas and `casesOn` are per type, with the types `Tₘ` in their statements;
+in a block, `Tₘ.Colean.casesOnAux` is by `cases` on a goal metavariable, which discards the
 constructors of the other types. `T.F.Rel` is part of the surface too, generated earlier
 (`Gen/Rel.lean`).
 
 In a block, the layer at the types, `Tₘ.F params (T₁ params) … (Tₖ params) idx`, is the block's
-functor at `Blk.St (T₁ params) …`, a family that is the block's `Blk params` at every
+functor at `Blk.Colean.St (T₁ params) …`, a family that is the block's `Blk params` at every
 constructor of `Blk.Ix` by definition, but not at a variable index. So `Tₘ.dtor` is the block's
 `dtor` followed by the map by the identity `ι` between the two, and `Tₘ.ctor` the block's `ctor`
 after the map by the identity `ρ` back (`atTypes`), and the proofs go from one to the other by
-cases on the index: the composites of the maps by `ι` and `ρ` are the identity by `F.map_comp`,
-`funext` of `rfl` by cases and `F.map_id` (`mapCancel`); `Tₘ.dtor_cᵢ` with `IOcc.map_heq_self`
+cases on the index: the composites of the maps by `ι` and `ρ` are the identity by `F.fmap_comp`,
+`funext` of `rfl` by cases and `F.fmap_id` (`mapCancel`); `Tₘ.dtor_cᵢ` with `IOcc.map_heq_self`
 at a nested argument, `Tₘ.bisim` with `Codata.rel_of_map_heq` (`Framework.lean`), both lemmas
 only; `Tₘ.corec_unique` and `Tₘ.fold_unique` are the block's at the morphisms packed by cases,
 their hypothesis at each type the per-type one under a map by `ρ` or `ι`. The other rules are
 the block's under these maps, or follow from the per-type ones as for a single type. The
-packing `Blk.St` at a constructor of `Blk.Ix` is shown as the family it packs there
+packing `Blk.Colean.St` at a constructor of `Blk.Ix` is shown as the family it packs there
 (`Gen/Pack.lean`).
 -/
 
@@ -217,14 +217,14 @@ def tyRelType (j : Nat) (X Y : Expr) : TermElabM Expr :=
   ctx.withTyIdx j .default fun js => do
     mkForallFVars js (← mkArrow (mkAppN X js) (← mkArrow (mkAppN Y js) (mkSort .zero)))
 
-/-- The names of the declarations per type of a `codatatype` block: `Blk.St`, `Tₘ.F`, `Tₘ.F.map`,
-`Tₘ.F.Rel`. -/
-def stN : Name := ctx.gen "St"
+/-- The names of the declarations per type of a block: the packing `Blk.Colean.St`, `Tₘ.F`,
+`Tₘ.F.fmap`, `Tₘ.F.Rel`. -/
+def stN : Name := ctx.colean "St"
 def layerN (m : Nat) : Name := ctx.tyGenP m "F"
-def layerMapN (m : Nat) : Name := .str (ctx.layerN m) "map"
+def layerMapN (m : Nat) : Name := .str (ctx.layerN m) "fmap"
 def layerRelN (m : Nat) : Name := .str (ctx.layerN m) "Rel"
 
-/-- `Blk.St params S₁ … Sₖ`, the families of the types packed into one family on `Blk.Ix`, at
+/-- `Blk.Colean.St params S₁ … Sₖ`, the families of the types packed into one family on `Blk.Ix`, at
 universe `w`. -/
 def stAt (w : Level) (Ss : Array Expr) : MetaM Expr := ctx.genAt ctx.stN [w] Ss
 
@@ -253,14 +253,14 @@ def funextCases (lhs rhs : Expr) : TermElabM Expr := do
     fun j uidx => mkEqRefl (mkApp lhs (ctx.ixAt j uidx)).headBeta
   mkAppOptM ``funext #[none, none, lhs, rhs, h]
 
-/-- `Blk.F.map φ₁ a = Blk.F.map φ₂ a` from `h : φ₁ = φ₂`, for `a : Blk.F X idx` and
+/-- `Blk.F.fmap φ₁ a = Blk.F.fmap φ₂ a` from `h : φ₁ = φ₂`, for `a : Blk.F X idx` and
 `φᵢ : ∀ i, X i → Y i`. -/
 def mapCongr (wX wY : Level) (X Y h : Expr) (idx : Array Expr) (a : Expr) : TermElabM Expr := do
   let some (φTy, _, _) := (← inferType h).eq? | throwError "internal error: not an equation"
   let mapφ ← lam `φ φTy fun φ => ctx.mapAt wX wY X Y φ idx a
   mkCongrArg mapφ h
 
-/-- `Blk.F.map g (Blk.F.map f a) = a`, for `a : Blk.F X idx`, `f : ∀ i, X i → Y i` and
+/-- `Blk.F.fmap g (Blk.F.fmap f a) = a`, for `a : Blk.F X idx`, `f : ∀ i, X i → Y i` and
 `g : ∀ i, Y i → X i` at universe `w`, from `hgf : (fun i x => g i (f i x)) = fun i x => x`. -/
 def mapCancel (w : Level) (X Y f g hgf : Expr) (idx : Array Expr) (a : Expr) :
     TermElabM Expr := do
@@ -269,12 +269,12 @@ def mapCancel (w : Level) (X Y f g hgf : Expr) (idx : Array Expr) (a : Expr) :
   let e₃ ← ctx.genAt ctx.Fmap_id [w] (#[X] ++ idx ++ #[a])
   mkEqTrans e₁ (← mkEqTrans e₂ e₃)
 
-/-- The layer per type at the types themselves: the family `Blk.St params (T₁ params) …`, the
-identities `ι : ∀ i, Blk params i → Blk.St … i` and `ρ` back, by cases on `i`,
-`hT : Blk params = Blk.St …`, `hι : ∀ i x, HEq (ι i x) x`, and the two composites the identity,
-`hρι : (fun i x => ρ i (ι i x)) = fun i x => x` and `hιρ`. The two families agree at every
-constructor of `Blk.Ix` by definition, but not at a variable, so a map by `ι` or `ρ` stands
-between them. -/
+/-- The layer per type at the types themselves: the family `Blk.Colean.St params (T₁ params) …`, the
+identities `ι : ∀ i, Blk params i → Blk.Colean.St … i` and `ρ` back, by cases on `i`,
+`hT : Blk params = Blk.Colean.St …`, `hι : ∀ i x, HEq (ι i x) x`, and the two composites the
+identity, `hρι : (fun i x => ρ i (ι i x)) = fun i x => x` and `hιρ`. The two families agree at every
+constructor of `Blk.Ix` by definition, but not at a variable, so a map by `ι` or `ρ` stands between
+them. -/
 structure AtTypes where
   StT : Expr
   ι : Expr
@@ -303,7 +303,7 @@ def atTypes : TermElabM AtTypes := do
   let hιρ ← ctx.funextCases (← ctx.compFn StT ι ρ) (← ctx.idFn StT)
   return { StT, ι, ρ, hT, hι, hρι, hιρ }
 
-/-- The arguments of `F.c` after `Tₘ.F.map f₁ … fₖ`, for the arguments `ys` of `c` with the
+/-- The arguments of `F.c` after `Tₘ.F.fmap f₁ … fₖ`, for the arguments `ys` of `c` with the
 occurrences at the families `Xs` (local variables, or the types `Tⱼ params`): data unchanged,
 `fⱼ idx y` for a recursive argument of the `j`-th type, under its telescope for a function, and
 for a nested one the map of its structure by the packed function `packF`. -/
@@ -324,8 +324,8 @@ def layerMapped (c : Ctor) (ys : Array Expr) (σ : Expr → Expr) (Xs fs : Array
       mkLambdaFVars zs (mkAppN fs[j]! (idx.push (mkAppN y zs))).headBeta
     | .nest o => mkAppM ``Codata.IOcc.map #[ctx.nestAt o wX σ, ctx.nestAt o wY σ, packF, y]
 
-/-- The laws of the layer per type, as those of `T.F` for a single type: `Tₘ.F.map_id`,
-`Tₘ.F.map_comp`, and for `codatatype` `Tₘ.F.rel_map`. Each is the block's law at the packed
+/-- The laws of the layer per type, as those of `T.F` for a single type: `Tₘ.F.fmap_id`,
+`Tₘ.F.fmap_comp`, and for `codatatype` `Tₘ.F.rel_fmap`. Each is the block's law at the packed
 functions, the packed identities or composites equal to the identity or composite of the packed
 ones by cases on the index (`funextCases`). -/
 def genLayerLaws : TermElabM Unit := do
@@ -339,7 +339,7 @@ def genLayerLaws : TermElabM Unit := do
   let pack (St₁ St₂ : Expr) (fs : Array Expr) : TermElabM Expr :=
     ctx.ixCases (fun i => mkArrow (mkApp St₁ i) (mkApp St₂ i))
       fun j uidx => pure (mkAppN fs[j]! uidx).headBeta
-  -- `Tₘ.F.map_id`
+  -- `Tₘ.F.fmap_id`
   do
     let fresh := ctx.freshLevels 1
     let w := ctx.holeLevel (.param fresh[0]!)
@@ -359,8 +359,8 @@ def genLayerLaws : TermElabM Unit := do
       let xs := ctx.params ++ Xs ++ uidx ++ #[a]
       let (type, value) ← withBinderInfo ctx.params .implicit do
         return (← mkForallFVars xs (← mkEq lhs a), ← mkLambdaFVars xs value)
-      addThm (.str (ctx.layerN m) "map_id") (← ctx.levelParamsOf fresh #[type]) type value (ref m)
-  -- `Tₘ.F.map_comp` and `Tₘ.F.rel_map`
+      addThm (.str (ctx.layerN m) "fmap_id") (← ctx.levelParamsOf fresh #[type]) type value (ref m)
+  -- `Tₘ.F.fmap_comp` and `Tₘ.F.rel_fmap`
   let fresh := ctx.freshLevels 3
   let [wX, wY, wZ] := fresh.map fun u => ctx.holeLevel (.param u) | unreachable!
   ctx.withPerType "X" .implicit (ctx.tyFamType · wX) fun Xs => do
@@ -385,7 +385,7 @@ def genLayerLaws : TermElabM Unit := do
       let xs := ctx.params ++ Xs ++ Ys ++ Zs ++ gs ++ fs ++ uidx ++ #[a]
       let (type, value) ← withBinderInfo ctx.params .implicit do
         return (← mkForallFVars xs (← mkEq lhs rhs), ← mkLambdaFVars xs value)
-      addThm (.str (ctx.layerN m) "map_comp") (← ctx.levelParamsOf fresh #[type]) type value
+      addThm (.str (ctx.layerN m) "fmap_comp") (← ctx.levelParamsOf fresh #[type]) type value
         (ref m)
   unless ctx.co do return
   ctx.withPerType "R" .default (fun j => ctx.tyRelType j Ys[j]! Zs[j]!) fun Rs => do
@@ -416,14 +416,14 @@ def genLayerLaws : TermElabM Unit := do
     let xs := ctx.params ++ Xs ++ Ys ++ Zs ++ Rs ++ fs ++ gs ++ uidx ++ #[a] ++ hs
     let (type, value) ← withBinderInfo ctx.params .implicit do
       return (← mkForallFVars xs stmt, ← mkLambdaFVars xs value)
-    addThm (.str (ctx.layerN m) "rel_map") (← ctx.levelParamsOf fresh #[type]) type value (ref m)
+    addThm (.str (ctx.layerN m) "rel_fmap") (← ctx.levelParamsOf fresh #[type]) type value (ref m)
 
-/-- In a block, the layer per type: `Blk.St`, which packs one family per type into one on
+/-- In a block, the layer per type: `Blk.Colean.St`, which packs one family per type into one on
 `Blk.Ix` by cases, the layer of each type at a family per type `Tₘ.F params S₁ … Sₖ idx` (the
-block's functor at the packed family, at the type's constructor of `Blk.Ix`), its map `Tₘ.F.map`
-with one function per type and the rules `Tₘ.F.map_cᵢ`, and for `codatatype` its lifting to
-relations `Tₘ.F.Rel` with one relation per type, all reducible; the laws `Tₘ.F.map_id`,
-`Tₘ.F.map_comp` and for `codatatype` `Tₘ.F.rel_map`, the block's at the packed functions, equal to
+block's functor at the packed family, at the type's constructor of `Blk.Ix`), its map `Tₘ.F.fmap`
+with one function per type and the rules `Tₘ.F.fmap_cᵢ`, and for `codatatype` its lifting to
+relations `Tₘ.F.Rel` with one relation per type, all reducible; the laws `Tₘ.F.fmap_id`,
+`Tₘ.F.fmap_comp` and for `codatatype` `Tₘ.F.rel_fmap`, the block's at the packed functions, equal to
 the packed composites by cases on the index; and the destructor and the constructor per type,
 `Tₘ.dtor` into the layer at the types and `Tₘ.ctor` out of it, the block's followed or preceded
 by the map by the identity `ι` or `ρ` (`atTypes`). -/
@@ -431,7 +431,7 @@ def genLayers : TermElabM Unit := do
   unless ctx.isBlock do return
   let (ixTy, _, _) ← ctx.ixType
   let ref (m : Nat) := ctx.types[m]!.ref
-  -- `Blk.St`
+  -- `Blk.Colean.St`
   do
     let fresh := ctx.freshLevels 1
     let w := ctx.holeLevel (.param fresh[0]!)
@@ -458,14 +458,14 @@ def genLayers : TermElabM Unit := do
       let type ← mkForallFVars xs (← inferType body)
       addDef (ctx.layerN m) (← ctx.levelParamsOf fresh #[type, value]) type value (ref m)
         (reducible := true)
-  -- `Tₘ.F.map`, `Tₘ.F.map_cᵢ`, `Tₘ.F.Rel`
+  -- `Tₘ.F.fmap`, `Tₘ.F.fmap_cᵢ`, `Tₘ.F.Rel`
   do
     let fresh := ctx.freshLevels 2
     let [wX, wY] := fresh.map fun u => ctx.holeLevel (.param u) | unreachable!
     ctx.withPerType "X" .implicit (ctx.tyFamType · wX) fun Xs => do
     ctx.withPerType "Y" .implicit (ctx.tyFamType · wY) fun Ys => do
     let (StX, StY) := (← ctx.stAt wX Xs, ← ctx.stAt wY Ys)
-    -- `Tₘ.F.map`
+    -- `Tₘ.F.fmap`
     ctx.withPerType "f" .default (fun j => ctx.tyFnType j Xs[j]! Ys[j]!) fun fs => do
     let packF ← ctx.ixCases (fun i => mkArrow (mkApp StX i) (mkApp StY i))
       fun j uidx => pure (mkAppN fs[j]! uidx)
@@ -478,7 +478,7 @@ def genLayers : TermElabM Unit := do
         return (← mkForallFVars xs (← ctx.layerAt m wY Ys uidx), ← mkLambdaFVars xs value)
       addDef (ctx.layerMapN m) (← ctx.levelParamsOf fresh #[type, value]) type value (ref m)
         (reducible := true)
-    -- `Tₘ.F.map_cᵢ`, by definition.
+    -- `Tₘ.F.fmap_cᵢ`, by definition.
     for c in ctx.ctors do
       ctx.withArgsAtU c (fun j idx => mkAppN Xs[j]! idx) wX (post := ctx.foldTy) fun ys σ => do
       let m := c.owner
@@ -488,7 +488,7 @@ def genLayers : TermElabM Unit := do
       let xs := ctx.params ++ Xs ++ Ys ++ fs ++ ys
       let (type, value) ← withBinderInfo ctx.params .implicit do
         return (← mkForallFVars xs (← mkEq lhs rhs), ← mkLambdaFVars xs (← mkEqRefl lhs))
-      let n := Name.str (ctx.layerN m) ("map_" ++ c.name.toString)
+      let n := Name.str (ctx.layerN m) ("fmap_" ++ c.name.toString)
       addThm n (← ctx.levelParamsOf fresh #[type]) type value (ref m)
       addSimp n
     -- `Tₘ.F.Rel`
@@ -534,7 +534,7 @@ def genLayers : TermElabM Unit := do
 the one-step lemmas of `Tₘ.F.Rel R₁ … Rₖ` (`RelStep`), `simp`, the premise at a recursive argument
 at the relation of its type, at a nested one the block's at the relations packed by cases;
 `Tₘ.F.Rel.mono`, the block's `T.F.Rel.mono` at the relations and the hypotheses packed by cases;
-and `Tₘ.F.rel_refl`, `Tₘ.F.rel_map` at the identities, rewritten by `Tₘ.F.map_id`. -/
+and `Tₘ.F.rel_refl`, `Tₘ.F.rel_fmap` at the identities, rewritten by `Tₘ.F.fmap_id`. -/
 def genLayerRels : TermElabM Unit := do
   unless ctx.co && ctx.isBlock do return
   let n := ctx.types.size
@@ -629,9 +629,9 @@ def genLayerRels : TermElabM Unit := do
     ctx.withTyIdx m .implicit fun uidx => do
     withLocalDeclD `a (← ctx.layerAt m w Xs uidx) fun a => do
     let relAt (b : Expr) := ctx.genAt (ctx.layerRelN m) [w, w] (Xs ++ Xs ++ Rs ++ uidx ++ #[b, b])
-    let relMap ← ctx.genAt (.str (ctx.layerN m) "rel_map") [w, w, w]
+    let relMap ← ctx.genAt (.str (ctx.layerN m) "rel_fmap") [w, w, w]
       (Xs ++ Xs ++ Xs ++ Rs ++ ids ++ ids ++ uidx ++ #[a] ++ hs)
-    let mapId ← ctx.genAt (.str (ctx.layerN m) "map_id") [w] (Xs ++ uidx ++ #[a])
+    let mapId ← ctx.genAt (.str (ctx.layerN m) "fmap_id") [w] (Xs ++ uidx ++ #[a])
     let relSelf ← lam `b (← ctx.layerAt m w Xs uidx) fun b => relAt b
     let value ← mkAppM ``Eq.mp #[← mkCongrArg relSelf mapId, relMap]
     let xs := ctx.params ++ Xs ++ Rs ++ hs ++ uidx ++ #[a]
@@ -874,9 +874,10 @@ def genDtorLemmas : TermElabM Unit := do
 
 /-! ### Case analysis -/
 
-/-- The value of `Tₘ.casesOnAux` in a block, on its statement `∀ params motive idx y minors, …`:
-by `cases` on `y : T.F params T (.Tₘ idx)`, which leaves the constructors of the `m`-th type
-(the others have another constructor of `Blk.Ix` as their index), then the minor premise. -/
+/-- The value of `Tₘ.Colean.casesOnAux` in a block, on its statement
+`∀ params motive idx y minors, …`: by `cases` on `y : T.F params T (.Tₘ idx)`, which leaves the
+constructors of the `m`-th type (the others have another constructor of `Blk.Ix` as their index),
+then the minor premise. -/
 def casesAuxBlock (m : Nat) (cs : Array Ctor) (g : MVarId) : TermElabM Unit := do
   let (hs, g) ← g.intros
   let y := hs[ctx.params.size + 1 + ctx.types[m]!.idx.size]!
@@ -890,7 +891,7 @@ def casesAuxBlock (m : Nat) (cs : Array Ctor) (g : MVarId) : TermElabM Unit := d
       throwError "internal error: ill-typed case{indentExpr v}"
     sg.mvarId.assign v
 
-/-- `Tₘ.casesOnAux`, `Tₘ.casesOn` (the `cases` eliminator), `Tₘ.casesOn_ctor`,
+/-- `Tₘ.Colean.casesOnAux`, `Tₘ.casesOn` (the `cases` eliminator), `Tₘ.Colean.casesOn_ctor`,
 `Tₘ.casesOn_cᵢ`, for the `m`-th type: its constructors only, its own indices. -/
 def genCasesOf (m : Nat) : TermElabM Unit := do
   let L ← ctx.tLvl
@@ -902,9 +903,9 @@ def genCasesOf (m : Nat) : TermElabM Unit := do
   let uidx := ty.idx
   let idx := ctx.wrap m uidx
   let cs := ctx.ctors.filter (·.owner == m)
-  let auxN := ctx.tyGen m "casesOnAux"
+  let auxN := ctx.tyColean m "casesOnAux"
   let casesN := ctx.tyGen m "casesOn"
-  let ctorN := ctx.tyGen m "casesOn_ctor"
+  let ctorN := ctx.tyColean m "casesOn_ctor"
   ctx.withTypeMotive m v fun motive => do
   let minorTy (c : Ctor) : TermElabM Expr := ctx.withTArgs c fun ys σ => do
     mkForallFVars ys (mkAppN motive (c.uidx.map σ |>.push (← ctx.tCtorApp c ys)))
@@ -996,14 +997,14 @@ def genTypes : TermElabM Unit := do
 recursors (one motive per type), with one state and one step per type, and one relation per type:
 
 * `Tₘ.corec c₁ … cₖ s`, with `cⱼ : ∀ idx, Sⱼ idx → Tⱼ.F params S₁ … Sₖ idx` and `s : Sₘ idx`,
-  the states in one universe: `Blk.corec` at the family `Blk.St S₁ … Sₖ` and the step made of
+  the states in one universe: `Blk.corec` at the family `Blk.Colean.St S₁ … Sₖ` and the step made of
   the `cⱼ` by cases on `Blk.Ix`;
 * `Tₘ.dtor_corec`, its rule with `Tₘ.dtor` and the map per type, `Tⱼ.corec c₁ … cₖ` at the
   positions of the `j`-th type: `Blk.dtor_corec` under the map by `ι` (`atTypes`), the two maps
-  composed (`F.map_comp`), and the composite equal to the packed corecursors by cases on the
+  composed (`F.fmap_comp`), and the composite equal to the packed corecursors by cases on the
   index;
 * `Tₘ.corec_eq` from `Tₘ.dtor_corec` and `Tₘ.ctor_dtor` (not `simp`: it loops), and
-  `Tₘ.corec_unique`, for morphisms `hⱼ` with `hhⱼ : (hⱼ s).dtor = Tⱼ.F.map h₁ … hₖ (cⱼ s)`:
+  `Tₘ.corec_unique`, for morphisms `hⱼ` with `hhⱼ : (hⱼ s).dtor = Tⱼ.F.fmap h₁ … hₖ (cⱼ s)`:
   `Blk.corec_unique` at the morphisms packed, its hypothesis at each type from `hhⱼ` under the map
   by `ρ`;
 * `Tₘ.bisim R₁ … Rₖ H₁ … Hₖ`, with `Hⱼ : ∀ idx x y, Rⱼ idx x y → Tⱼ.F.Rel R₁ … Rₖ x.dtor y.dtor`:
@@ -1277,16 +1278,16 @@ def genCoinduct : TermElabM Unit := do
 type), with one family and one algebra per type, as step 3 states it for a single type:
 
 * `Tₘ.fold a₁ … aₖ t`, with `aⱼ : ∀ idx, Tⱼ.F params S₁ … Sₖ idx → Sⱼ idx` and `t : Tₘ idx`, the
-  families in one universe: `Blk.fold` at the family `Blk.St S₁ … Sₖ` and the algebra made of
+  families in one universe: `Blk.fold` at the family `Blk.Colean.St S₁ … Sₖ` and the algebra made of
   the `aⱼ` by cases on `Blk.Ix`;
 * `Tₘ.fold_ctor` (`simp`), its rule with `Tₘ.ctor` and the map per type, `Tⱼ.fold a₁ … aₖ` at the
-  positions of the `j`-th type: `Blk.fold_ctor` at `Blk.F.map ρ y`, the two maps composed
-  (`F.map_comp`), and the composite equal to the packed folds by cases on the index;
+  positions of the `j`-th type: `Blk.fold_ctor` at `Blk.F.fmap ρ y`, the two maps composed
+  (`F.fmap_comp`), and the composite equal to the packed folds by cases on the index;
 * `Tₘ.fold_eq` from `Tₘ.fold_ctor` and `Tₘ.ctor_dtor`, and `Tₘ.fold_cᵢ` (`simp`) from
-  `Tₘ.fold_ctor` and `Tₘ.ctor_cᵢ`, `Tₘ.F.map` computing on `F.cᵢ` by definition;
-* `Tₘ.fold_unique`, for morphisms `hⱼ` with `hhⱼ : hⱼ (Tⱼ.ctor y) = aⱼ (Tⱼ.F.map h₁ … hₖ y)`:
+  `Tₘ.fold_ctor` and `Tₘ.ctor_cᵢ`, `Tₘ.F.fmap` computing on `F.cᵢ` by definition;
+* `Tₘ.fold_unique`, for morphisms `hⱼ` with `hhⱼ : hⱼ (Tⱼ.ctor y) = aⱼ (Tⱼ.F.fmap h₁ … hₖ y)`:
   `Blk.fold_unique` at the morphisms packed, its hypothesis at each type from `hhⱼ` at
-  `Blk.F.map ι y`.
+  `Blk.F.fmap ι y`.
 
 The block-level `Blk.fold`, `Blk.fold_ctor`, `Blk.fold_unique` take one family over `Blk.Ix`, and
 the rules of `Blk.fold` are `Blk.fold_cᵢ`. -/
@@ -1422,7 +1423,7 @@ def genTypeFolds : TermElabM Unit := do
 /-- The induction hypotheses of `c` with arguments `ys` (as those of `T.c`) as values, the
 recursor applied to the recursive arguments: `recAt idx x` at the family-level index arguments
 `idx`; for a nested argument, `fun t _ => recAt idx t` on its members, or with `pos` the
-recursor at every position of its structure (`T.recPos`), with `split` one per type as in
+recursor at every position of its structure (`T.Colean.recPos`), with `split` one per type as in
 `recIHsWith`. The right-hand side of `rec_cᵢ` is the minor premise applied to `ys` and these. -/
 def recIHVals (recAt : Array Expr → Expr → TermElabM Expr) (c : Ctor) (ys : Array Expr)
     (σ : Expr → Expr) (pos split : Bool := false) : TermElabM (Array Expr) := do
@@ -1461,9 +1462,9 @@ type (`genTypeFolds`). -/
 def foldRuleN (c : Ctor) : Name :=
   if ctx.isBlock then ctx.gen ("fold_" ++ c.fname.toString) else ctx.tName' c "fold_" ""
 
-/-- `T.rec_cᵢ` (in a block `Blk.rec_cᵢ`) and `T.fold_cᵢ`. The rule of `rec` is that of
-`recPos` (`T.recPos_ctor`, at the minor premises of `rec`), followed by `PolyIso.memRec_pos` at
-each nested argument (`memValEq`). -/
+/-- `T.rec_cᵢ` (in a block `Blk.rec_cᵢ`) and `T.fold_cᵢ`. The rule of `rec` is that of `recPos`
+(`T.Colean.recPos_ctor`, at the minor premises of `rec`), followed by `PolyIso.memRec_pos` at each
+nested argument (`memValEq`). -/
 def genRecLemmas : TermElabM Unit := do
   let L ← ctx.tLvl
   let T ← ctx.tFam

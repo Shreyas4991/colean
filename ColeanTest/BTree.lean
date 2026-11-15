@@ -16,7 +16,7 @@ codatatype BTree (I : Type u) (α : Type v)
 #check @BTree.corec
 #check @BTree.F.Rel.node
 #check @BTree.node
-#check @BTree.B.node_children
+#check @BTree.Colean.B.node_children
 
 /-- The constant tree. -/
 def BTree.const {I : Type u} {α : Type v} (a : α) : BTree I α :=

@@ -169,12 +169,12 @@ example : (EProdBoth.mk (.l (.mk (.r .leaf), 2))).size = 5 := by
 codatatype S (α : Type u)
   | mk (p : List (α × S α))
 
-/-- info: S.Poly.instPolyIsoEta -/
+/-- info: S.Colean.Poly.instPolyIsoEta -/
 #guard_msgs in
 #synth PolyIso S.{0} _ _
 
 /--
-info: @S.Poly.map_mk : ∀ {H : Type u_2 → Type u_1} {H' : Type u_3 → Type u_6} {S : Type u_4} {R : S → Type u_5}
+info: @S.Colean.Poly.map_mk : ∀ {H : Type u_2 → Type u_1} {H' : Type u_3 → Type u_6} {S : Type u_4} {R : S → Type u_5}
   [inst : PolyIso H S R] [inst' : PolyIso H' S R] {X : Type u_2} {Y : Type u_3} (f : X → Y)
   (p : List (H X × NestGaps2Test.S (H X))),
   (Occ.ofIso fun X => NestGaps2Test.S (H X)).map (Occ.ofIso fun X => NestGaps2Test.S (H' X)) f (NestGaps2Test.S.mk p) =
@@ -184,17 +184,17 @@ info: @S.Poly.map_mk : ∀ {H : Type u_2 → Type u_1} {H' : Type u_3 → Type u
         (fun t => (Occ.ofIso fun X => NestGaps2Test.S (H X)).map (Occ.ofIso fun X => NestGaps2Test.S (H' X)) f t) p)
 -/
 #guard_msgs(whitespace := lax) in
-#check @S.Poly.map_mk
+#check @S.Colean.Poly.map_mk
 
 /--
-info: @S.Poly.mem_mk : ∀ {H : Type u_2 → Type u_1} {S : Type u_3} {R : S → Type u_4} [inst : PolyIso H S R] {X : Type u_2}
+info: @S.Colean.Poly.mem_mk : ∀ {H : Type u_2 → Type u_1} {S : Type u_3} {R : S → Type u_4} [inst : PolyIso H S R] {X : Type u_2}
   (x : X) (p : List (H X × NestGaps2Test.S (H X))),
   PolyIso.Mem (fun X => NestGaps2Test.S (H X)) x (NestGaps2Test.S.mk p) ↔
     PolyIso.Mem (fun X_1 => List (H X_1 × NestGaps2Test.S (H X))) x p ∨
       ∃ t, PolyIso.Mem (fun X_1 => List (H X × X_1)) t p ∧ PolyIso.Mem (fun X => NestGaps2Test.S (H X)) x t
 -/
 #guard_msgs(whitespace := lax) in
-#check @S.Poly.mem_mk
+#check @S.Colean.Poly.mem_mk
 
 example (f : Nat → Nat) (a b : Nat) :
     (Occ.ofIso S).map (Occ.ofIso S) f (S.mk [(a, S.mk []), (b, S.mk [])]) =
@@ -236,7 +236,7 @@ datatype FPair (α : Type u)
   | leaf
   | mk (k : Nat → α × FPair α)
 
-/-- info: FPair.Poly.instPolyIsoEta -/
+/-- info: FPair.Colean.Poly.instPolyIsoEta -/
 #guard_msgs in
 #synth PolyIso FPair.{0} _ _
 

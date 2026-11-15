@@ -8,8 +8,8 @@ import Colean.Model.Occ
 *Spec.* Input: a type `T` declared by a single `codatatype` declaration, with parameters and at most
 one index, and the constructor without arguments chosen as the bottom (by name,
 `with_ccpo (bot := c)`, or the first one).
-Output, from the type's public declarations (`T.contract`, `T.F`, `T.F.Rel`, `T.F.rel_map`,
-`T.sig`, `T.toC`, `T.ofC` and their laws) and the theory of `Model/CCPO.lean`:
+Output, from the type's public declarations (`T.contract`, `T.F`, `T.F.Rel`, `T.F.rel_fmap`,
+`T.Colean.sig`, `T.Colean.toC`, `T.Colean.ofC` and their laws) and the theory of `Model/CCPO.lean`:
 
 * `T.instCCPO : Lean.Order.CCPO (T params idx)`, at every index: the order of approximation with
   the bottom constructor at the bottom (`Codata.Contract.ccpo`), which `partial_fixpoint` takes as
@@ -33,12 +33,12 @@ and it has no other argument (`| stop {n : Nat} : T n`).
 This step is separate from the declaration, as step 5 is: it runs on a declared type when the
 attribute `with_ccpo` is applied to it (`CodataCmd.lean`), reads only the environment, and changes
 nothing the declaration generated. A failure is an error of the attribute, and restores the state.
-The pieces of the order (`K`, the bottom layer `e`, the container `C`, the proof that the bottom
-has no positions, the lifting `T.F.Rel` with `T.F.rel_map` and `T.rel_ofC`) are elaborated from
+The pieces of the order (`K`, the bottom layer `e`, the container `C`, the proof that the bottom has
+no positions, the lifting `T.F.Rel` with `T.F.rel_fmap` and `T.Colean.rel_ofC`) are elaborated from
 short terms on the generated constants (`mkCIdent`), so that unification adapts the plain type's
 contract over `Unit` and a family's alike; the statements are built as `Expr`s; the proofs
-instantiate the theory, and the monotonicity lemmas apply the constructor of `T.F.Rel` and close
-its premises by the hypotheses, or by reflexivity for a fixed nested argument (`Occ.rel_refl`,
+instantiate the theory, and the monotonicity lemmas apply the constructor of `T.F.Rel` and close its
+premises by the hypotheses, or by reflexivity for a fixed nested argument (`Occ.rel_refl`,
 `IOcc.rel_refl`).
 
 Not supported: a type of a `mutual` block or of an inner run of a `mixed_mutual` block (each type
@@ -229,6 +229,12 @@ def genMonotone (c : Name) (ps : Array Expr) (plain : Bool)
   let type ← mkForallFVars xs stmt
   let value ← mkLambdaFVars xs value
   let name := T ++ (`monotone).appendAfter ("_" ++ short.toString)
+  if (← getEnv).contains name then
+    let s := name.componentsRev.head!
+    if (← getEnv).isConstructor (T ++ `F ++ s) then
+      fail m!"constructor `{s}` clashes with the declaration `{name}` of the order, the \
+        monotonicity lemma of `{user}`; rename the constructor"
+    fail m!"`{name}`, the monotonicity lemma of `{user}`, is declared already"
   addThm name (lvls ++ [v]) type value
   addAttrs name #[← `(Parser.Term.attrInstance| partial_fixpoint_monotone)]
 
@@ -258,6 +264,13 @@ def genCCPO (bot? : Option Name) : TermElabM Unit := do
   let some (.inductInfo finfo) := env.find? FN
     | fail m!"`{.ofConstName T}` is a type of an inner run of a `mixed_mutual` block, which is not \
         supported"
+  -- A constructor named as a declaration of the order: `T.c` is the constructor `c`. Those of
+  -- the monotonicity lemmas are checked by `genMonotone`.
+  for c in finfo.ctors do
+    let c := c.componentsRev.head!
+    if [`instCCPO, `approx_iff, `approx_coind, `bot_eq].contains c then
+      fail m!"constructor `{c}` clashes with the declaration `{T ++ c}` of the order; rename the \
+        constructor"
   if env.contains (T ++ `instCCPO) then
     fail m!"the order of `{.ofConstName T}` is already declared"
   -- The bottom constructor, at every index, and its arguments there.
@@ -286,11 +299,12 @@ def genCCPO (bot? : Option Name) : TermElabM Unit := do
   let (botF, botVals, e) := bot
   let botName := T ++ botF.componentsRev.head!
   -- The signature, the container and the emptiness of the bottom's positions.
-  let σ ← mkAppOptM (T ++ `sig) (ps.map some)
+  let σ ← mkAppOptM (coleanNs T ++ `sig) (ps.map some)
   let id (n : Name) : Term := mkCIdent (T ++ n)
+  let int (n : Name) : Term := mkCIdent (coleanNs T ++ n)
   let CTy ← mkAppOptM ``Codata.Contract.Container #[σ, T', F', K]
   let (toC, ofC, ofC_toC, toC_ofC, ofC_map) :=
-    (id `toC, id `ofC, id `ofC_toC, id `toC_ofC, id `ofC_map)
+    (int `toC, int `ofC, int `ofC_toC, int `toC_ofC, int `ofC_map)
   let C ← elabAt (← `(⟨$toC, $ofC, $ofC_toC, $toC_ofC, fun f _ z => $ofC_map f z⟩)) CTy
   let ccpo0 ← mkAppOptM ``Codata.Contract.ccpo #[σ, T', F', K, e, C]
   let hbot ← elabAt (← `(fun _ b => by cases b)) (← whnf (← inferType ccpo0)).bindingDomain!
@@ -317,9 +331,9 @@ def genCCPO (bot? : Option Name) : TermElabM Unit := do
       `(fun R _ a b => $(id `F.Rel) (R ()) a b) else `(fun R _ a b => $(id `F.Rel) R a b))
   let Rel' ← instantiateMVars (thmIff.appArg!)
   let thmIff ← appElab thmIff (← if plain then
-      `(fun _ _ z => $(id `F.rel_map) _ _ _ z fun p => p.2)
-    else `(fun _ _ z => $(id `F.rel_map) _ _ _ z fun _ p => p.2))
-  let relOfC ← elabAt (← `(fun R _ z z' h => $(id `rel_ofC) R z z' h))
+      `(fun _ _ z => $(id `F.rel_fmap) _ _ _ z fun p => p.2)
+    else `(fun _ _ z => $(id `F.rel_fmap) _ _ _ z fun _ p => p.2))
+  let relOfC ← elabAt (← `(fun R _ z z' h => $(int `rel_ofC) R z z' h))
     (← whnf (← inferType thmIff)).bindingDomain!
   let thmIff := mkApp thmIff relOfC
   -- `T.approx_iff`

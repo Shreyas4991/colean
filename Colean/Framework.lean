@@ -100,7 +100,7 @@ theorem dtor_injective {i : I} : Function.Injective (K.dtor (i := i)) := fun a b
 end Contract
 
 /-- `bisim` for the canonical lifting, from `bisim` for a lifting `Rel'` that contains it (for
-the command: the inductive `F.Rel`, which contains it by `F.rel_map`). -/
+the command: the inductive `F.Rel`, which contains it by `F.rel_fmap`). -/
 theorem bisim_canonical_of {I : Type w} {T : I → Type u} {F : (I → Type u) → I → Type u}
     (map : ∀ {X Y : I → Type u}, (∀ j, X j → Y j) → ∀ {i}, F X i → F Y i)
     (Rel' : ∀ {X Y : I → Type u}, (∀ j, X j → Y j → Prop) → ∀ {i}, F X i → F Y i → Prop)

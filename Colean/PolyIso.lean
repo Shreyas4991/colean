@@ -28,7 +28,7 @@ codatatype Stream' (α : Type u)
 * `PolyMap F F'` gives the intended action on functions and says that the bijections are natural
   with respect to it. Together the two classes state the isomorphism of functors.
 
-The action is a class of its own, on two instantiations of `F`, because the generated `T.F.map`
+The action is a class of its own, on two instantiations of `F`, because the generated `T.F.fmap`
 crosses universes: the state of `corec` may live in any universe. Lean's `Functor` maps within
 one universe, and naturality in each universe separately does not determine the map between
 them. With `PolyMap`, the map the command generates on a nested argument is provably the
@@ -57,7 +57,8 @@ in the arguments that may vary, for the functors `fun X => T (H X)` with `H` its
 (`PolyMap` from that of `H`, as for the forms here), and for a family or a type of a block at
 every index, `fun X => T (H X) idx`. With them come
 `simp` lemmas on its constructors, for the map on the leaf `Occ.ofIso` of the instance
-(`T.Poly.map_c`) and for membership (`T.Poly.mem_c`), so that `simp` computes through them.
+(`T.Colean.Poly.map_c`) and for membership (`T.Colean.Poly.mem_c`), so that `simp` computes
+through them.
 -/
 
 universe u u' u'' v v' v'' w w' s s' p p' j k a

@@ -9,9 +9,10 @@ motive's universe first, as does every declaration with a motive or a state, nam
 (`T.fold.{u, u_1}`). A default value or tactic is on the constructor only. Injectivity is
 stated as `injEq` is, with `HEq` where the two sides' types differ. Types with dotted names may
 form a block. A single index that is a proposition is reported at the index. A constructor has
-the declaration ranges of its own syntax. The internals are `protected`. `induction` on a
-`codatatype` is its case analysis, and on a type of a `datatype` block it is refused, as on a mutual
-inductive. -/
+the declaration ranges of its own syntax. The internals are under `T.Colean`, `protected`.
+`induction` on a `codatatype` is its case analysis, and on a type of a `datatype` block it is
+refused, as on a mutual inductive. A constructor may be named as an internal, not as a generated
+declaration of its type or functor, nor twice. -/
 
 namespace FrontEndTest
 
@@ -484,6 +485,17 @@ example : PT → Nat := fold fun _ => 0
 /-- error: Unknown identifier `toC` -/
 #guard_msgs in #check toC
 
+-- The internals are under `PT.Colean`, protected there too.
+section
+open PT.Colean
+
+/-- error: Unknown identifier `toC` -/
+#guard_msgs in #check toC
+
+example : PT.Colean.Shape := .leaf
+
+end
+
 /-- The full names, dot notation and the constructors. -/
 def PT.size (t : PT) : Nat :=
   PT.rec (motive := fun _ => Nat) 1 (fun _ _ a b => a + b + 1) t
@@ -640,6 +652,155 @@ Hint: Use its recursor, with the other motives given by name: `induction t using
 -/
 #guard_msgs in
 example (t : IMArgs) : True := by induction t
+
+/-! ### Constructor names
+
+The internals are under `T.Colean` (`T.Colean.B`, the positions, `T.Colean.Shape`, `T.Colean.sig`,
+`T.Colean.toC`, `T.Colean.Poly.*`), and the functor's action on functions is `T.F.fmap`, so
+constructors may have these names. A constructor named like a generated declaration of its type,
+or of the functor, which has a constructor of the same name, is refused before anything is
+declared; so is a constructor declared twice, with the message of `inductive`. -/
+
+datatype Letter
+  | A
+  | B
+  | C
+
+/-- info: FrontEndTest.Letter.B : Letter -/
+#guard_msgs in #check Letter.B
+
+example : Letter.A ≠ Letter.B := by simp
+
+datatype Op
+  | map
+  | filter
+  | reduce
+
+example : Op.map ≠ Op.filter := by simp
+
+example : Op.fold (fun | .map => 1 | .filter => 2 | .reduce => 3) Op.map = 1 := by simp
+
+datatype Shape2
+  | Shape
+  | sig
+
+example : Shape2.Shape ≠ Shape2.sig := by simp
+
+codatatype Q
+  | Poly (q : Q)
+  | toC (q : Q)
+
+example (q : Q) : (Q.Poly q).dtor = .Poly q := by simp
+
+/--
+error: constructor `dtor` clashes with the generated declaration `FrontEndTest.Cmd.dtor`; rename the constructor
+-/
+#guard_msgs in
+codatatype Cmd
+  | dtor
+  | ctor
+
+/-- error: Unknown identifier `Cmd` -/
+#guard_msgs in #check Cmd
+
+/--
+error: constructor `fold_eq` clashes with the generated declaration `FrontEndTest.Cmd.fold_eq`; rename the constructor
+-/
+#guard_msgs in
+datatype Cmd
+  | stop
+  | fold_eq (c : Cmd)
+
+-- A rule of another constructor.
+/--
+error: constructor `dtor_a` clashes with the generated declaration `FrontEndTest.Cmd.dtor_a`; rename the constructor
+-/
+#guard_msgs in
+datatype Cmd
+  | a
+  | dtor_a
+
+/--
+error: constructor `Colean` clashes with `FrontEndTest.Cmd.Colean`, the namespace of the generated internals; rename the constructor
+-/
+#guard_msgs in
+datatype Cmd
+  | Colean
+
+-- The functor `Cmd.F` has a constructor for each constructor.
+/--
+error: constructor `fmap` clashes with the generated declaration `FrontEndTest.Cmd.F.fmap`: the functor `FrontEndTest.Cmd.F` has a constructor `FrontEndTest.Cmd.F.fmap` for it; rename the constructor
+-/
+#guard_msgs in
+datatype Cmd
+  | fmap
+  | filter
+
+/--
+error: constructor `rec` clashes with the generated declaration `FrontEndTest.Cmd.F.rec`: the functor `FrontEndTest.Cmd.F` has a constructor `FrontEndTest.Cmd.F.rec` for it; rename the constructor
+-/
+#guard_msgs in
+codatatype Cmd
+  | rec
+  | next (c : Cmd)
+
+/--
+error: constructor `mono` clashes with the generated declaration `FrontEndTest.Cmd.F.Rel.mono`: the lifting `FrontEndTest.Cmd.F.Rel` has a constructor `FrontEndTest.Cmd.F.Rel.mono` for it; rename the constructor
+-/
+#guard_msgs in
+codatatype Cmd
+  | stop
+  | mono (c : Cmd)
+
+-- In a block, a constructor of one type only keeps its name in the block's functor; one of
+-- several types is qualified there (`CA_CB.F.CA_fmap`).
+/--
+error: constructor `fmap` clashes with the generated declaration `FrontEndTest.CA_CB.F.fmap`: the functor `FrontEndTest.CA_CB.F` has a constructor `FrontEndTest.CA_CB.F.fmap` for it; rename the constructor
+-/
+#guard_msgs in
+mutual
+datatype CA
+  | fmap (b : CB)
+datatype CB
+  | stop
+end
+
+mutual
+datatype CA
+  | fmap (b : CB)
+  | stop
+datatype CB
+  | fmap (a : CA)
+  | contract
+end
+
+example : CB.fmap .stop ≠ CB.contract := by simp
+
+-- In a `mixed_mutual` block, the closed type of an inner run restates the open type as `T.Open`.
+/--
+error: constructor `Open` clashes with the generated declaration `FrontEndTest.XF.Open`; rename the constructor
+-/
+#guard_msgs in
+mixed_mutual
+codatatype XT
+  | node (f : XF)
+datatype XF
+  | nil
+  | Open (t : XT)
+end
+
+/--
+error: Cannot define multiple constructors with the same name `FrontEndTest.Bad.mk`
+---
+error: Cannot define multiple constructors with the same name `FrontEndTest.Bad.mk`
+-/
+#guard_msgs in
+codatatype Bad
+  | mk
+  | mk
+
+/-- error: Unknown identifier `Bad` -/
+#guard_msgs in #check Bad
 
 /-! ### `data` and `codata` are not keywords
 

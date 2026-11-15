@@ -85,7 +85,7 @@ end Basic
 As Lean's mutual recursors have a motive per type, each type has a fold with a family and an
 algebra per type: `Rose.fold a₁ a₂ t` with `a₁ : Rose.F α S₁ S₂ → S₁`, `a₂ : Forest.F α S₁ S₂ → S₂`
 and `t : Rose α`. The layer of a type, `Rose.F α S₁ S₂`, is the block's functor at the families
-packed by cases on `Ix` (`Rose_Forest.St`), so its constructors are the block functor's and
+packed by cases on `Ix` (`Rose_Forest.Colean.St`), so its constructors are the block functor's and
 patterns find them (`.node _ n`). The rules `Rose.fold_node`, `Forest.fold_cons` fold the
 arguments with `Rose.fold a₁ a₂` and `Forest.fold a₁ a₂`; `Rose.fold_unique` says the fold is the
 only morphism. Over the block, `Rose_Forest.fold` takes one algebra over `Ix` instead, which says
@@ -167,9 +167,9 @@ As Lean's mutual recursors have a motive per type, each type has a corecursor wi
 step per type, and a bisimulation with a relation per type: `Tree.corec c₁ c₂ s` with
 `c₁ : S₁ → Tree.F α S₁ S₂`, `c₂ : S₂ → Forest.F α S₁ S₂` and `s : S₁`. The layer of a type at
 its states, `Tree.F α S₁ S₂`, is the block's functor at the states packed by cases on `Ix`
-(`Tree_Forest.St`), so its constructors are the block functor's and dot notation finds them
+(`Tree_Forest.Colean.St`), so its constructors are the block functor's and dot notation finds them
 (`.node a s`). `t.dtor` is in the layer at the types, `Tree.F α (Tree α) (Forest α)`, and the
-rule `Tree.dtor_corec` maps with `Tree.corec c₁ c₂` and `Forest.corec c₁ c₂` (`Tree.F.map`, one
+rule `Tree.dtor_corec` maps with `Tree.corec c₁ c₂` and `Forest.corec c₁ c₂` (`Tree.F.fmap`, one
 function per type). Nothing mentions `Ix`. The rest of the interface of a single type is there
 too: `Tree.ctor`, Lambek's lemma (`Tree.ctor_dtor`, …), `Tree.corec_eq`, and `Tree.corec_unique`
 with a morphism per type. In `match t.dtor with | .node a cs`, `cs` shows as `Forest α`. The
@@ -223,10 +223,10 @@ example {α : Type u} (a : α) (n : Nat) : Tree.full a = Tree.count a n := by
   refine Tree.bisim (fun x y => x = Tree.full a ∧ ∃ k, y = Tree.count a k)
     (fun x y => x = Forest.full a ∧ ∃ k, y = Forest.count a k) ?_ ?_ ⟨rfl, n, rfl⟩
   · rintro _ _ ⟨rfl, k, rfl⟩
-    simp only [Tree.dtor_full, Tree.count, Tree.dtor_corec, Tree.F.map_node]
+    simp only [Tree.dtor_full, Tree.count, Tree.dtor_corec, Tree.F.fmap_node]
     exact .node _ _ _ ⟨rfl, _, rfl⟩
   · rintro _ _ ⟨rfl, k, rfl⟩
-    simp only [Forest.dtor_full, Forest.count, Forest.dtor_corec, Forest.F.map_cons]
+    simp only [Forest.dtor_full, Forest.count, Forest.dtor_corec, Forest.F.fmap_cons]
     exact .cons _ _ _ _ ⟨rfl, _, rfl⟩ ⟨rfl, _, rfl⟩
 
 /-- Over the block, a state is a family over `Ix` and one coalgebra serves the block. -/

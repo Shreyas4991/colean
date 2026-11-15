@@ -7,12 +7,12 @@ file of theory and one generator file.
 
 | Step | Sees | Produces | Proofs |
 |---|---|---|---|
-| 1. Functor | the declaration | `T.F`, `T.F.map`, `map_id`, `map_comp` | tactic, per declaration |
+| 1. Functor | the declaration | `T.F`, `T.F.fmap`, `fmap_id`, `fmap_comp` | tactic, per declaration |
 | 2. Model | `T.F` | `T.contract : Contract T F` (a signature, an isomorphism `F X ≃ σ.Obj X`, the fixpoint on `Raw`) | the isomorphism's laws by tactic; the rest instantiated |
-| 2b. Model extras | the model | polymorphic `fold`/`corec`, `T.recPos`, `T.rec` | instantiated |
+| 2b. Model extras | the model | polymorphic `fold`/`corec`, `T.Colean.recPos`, `T.rec` | instantiated |
 | 3. Framework | `T.contract` only | `ctor`, `dtor_ctor`, `ctor_dtor`, `ctor_injective`, `dtor_injective`, `dtor_inj` (`simp`), `corec_eq`, `corec_unique` and the data duals | none: instantiation of generic theorems |
 | 4. Surface | the constructor list and steps 2–3 | `T.cᵢ` with their lemmas, `T.dtor_eq_cᵢ_iff`, `casesOn`, `rec_cᵢ`, `fold_cᵢ`, the characterisation `T.F.Rel` with one step of it at two constructors `T.F.rel_cᵢ_cⱼ` (`simp`), `T.F.Rel.mono`, `T.F.rel_refl`, and coinduction up to equality `T.coinduct`; in a block the types, and per type the interface of a single type with a family per type of the block: the layer `Tₘ.F` with its map, lifting and laws, `dtor`, `ctor`, Lambek's lemma and `dtor_inj`, and `corec`, `dtor_corec`, `corec_eq`, `corec_unique`, `bisim`, `coinduct`, the lemmas of the lifting (`codatatype`) or `fold`, `fold_ctor`, `fold_eq`, `fold_unique`, `fold_cᵢ`, `rec` (`datatype`) | term assembly; by cases on the block's index, and two lemmas, between the block's family and the types packed by cases; the one-step lemmas and `Rel.mono` by cases on the lifting (in general position) and its constructor |
-| 5. Instances | a declared type, family or block | `PolyIso`/`PolyMap` instances for it (`T.Poly.*`), and the `simp` lemmas `T.Poly.map_cᵢ`, `T.Poly.mem_cᵢ` | the layer's laws by tactic; the fixpoint instantiated; the lemmas by a theorem of `Model/Poly.lean` and definitional unfolding (map), cases on the positions of a layer (membership) |
+| 5. Instances | a declared type, family or block | `PolyIso`/`PolyMap` instances for it (`T.Colean.Poly.*`), and the `simp` lemmas `T.Colean.Poly.map_cᵢ`, `T.Colean.Poly.mem_cᵢ` | the layer's laws by tactic; the fixpoint instantiated; the lemmas by a theorem of `Model/Poly.lean` and definitional unfolding (map), cases on the positions of a layer (membership) |
 | 6. Order (`with_ccpo`, off by default) | a declared `codatatype`, single, with at most one index | `T.instCCPO : Lean.Order.CCPO`, `T.approx_iff`, `T.approx_coind`, `T.bot_eq`, the monotonicity lemmas `T.monotone_cᵢ` | none for the order: `Model/CCPO.lean` instantiated; the bottom's positions empty by `cases`; the lemmas by the constructor of `T.F.Rel` |
 
 ## Files
@@ -32,17 +32,17 @@ Theory, in dependency order:
 
 Generators, on `Expr`, in dependency order. `Syntax.lean` holds the command syntax: a declaration is Lean's `inductive` with its keyword swapped (`declModifiers`, `declId`, `optDeclSig`, `where`, Lean's `ctor`, `deriving`), and a `mixed_mutual` block holds commands up to `end`, as `mutual` does.
 
-- `Gen/Decl.lean`: adding declarations from closed `Expr`s, each checked by the kernel before the next: inductive types with the auxiliary constructions of `inductive` (fixed indices promoted to parameters, as `inductive` does), noncomputable definitions, theorems by term or by a tactic on a goal metavariable, simp lemmas and other attributes, and the tag `colean_mutual_rec` of the recursors per type of a `datatype` block; definitions by cases (`mkCasesOnApp`).
+- `Gen/Decl.lean`: adding declarations from closed `Expr`s, each checked by the kernel before the next: inductive types with the auxiliary constructions of `inductive` (fixed indices promoted to parameters, as `inductive` does), noncomputable definitions, theorems by term or by a tactic on a goal metavariable, simp lemmas and other attributes, and the tag `colean_mutual_rec` of the recursors per type of a `datatype` block; definitions by cases (`mkCasesOnApp`); the generated names relative to a type (`genName`, `coleanNs`) and their protection (`protectedGen`).
 - `Gen/Occ.lean`: the occurrence structure of an elaborated argument type, by recursion on its head after `whnfR` (and `id`); instance search at leaves.
 - `Gen/Ctx.lean`: the context `Ctx`: parameters (section variables first), indices and constructor arguments as free variables of one `TermElabM` run, the types being defined as local variables at a placeholder universe, argument kinds, names; for a block, its index `Blk.Ix`.
-- `Gen/Front.lean`: syntax → `Ctx`, elaborating the declarations as `inductive` does, a single one or the types of a block, or a run of a mixed block with the other runs' types replaced (`Mix`); before that, the modifiers (`DeclStx.elabMods`): the full name of each type, private or not, its universe names, and the modifiers of the type and the constructors.
+- `Gen/Front.lean`: syntax → `Ctx`, elaborating the declarations as `inductive` does, a single one or the types of a block, or a run of a mixed block with the other runs' types replaced (`Mix`); before that, the modifiers (`DeclStx.elabMods`): the full name of each type, private or not, its universe names, and the modifiers of the type and the constructors; and the names (`checkNames`, `checkCtorNames`).
 - `Gen/Functor.lean`: step 1.
 - `Gen/Signature.lean`, `Gen/Iso.lean`, `Gen/Model.lean`: step 2 (the signature; the isomorphism and its laws; the type and the contract).
-- `Gen/Rel.lean`: `T.F.Rel`, `rel_map`, `rel_ofC`, and the lemmas of the lifting: one step at two constructors `T.F.rel_cᵢ_cⱼ` (`simp`, `genRelSteps`, also per type of a block), by cases in general position (`casesRel`), `T.F.Rel.mono`, `T.F.rel_refl` (step 4, generated before the model, see below).
+- `Gen/Rel.lean`: `T.F.Rel`, `rel_fmap`, `rel_ofC`, and the lemmas of the lifting: one step at two constructors `T.F.rel_cᵢ_cⱼ` (`simp`, `genRelSteps`, also per type of a block), by cases in general position (`casesRel`), `T.F.Rel.mono`, `T.F.rel_refl` (step 4, generated before the model, see below).
 - `Gen/Framework.lean`: step 3.
-- `Gen/Extras.lean`: step 2b (`T.recPos`, `T.rec`), and the instance of an occurrence structure (`isoOf`).
+- `Gen/Extras.lean`: step 2b (`T.Colean.recPos`, `T.rec`), and the instance of an occurrence structure (`isoOf`).
 - `Gen/Surface.lean`: step 4 (constructors and their lemmas, `casesOn`, `rec_cᵢ`, `fold_cᵢ`, `T.dtor_eq_cᵢ_iff`, `T.coinduct`; in a block, the types `Tₘ`, and per type the layer `Tₘ.F` and the lemmas of its lifting, `Tₘ.dtor`, `Tₘ.ctor`, Lambek's lemma and `Tₘ.dtor_inj`, for `datatype` `Tₘ.fold` and its lemmas and the recursors `Tₘ.rec`, for `codatatype` `Tₘ.corec` and its lemmas, `Tₘ.bisim` and `Tₘ.coinduct`).
-- `Gen/Pack.lean`: the display of the packing `Blk.St` of a block's families at a constructor of `Blk.Ix`, as the family it packs there (a delaborator, for the attribute `colean_pack`).
+- `Gen/Pack.lean`: the display of the packing `Blk.Colean.St` of a block's families at a constructor of `Blk.Ix`, as the family it packs there (a delaborator, for the attribute `colean_pack`).
 - `Gen/Derive.lean`: step 5, separate from the pipeline (see below), in parts under `Gen/Derive/`, each on the ones before: the holes and the structures of the fields (`Holes.lean`), the presentation (`Pres.lean`), the layer `toL`, `ofL` and its laws (`Layer.lean`), the fixpoint and the instances (`Fix.lean`), the `simp` lemmas (`Simp.lean`); `Derive.lean` runs them.
 - `Gen/CCPO.lean`: step 6, run by the attribute `with_ccpo` (`CodataCmd.lean`), separate from the pipeline (below).
 - `Gen/Command.lean`: the pipeline, before it a dotted name's namespace (`elabInNamespace`), and what comes after it as after `inductive`: the doc comments, `protected` constructors and the info trees (`finishDecls`), then the attributes (`applyDeclAttrs`). `CodataCmd.lean`, `DataCmd.lean`: the commands; `MutualCmd.lean`: `mutual` blocks of them, and `mixed_mutual` blocks, and the refusal of plain `induction` on a type of a `datatype` block (`evalInductionBlockType`).
@@ -68,7 +68,9 @@ private type makes them private; the names built from components (a block `A_B`,
 open types of a mixed block) are made private with the types (`privateLike`), and the types of a
 block are all private or all public. Before the types are declared, the names are checked (no
 type twice in a block; no type, block or index of a block declared already; no two types with one
-constructor of the block's index: `checkNames`), and so
+constructor of the block's index; no constructor twice in a type, nor named as a type, with the
+messages of `inductive`: `checkNames`; no constructor named as a generated declaration, below:
+`checkCtorNames`), and so
 is a universe written in a declared sort, against the model's, which is the types' (`checkSorts`,
 first in the pipeline; in a mixed block, of the closed types, before the outermost run).
 
@@ -88,12 +90,12 @@ theorems. Generated constants are used through `constWith`, at the universes a u
 
 Proofs are terms where a theorem of the theory applies. Where building a term by hand would be
 painful, the statement is a goal metavariable and a tactic closes it: `MVarId.cases`, `refl`,
-`simp only`, `rewrite` from `MetaM`, or a short tactic script run on the goal (`rel_map`,
+`simp only`, `rewrite` from `MetaM`, or a short tactic script run on the goal (`rel_fmap`,
 `rel_ofC`, the `rw` steps of step 5). A value by dependent cases is built the same way, as the
 instantiated goal. The only syntax left is the command syntax, these tactic scripts, and the
 attributes of the eliminators.
 
-A position `b : T.B idx (Shape.c d)` is eliminated in general position (`casesPos`,
+A position `b : T.Colean.B idx (Shape.c d)` is eliminated in general position (`casesPos`,
 `Gen/Iso.lean`): at variables, solving the equation of the shapes, by the heterogeneous
 `noConfusion`, before those of the indices, which then hold by definition. So a constructor's
 result index need not be a pattern (`T (n * 2)`, `T (!b)`), as with `inductive`; `MVarId.cases`
@@ -107,25 +109,54 @@ on the shape, `rel_ofC` by cases on `F.Rel` after writing the layers as `toC a`.
 - A nested argument enters the model as a shape with positions; the user-facing `F` keeps its type.
 - Some generated proofs need the definitional unfolding of Lean before 4.34 (`withUnfolding`, around those proofs only): a term of the signature is the expected one only after unfolding.
 
-## Protected names
+## Names
+
+The generated declarations are named after their type, a block or an open type `T` (`genName`,
+`Gen/Decl.lean`; a name equal to the type's own is primed, `B.B'` for a type `B`, as `T.T` would
+shadow the type inside its namespace). Those a user calls, or that a user-facing statement
+mentions, are `T.s`: the functor `T.F` with its map `T.F.fmap`, the lifting `T.F.Rel` and their
+laws and rules, `T.contract`, `T.ctor`, `T.dtor`, the eliminators and their rules, the lemmas of
+step 3 and 4, the order of step 6, and the index `Blk.Ix` of a block (the block's family is over
+it) and the open type `Tₘ.Open` of a run inside a mixed block (the functor of an outer type
+mentions it). The internals are under `T.Colean` (`coleanNs`): the signature `T.Colean.Shape`,
+`T.Colean.B`, `T.Colean.Ix` (the packed index of several), `T.Colean.ShapeP`, `T.Colean.idx`,
+`T.Colean.sig`; the isomorphism `T.Colean.toC`, `T.Colean.ofC` and its laws `T.Colean.ofC_toC`,
+`T.Colean.toC_ofC`, `T.Colean.ofC_map`, `T.Colean.rel_ofC`; the model's recursor
+`T.Colean.recPos`, `T.Colean.recAux`, `T.Colean.recPos_ctor`; the cases before the cast
+`Tₘ.Colean.casesOnAux`, `Tₘ.Colean.casesOn_ctor`; the packing `Blk.Colean.St` of a block's
+families; and everything of step 5 (`T.Colean.Poly.*`, the instances and their `simp` lemmas
+`T.Colean.Poly.map_cᵢ`, `T.Colean.Poly.mem_cᵢ` among them). So a constructor may be named as one
+of the internals (`B`, `Shape`, `sig`, `toC`, `Poly`), or `map`.
+
+A constructor `T.c` named as a generated declaration of its type, or whose constructor `F.c` of
+the functor (`Blk.F.Tₘ_c` in a block when two types have a constructor `c`) is named as a
+declaration of the functor (`fmap`, `Rel`, the auxiliary constructions of `inductive`, …), or
+`F.Rel.c` as `F.Rel.mono`, would make the kernel refuse a generated declaration; the front end
+refuses it first, at the constructor's name, before anything is declared (`checkCtorNames`, also
+per run of a mixed block, in `checkMixNames`): "constructor `dtor` clashes with the generated
+declaration `Cmd.dtor`; rename the constructor". The names checked are the fixed ones of the type
+(`typeGenNames`) and of the functor (`functorGenNames`), the namespace `T.Colean`, and the rules
+every constructor has (`T.dtor_cᵢ`, `T.ctor_cᵢ`, `T.casesOn_cᵢ`, `T.dtor_eq_cᵢ_iff`, `T.rec_cᵢ`,
+`T.fold_cᵢ`, `T.F.fmap_cᵢ`); not those of some constructors only (`T.cᵢ_inj`, `T.cᵢ_ne_cⱼ`,
+`T.F.rel_cᵢ_cⱼ`, the membership lemmas `Tₘ.mem_cᵢ` of a mixed block). `with_ccpo` refuses a
+constructor named as a declaration of the order the same way (`Gen/CCPO.lean`).
 
 As `inductive` protects its auxiliary constructions (`recOn`, `noConfusion`, `below`, `brecOn`,
-`ctorIdx`, …, which the inductive types generated here, `T.F`, `T.Shape`, `T.B`, `T.F.Rel`, get
-from it), the commands protect, relative to a type, a block or an open type `T`: `T.ctor`,
-`T.bisim`, `T.F`, `T.contract`; the internals `T.Shape`, `T.B`, `T.Ix`, `T.ShapeP`, `T.idx`, `T.sig`, `T.St`, `T.toC`, `T.ofC`, `T.ofC_toC`,
-`T.toC_ofC`, `T.ofC_map`, `T.rel_ofC`, `T.recPos`, `T.recAux`, `T.recPos_ctor`, `T.fold_ctor`,
-`T.casesOnAux`, `T.casesOn_ctor`; everything under `T.Poly` (step 5); and the open types `Tₘ.Open`
-of a mixed block. After `open T` these are not `toC`, `bisim`, …, only `T.toC`, `T.bisim`. The
-types, the constructors, the eliminators `T.rec`, `T.casesOn` (which Lean leaves unprotected too)
-and `T.fold`, `T.corec`, `T.dtor`, and the user-facing lemmas (`T.cᵢ_inj`, `T.cᵢ_ne_cⱼ`, `T.rec_cᵢ`,
-`T.fold_cᵢ`, `T.casesOn_cᵢ`, `T.dtor_cᵢ`, `T.ctor_cᵢ`, `T.dtor_corec`, `T.corec_eq`,
-`T.corec_unique`, `T.fold_eq`, `T.fold_unique`, `T.ctor_dtor`, `T.dtor_ctor`, `T.ctor_injective`,
-`T.dtor_injective`, `T.dtor_inj`, `T.dtor_eq_cᵢ_iff`, `T.coinduct`, the declarations under `T.F`)
-are not, as Lean protects neither constructors nor `inj`/`injEq`.
-The list is `protectedGen` (`Gen/Decl.lean`), applied once the pipeline has declared everything,
-step 5 included (`protectGenerated`, at the end of `pipeline`, and for the closed types of a
-mixed block at the end of `elabMixed`), so protection changes no generated statement, and the
-generators refer to everything by its full name anyway.
+`ctorIdx`, …, which the inductive types generated here, `T.F`, `T.Colean.Shape`, `T.Colean.B`,
+`T.F.Rel`, get from it), the commands protect, relative to a type, a block or an open type `T`:
+the declarations with generic names `T.ctor`, `T.bisim`, `T.F`, `T.contract`, the
+index `Blk.Ix` and the open types `Tₘ.Open` of a mixed block; and everything under `T.Colean`.
+After `open T` these are not `ctor`, `bisim`, …, only `T.ctor`, `T.bisim`, and after
+`open T.Colean` not `toC`, only `T.Colean.toC`. The types, the constructors, the eliminators
+`T.rec`, `T.casesOn` (which Lean leaves unprotected too) and `T.fold`, `T.corec`, `T.dtor`, and
+the user-facing lemmas (`T.cᵢ_inj`, `T.cᵢ_ne_cⱼ`, `T.rec_cᵢ`, `T.fold_cᵢ`, `T.casesOn_cᵢ`,
+`T.dtor_cᵢ`, `T.ctor_cᵢ`, `T.dtor_corec`, `T.corec_eq`, `T.corec_unique`, `T.fold_eq`,
+`T.fold_unique`, `T.ctor_dtor`, `T.dtor_ctor`, `T.ctor_injective`, `T.dtor_injective`,
+`T.dtor_inj`, `T.dtor_eq_cᵢ_iff`, `T.coinduct`, the declarations under `T.F`) are not, as Lean
+protects neither constructors nor `inj`/`injEq`. The list is `protectedGen` (`Gen/Decl.lean`),
+applied once the pipeline has declared everything, step 5 included (`protectGenerated`, at the end
+of `pipeline`, and for the closed types of a mixed block at the end of `elabMixed`), so protection
+changes no generated statement, and the generators refer to everything by its full name anyway.
 
 ## Recursors
 
@@ -158,15 +189,15 @@ finds an instance for the whole (`Vec (List T) n` is `Vec`'s instance at `List`,
 composite; `E (T × Nat) Nat` is `E`'s at the product). `simp` computes the map at the premise of
 such an instance, a leaf or a built-in form (`Occ.ofIso_prod`, …).
 
-`T.recPos` is the recursor of the model, with the hypotheses at the positions of the structures.
-`T.rec` is `T.recPos` at minor premises that turn these hypotheses into membership
-(`PolyIso.memRec`, by `Classical.choose`, with no proof in between since the instance is the
-structure; through `List`, `Option` and `Array` then by `PolyIso.mem_list`, …), and its rules
-`T.rec_cᵢ` are `T.recPos_ctor` followed by `PolyIso.memRec_pos` at each nested argument.
+`T.Colean.recPos` is the recursor of the model, with the hypotheses at the positions of the
+structures. `T.rec` is `T.Colean.recPos` at minor premises that turn these hypotheses into
+membership (`PolyIso.memRec`, by `Classical.choose`, with no proof in between since the instance is
+the structure; through `List`, `Option` and `Array` then by `PolyIso.mem_list`, …), and its rules
+`T.rec_cᵢ` are `T.Colean.recPos_ctor` followed by `PolyIso.memRec_pos` at each nested argument.
 
 ## Known boundary violations
 
-- `T.corec`, `T.fold` (universe-polymorphic in the state) and `T.recPos` come from the model, because `Contract` fixes one universe for `F`. Fix: a universe-polymorphic framework interface, after which the recursor derives from `fold` and `induction`.
+- `T.corec`, `T.fold` (universe-polymorphic in the state) and `T.Colean.recPos` come from the model, because `Contract` fixes one universe for `F`. Fix: a universe-polymorphic framework interface, after which the recursor derives from `fold` and `induction`.
 - `T.F.Rel` (surface) is generated before the model, because `rel_ofC` and the contract's `bisim` are stated with it. Fix: state `bisim` with the canonical `Rel`, derive the inductive characterisation in step 4 by term-level introduction and elimination lemmas.
 
 ## Blocks
@@ -199,42 +230,41 @@ plain `induction t` on `t : Tₘ` is refused with a hint to `induction t using T
 (motive_2 := …)`, as Lean refuses a mutual inductive (`MutualCmd.lean`). The block family of a
 `codatatype` block has no case analysis.
 
-`Blk.St S₁ … Sₖ` packs a family per type into one on `Blk.Ix` by cases (`Blk.Ix.casesOn`); the
-layer of a type, `Tₘ.F params S₁ … Sₖ idx`, is `Blk.F` at it and at `.Tₘ idx`, and its map
-`Tₘ.F.map f₁ … fₖ` and, for `codatatype`, its lifting `Tₘ.F.Rel R₁ … Rₖ` are the block's at the
+`Blk.Colean.St S₁ … Sₖ` packs a family per type into one on `Blk.Ix` by cases (`Blk.Ix.casesOn`);
+the layer of a type, `Tₘ.F params S₁ … Sₖ idx`, is `Blk.F` at it and at `.Tₘ idx`, and its map
+`Tₘ.F.fmap f₁ … fₖ` and, for `codatatype`, its lifting `Tₘ.F.Rel R₁ … Rₖ` are the block's at the
 functions and relations packed by cases, all reducible, so that patterns and dot notation find the
-block functor's constructors; their laws `Tₘ.F.map_id`, `Tₘ.F.map_comp`, `Tₘ.F.rel_map` are the
+block functor's constructors; their laws `Tₘ.F.fmap_id`, `Tₘ.F.fmap_comp`, `Tₘ.F.rel_fmap` are the
 block's at the packed functions, equal to the packed identities and composites by cases.
-`Tₘ.corec c₁ … cₖ` is `Blk.corec` at `Blk.St S₁ … Sₖ` and the step made of the `cⱼ` by cases, and
-`Tₘ.fold a₁ … aₖ` is `Blk.fold` there at the algebra made of the `aⱼ`. The layer at the types,
-`Tₘ.F params (T₁ params) …`, is `Blk.F` at `Blk.St (T₁ params) …`, which is `Blk params` at every
-constructor of `Blk.Ix` by definition but not at a variable index, so the two are not one type:
-`Tₘ.dtor` is `Blk.dtor` followed by `Blk.F.map ι`, and `Tₘ.ctor` is `Blk.ctor` after
-`Blk.F.map ρ`, `ι` and `ρ` the identities between them by cases. The rules pass between them by
-cases on the index: `ρ ∘ ι` and `ι ∘ ρ` are the identity by `funext` of `rfl` by cases, so the
-maps by them cancel (`F.map_comp`, `F.map_id`), which gives Lambek's lemma per type from the
-block's; `Tₘ.dtor_cᵢ` is `Blk.dtor_ctor` under the map, with `IOcc.map_heq_self` at a nested
-argument (`Model/Occ.lean`, from `subst` on the equation of the two families), and `Tₘ.ctor_cᵢ`
-follows from it and `Tₘ.ctor_dtor`; `Tₘ.dtor_corec` is `Blk.dtor_corec` under the map,
-`F.map_comp`, and the composite equal to the packed corecursors by cases, and dually `Tₘ.fold_ctor`
-is `Blk.fold_ctor` at `Blk.F.map ρ y`; `Tₘ.corec_eq`, `Tₘ.fold_eq` and `Tₘ.fold_cᵢ` follow from
-these as for a single type; `Tₘ.corec_unique` and `Tₘ.fold_unique` are `Blk.corec_unique` and
-`Blk.fold_unique` at the morphisms packed by cases, the hypothesis at each type from the per-type
-one under the map by `ρ` (`codatatype`) or at `Blk.F.map ι y` (`datatype`); `Tₘ.bisim R₁ … Rₖ` is
-`Blk.bisim` at the packed relation, its hypothesis at each type from the per-type one by
-`Codata.rel_of_map_heq` (`Framework.lean`). The lemmas of the lifting per type are those of a
-single type: one step at two constructors `Tₘ.F.rel_cᵢ_cⱼ` (`simp`), stated with the relations
-per type (`R₂ f g` at a forest; at a nested argument the block's structure at the packed
-relations, which `simp` takes back to a type's, `IOcc.rel_ofOcc`), proved as for a single type,
-`Tₘ.F.Rel.mono`, the block's at the packed relations and hypotheses, and `Tₘ.F.rel_refl`,
-`Tₘ.F.rel_map` at the identities; `Tₘ.coinduct` is `Tₘ.bisim` at the relations up to equality,
-and `Tₘ.dtor_injective` is `Tₘ.ctor_dtor` as a left inverse. The block-level declarations, and
-the rules of the block's `dtor`, `ctor` and `fold`, `Blk.dtor_cᵢ`, `Blk.ctor_cᵢ`, `Blk.fold_cᵢ`,
-stay; step 5 uses these. A run inside a `mixed_mutual` block that is a block gets the same as `Tₘ.Open.F`,
-`Tₘ.Open.corec`, `Tₘ.Open.fold`, …, restated at the closed types as `Tₘ.F`, `Tₘ.corec`,
-`Tₘ.fold`, … (next section). In the infoview, `Blk.St S₁ … Sₖ` at a constructor `.Tⱼ idx` is
-shown as `Sⱼ idx` (`Gen/Pack.lean`), so that the fields of a match on `t.dtor` show as trees and
-forests.
+`Tₘ.corec c₁ … cₖ` is `Blk.corec` at `Blk.Colean.St S₁ … Sₖ` and the step made of the `cⱼ` by cases,
+and `Tₘ.fold a₁ … aₖ` is `Blk.fold` there at the algebra made of the `aⱼ`. The layer at the types,
+`Tₘ.F params (T₁ params) …`, is `Blk.F` at `Blk.Colean.St (T₁ params) …`, which is `Blk params` at
+every constructor of `Blk.Ix` by definition but not at a variable index, so the two are not one
+type: `Tₘ.dtor` is `Blk.dtor` followed by `Blk.F.fmap ι`, and `Tₘ.ctor` is `Blk.ctor` after
+`Blk.F.fmap ρ`, `ι` and `ρ` the identities between them by cases. The rules pass between them by
+cases on the index: `ρ ∘ ι` and `ι ∘ ρ` are the identity by `funext` of `rfl` by cases, so the maps
+by them cancel (`F.fmap_comp`, `F.fmap_id`), which gives Lambek's lemma per type from the block's;
+`Tₘ.dtor_cᵢ` is `Blk.dtor_ctor` under the map, with `IOcc.map_heq_self` at a nested argument
+(`Model/Occ.lean`, from `subst` on the equation of the two families), and `Tₘ.ctor_cᵢ` follows from
+it and `Tₘ.ctor_dtor`; `Tₘ.dtor_corec` is `Blk.dtor_corec` under the map, `F.fmap_comp`, and the
+composite equal to the packed corecursors by cases, and dually `Tₘ.fold_ctor` is `Blk.fold_ctor` at
+`Blk.F.fmap ρ y`; `Tₘ.corec_eq`, `Tₘ.fold_eq` and `Tₘ.fold_cᵢ` follow from these as for a single
+type; `Tₘ.corec_unique` and `Tₘ.fold_unique` are `Blk.corec_unique` and `Blk.fold_unique` at the
+morphisms packed by cases, the hypothesis at each type from the per-type one under the map by `ρ`
+(`codatatype`) or at `Blk.F.fmap ι y` (`datatype`); `Tₘ.bisim R₁ … Rₖ` is `Blk.bisim` at the packed
+relation, its hypothesis at each type from the per-type one by `Codata.rel_of_map_heq`
+(`Framework.lean`). The lemmas of the lifting per type are those of a single type: one step at two
+constructors `Tₘ.F.rel_cᵢ_cⱼ` (`simp`), stated with the relations per type (`R₂ f g` at a forest; at
+a nested argument the block's structure at the packed relations, which `simp` takes back to a
+type's, `IOcc.rel_ofOcc`), proved as for a single type, `Tₘ.F.Rel.mono`, the block's at the packed
+relations and hypotheses, and `Tₘ.F.rel_refl`, `Tₘ.F.rel_fmap` at the identities; `Tₘ.coinduct` is
+`Tₘ.bisim` at the relations up to equality, and `Tₘ.dtor_injective` is `Tₘ.ctor_dtor` as a left
+inverse. The block-level declarations, and the rules of the block's `dtor`, `ctor` and `fold`,
+`Blk.dtor_cᵢ`, `Blk.ctor_cᵢ`, `Blk.fold_cᵢ`, stay; step 5 uses these. A run inside a `mixed_mutual`
+block that is a block gets the same as `Tₘ.Open.F`, `Tₘ.Open.corec`, `Tₘ.Open.fold`, …, restated at
+the closed types as `Tₘ.F`, `Tₘ.corec`, `Tₘ.fold`, … (next section). In the infoview,
+`Blk.Colean.St S₁ … Sₖ` at a constructor `.Tⱼ idx` is shown as `Sⱼ idx` (`Gen/Pack.lean`), so that
+the fields of a match on `t.dtor` show as trees and forests.
 
 A block mixing `datatype` and `codatatype` is a nested fixpoint, whose order is a choice; `mutual`
 rejects such a block, and `mixed_mutual` states the order (next section).
@@ -292,18 +322,18 @@ what it failed to generate (`stepPhase`), the error itself under
 says so and why.
 
 It generates one instance per type, `PolyIso (fun X => T (H₁ X) … (Hₙ X))` with premises on the
-`Hᵢ`, over the parameters that may vary, and the eta-reduced form `T A₁ … Aₙ₋₁`, with the
-`PolyMap` instance from `PolyMap Hᵢ H'ᵢ` premises, as the instances of the built-in forms (the
-eta form across universes when the universe of the last parameter is its own). When a field fixes the
-universe of the occurrences (`NDet (T α)` with `NDet : Type → Type`), the layer's `Y` is at it, and
-so are the states of the fixpoint: the premises' shapes are in `Type`, and for `codatatype` their
-positions too and `X` at that universe (`stepLevels`); for `datatype` above `Type`, the trees of
-shapes must reach it (`checkStateLevel`, a limit otherwise). Only the layer
-`T.Poly.toL`/`ofL` and its laws are per declaration; the fixpoint is `Model/Poly.lean`, one proof
-for `datatype` and `codatatype`, from the contract. The structure of a field in the parameters is
-that of `Gen/Occ.lean`, with each premise's structure at its parameter; a field may mention several,
-and when it has no structure in all of them the fewest are kept constant, the first ones first, so
-that the others have one (`refineHoles`).
+`Hᵢ`, over the parameters that may vary, and the eta-reduced form `T A₁ … Aₙ₋₁`, with the `PolyMap`
+instance from `PolyMap Hᵢ H'ᵢ` premises, as the instances of the built-in forms (the eta form across
+universes when the universe of the last parameter is its own). When a field fixes the universe of
+the occurrences (`NDet (T α)` with `NDet : Type → Type`), the layer's `Y` is at it, and so are the
+states of the fixpoint: the premises' shapes are in `Type`, and for `codatatype` their positions too
+and `X` at that universe (`stepLevels`); for `datatype` above `Type`, the trees of shapes must reach
+it (`checkStateLevel`, a limit otherwise). Only the layer `T.Colean.Poly.toL`/`ofL` and its laws are
+per declaration; the fixpoint is `Model/Poly.lean`, one proof for `datatype` and `codatatype`, from
+the contract. The structure of a field in the parameters is that of `Gen/Occ.lean`, with each
+premise's structure at its parameter; a field may mention several, and when it has no structure in
+all of them the fewest are kept constant, the first ones first, so that the others have one
+(`refineHoles`).
 
 The layer is presented constructor by constructor of the presentation (`VCtor`): those of `T`,
 with a nested argument split through its products and sums when it mentions a parameter that
@@ -329,27 +359,28 @@ structure in the occurrences, is its map in them by `Occ₂.AgreeY`, proved comb
 combinator.
 
 With indices the structure is over the index of the presentation (`IOcc₂`, `Model/IOcc2.lean`;
-`imixOcc`), its occurrences at the presentation's indices, so that the positions of the layer
-carry them by construction; in a block, a nested argument whose positions are at a type of the
-block only after cases on them inside a named type constructor (`p : List (RA α × Nat)`) is
-presented so too, with no part in the parameters. When the positions are at one index after cases
-(`oneIdx`, the analysis of the recursor's hypotheses too), the structure is the plain one at that
-index (`IOcc₂.ofOcc₂`), whose map and members are those of the plain one by definition, and the
-rules are stated as without indices, at the type of the members. In `ofL_map` the map of `T.F`,
-by the family's indexed structure over its own index, is its map by `IOcc₂.AgreeY`, along `ι`,
-the identity or `Blk.Poly.ixIn`; for a plain structure at one index, from the plain agreement and
-the map of the indexed structure at that index, the plain one's by definition and across a sum by
-cases on the value (`IOcc₂.AgreeY.ofOcc₂`, `IOcc.map_flat_sum`, …).
+`imixOcc`), its occurrences at the presentation's indices, so that the positions of the layer carry
+them by construction; in a block, a nested argument whose positions are at a type of the block only
+after cases on them inside a named type constructor (`p : List (RA α × Nat)`) is presented so too,
+with no part in the parameters. When the positions are at one index after cases (`oneIdx`, the
+analysis of the recursor's hypotheses too), the structure is the plain one at that index
+(`IOcc₂.ofOcc₂`), whose map and members are those of the plain one by definition, and the rules are
+stated as without indices, at the type of the members. In `ofL_map` the map of `T.F`, by the
+family's indexed structure over its own index, is its map by `IOcc₂.AgreeY`, along `ι`, the identity
+or `Blk.Colean.Poly.ixIn`; for a plain structure at one index, from the plain agreement and the map
+of the indexed structure at that index, the plain one's by definition and across a sum by cases on
+the value (`IOcc₂.AgreeY.ofOcc₂`, `IOcc.map_flat_sum`, …).
 
-A family gets the instances at every index, `PolyIso (fun X => T (H X) idx)` with `idx` arguments
-of the instance; its presentation is a family over the packed index, with the index of each
-position (`T.Poly.idx`, `T.Poly.sig`), and the layer at an index `i` is `ILay`. The types of a
-block get theirs at their index of the block: the presentation is per block (`Blk.Poly.*`), over
-`Blk.Poly.Ix`, which is `Blk.Ix` without the parameters that vary (`Blk.Ix` takes them all, so it
-cannot index trees of shapes that do not depend on them), read in the block's index along
-`Blk.Poly.ixIn`; the instances are per type (`Tₘ.Poly.instPolyIso`), with the eta forms for a
-type without indices. The theory takes the contract along this map (`ico_bisim`, `iin_ind`), and
-`corec` and `fold` on states over the presentation's index through `Along` and `Over`.
+A family gets the instances at every index, `PolyIso (fun X => T (H X) idx)` with `idx` arguments of
+the instance; its presentation is a family over the packed index, with the index of each position
+(`T.Colean.Poly.idx`, `T.Colean.Poly.sig`), and the layer at an index `i` is `ILay`. The types of a
+block get theirs at their index of the block: the presentation is per block (`Blk.Colean.Poly.*`),
+over `Blk.Colean.Poly.Ix`, which is `Blk.Ix` without the parameters that vary (`Blk.Ix` takes them
+all, so it cannot index trees of shapes that do not depend on them), read in the block's index along
+`Blk.Colean.Poly.ixIn`; the instances are per type (`Tₘ.Colean.Poly.instPolyIso`), with the eta
+forms for a type without indices. The theory takes the contract along this map (`ico_bisim`,
+`iin_ind`), and `corec` and `fold` on states over the presentation's index through `Along` and
+`Over`.
 
 Scope: in a block, a nested argument with positions at several types of the block inside a named
 type constructor (`List (A × B)`) gets its instances but not its `simp` lemmas, which state the
@@ -362,18 +393,18 @@ type.
 With the instances come, per constructor `c` of each type, two `simp` lemmas at the premises
 (`genPolySimp`), so that `simp` computes through the instances in the rules of other types:
 
-- `T.Poly.map_c`: `(Occ.ofIso fun X => T (H X) idx).map (Occ.ofIso fun X => T (H' X) idx) f
+- `T.Colean.Poly.map_c`: `(Occ.ofIso fun X => T (H X) idx).map (Occ.ofIso fun X => T (H' X) idx) f
   (T.c args) = T.c args'`, data unchanged, a field at a parameter position mapped by its
   structure in the premises (`(Occ.ofIso H).map (Occ.ofIso H') f a`, `f a` by `simp` at the
   identity), a recursive argument by this map, a nested one by the map of its structure. It is
-  stated on the leaf `Occ.ofIso`, as the other types' rules (`fold_c`, `F.map_c`, `dtor_corec`)
+  stated on the leaf `Occ.ofIso`, as the other types' rules (`fold_c`, `F.fmap_c`, `dtor_corec`)
   mention the map: a rule on `PolyMap.map`, whose functor is implicit, would make `simp` solve
   `?H ?X =?= T` first and not apply at the identity premise. `Occ.map_ofIso` relates the two.
   An argument with a structure in two variables is mapped by `Occ₂.map`, by `f` in the parameter
   and by this map in the occurrences; at several indices of a family by `IOcc₂.map`, at each
   index by the map of the leaf there. The proof is `PolyFix.map_eq_of_d` at `ctor ∘ ofL` after
   `dtor_c`; the right-hand side is then the result by definition.
-- `T.Poly.mem_c`: `PolyIso.Mem (fun X => T (H X) idx) x (T.c args) ↔ …`, a disjunct per field
+- `T.Colean.Poly.mem_c`: `PolyIso.Mem (fun X => T (H X) idx) x (T.c args) ↔ …`, a disjunct per field
   at a parameter position and per recursive argument (through a nested one, `∃ t, Mem G t c ∧
   Mem … x t`), `False` without any; an argument with a structure in two variables has two, by its
   structure in the parameter alone (the occurrences constant) and in the occurrences alone, whose
@@ -398,20 +429,20 @@ a declared type, reads only the environment, and declares nothing in the pipelin
 nothing a declaration generates changes. A failure is an error of the attribute, which restores the
 state.
 
-The order is *approximation*, with a constructor without arguments as the bottom (`with_ccpo (bot := c)`,
-or the first such constructor): `x ⊑ y` when `x` is the bottom, or `dtor x` and `dtor y` are
-related by the lifting of the order, the greatest such relation (`Contract.Approx`). It is defined
-from the contract and the bottom layer alone. That it is a partial order and that chains have
-suprema needs the positions of a layer (the lifting by `map` alone need not preserve intersections
-and composites of relations): the theory takes the presentation of `F` as `σ.Obj` that every
-generated type has (`T.toC`, `T.ofC`, `Contract.Container`), and the emptiness of the bottom's
-positions, by `cases` on `T.B`. Antisymmetry is `bisim`; the supremum of a chain is `corec` on sets
-of elements, the bottom layer if there is no other element, otherwise the shape of the others with
-the sets of their children at its positions (`Contract.csup`). The instance is
-`Contract.ccpo T.contract e C hbot idx`, at every index for a family, whose bottom is then a
-constructor at every index (`| stop {n} : T n`). The pieces are elaborated from short terms on the
-generated constants, so that one generator covers the contract over `Unit` of a plain type and a
-family's.
+The order is *approximation*, with a constructor without arguments as the bottom
+(`with_ccpo (bot := c)`, or the first such constructor): `x ⊑ y` when `x` is the bottom, or `dtor x`
+and `dtor y` are related by the lifting of the order, the greatest such relation
+(`Contract.Approx`). It is defined from the contract and the bottom layer alone. That it is a
+partial order and that chains have suprema needs the positions of a layer (the lifting by `map`
+alone need not preserve intersections and composites of relations): the theory takes the
+presentation of `F` as `σ.Obj` that every generated type has (`T.Colean.toC`, `T.Colean.ofC`,
+`Contract.Container`), and the emptiness of the bottom's positions, by `cases` on `T.Colean.B`.
+Antisymmetry is `bisim`; the supremum of a chain is `corec` on sets of elements, the bottom layer if
+there is no other element, otherwise the shape of the others with the sets of their children at its
+positions (`Contract.csup`). The instance is `Contract.ccpo T.contract e C hbot idx`, at every index
+for a family, whose bottom is then a constructor at every index (`| stop {n} : T n`). The pieces are
+elaborated from short terms on the generated constants, so that one generator covers the contract
+over `Unit` of a plain type and a family's.
 
 `partial_fixpoint` proves a definition monotone with the lemmas tagged
 `@[partial_fixpoint_monotone]`, by the head of the body, and splits `match`es (on `t.dtor`). A

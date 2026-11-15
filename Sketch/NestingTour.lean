@@ -189,15 +189,15 @@ datatype L (α : Type u)
 codatatype Str (α : Type u)
   | cons (a : α) (t : Str α)
 
-/-- info: L.Poly.instPolyIsoEta -/
+/-- info: L.Colean.Poly.instPolyIsoEta -/
 #guard_msgs in
 #synth PolyIso L.{0} _ _
 
-/-- info: Str.Poly.instPolyIsoEta -/
+/-- info: Str.Colean.Poly.instPolyIsoEta -/
 #guard_msgs in
 #synth PolyIso Str.{0} _ _
 
-/-- info: L.Poly.instPolyMapEta -/
+/-- info: L.Colean.Poly.instPolyMapEta -/
 #guard_msgs in
 #synth PolyMap L.{0} L.{1}
 
@@ -244,19 +244,19 @@ datatype E (α β : Type u)
   | l (a : α)
   | r (b : β)
 
-/-- info: E.Poly.instPolyIso -/
+/-- info: E.Colean.Poly.instPolyIso -/
 #guard_msgs in
 #synth PolyIso (fun X : Type u => E X X) _ _
 
-/-- info: E.Poly.instPolyIso -/
+/-- info: E.Colean.Poly.instPolyIso -/
 #guard_msgs in
 #synth PolyIso (fun X : Type => E X Nat) _ _
 
-/-- info: E.Poly.instPolyIsoEta ℕ -/
+/-- info: E.Colean.Poly.instPolyIsoEta ℕ -/
 #guard_msgs in
 #synth PolyIso (E Nat) _ _
 
-/-- info: E.Poly.instPolyIso -/
+/-- info: E.Colean.Poly.instPolyIso -/
 #guard_msgs in
 #synth PolyIso (fun X : Type u => E (List X) (Option X)) _ _
 
@@ -322,7 +322,7 @@ datatype Fields (α : Type u)
   | mk (x : Option (List α)) (y : Nat → α) (z : (n : Nat) × (Fin n → α)) (w : α ⊕ Nat)
        (s : L α) (e : E α (List α)) (t : Fields α)
 
-/-- info: Fields.Poly.instPolyIsoEta -/
+/-- info: Fields.Colean.Poly.instPolyIsoEta -/
 #guard_msgs in
 #synth PolyIso Fields.{0} _ _
 
@@ -358,11 +358,11 @@ varies as well. -/
 datatype P2 (α β : Type u)
   | mk (p : α × β)
 
-/-- info: P2.Poly.instPolyIso -/
+/-- info: P2.Colean.Poly.instPolyIso -/
 #guard_msgs in
 #synth PolyIso (fun X : Type => P2 X Nat) _ _
 
-/-- info: P2.Poly.instPolyIsoEta ℕ -/
+/-- info: P2.Colean.Poly.instPolyIsoEta ℕ -/
 #guard_msgs in
 #synth PolyIso (P2 Nat) _ _
 
@@ -383,7 +383,7 @@ others can: `A` is a domain in `Fn`, so `FnBoth` varies in `β` only. -/
 datatype FnBoth (α β : Type)
   | mk (x : Fn α β)
 
-/-- info: FnBoth.Poly.instPolyIsoEta -/
+/-- info: FnBoth.Colean.Poly.instPolyIsoEta -/
 #guard_msgs in
 #synth PolyIso (FnBoth Nat) _ _
 
@@ -393,7 +393,7 @@ are, and `FnFn` varies in `γ`. -/
 datatype FnFn (α β γ : Type)
   | mk (x : α → β → γ)
 
-/-- info: FnFn.Poly.instPolyIsoEta -/
+/-- info: FnFn.Colean.Poly.instPolyIsoEta -/
 #guard_msgs in
 #synth PolyIso (FnFn Nat Nat) _ _
 
@@ -407,7 +407,7 @@ datatype UsePhantom
 
 codatatype Void (α : Type u)
 
-/-- info: Void.Poly.instPolyIsoEta -/
+/-- info: Void.Colean.Poly.instPolyIsoEta -/
 #guard_msgs in
 #synth PolyIso Void.{0} _ _
 
@@ -572,7 +572,7 @@ datatype Vec (α : Type u) : Nat → Type u
   | nil : Vec α 0
   | cons {n : Nat} (a : α) (t : Vec α n) : Vec α (n + 1)
 
-/-- info: Vec.Poly.instPolyIso 3 -/
+/-- info: Vec.Colean.Poly.instPolyIso 3 -/
 #guard_msgs in
 #synth PolyIso (fun X : Type => Vec X 3) _ _
 
@@ -595,7 +595,7 @@ datatype Pong (α : Type u)
   | cons (a : α) (b : Ping α)
 end
 
-/-- info: Ping.Poly.instPolyIsoEta -/
+/-- info: Ping.Colean.Poly.instPolyIsoEta -/
 #guard_msgs in
 #synth PolyIso Ping.{0} _ _
 
@@ -689,7 +689,7 @@ datatype PB (α : Type u)
   | mk (a : PA α)
 end
 
-/-- info: PA.Poly.instPolyIsoEta -/
+/-- info: PA.Colean.Poly.instPolyIsoEta -/
 #guard_msgs in
 #synth PolyIso PA.{0} _ _
 
@@ -706,7 +706,7 @@ datatype QB (α : Type u)
   | mk (a : α) (q : QA α)
 end
 
-/-- info: QB.Poly.instPolyIsoEta -/
+/-- info: QB.Colean.Poly.instPolyIsoEta -/
 #guard_msgs in
 #synth PolyIso QB.{0} _ _
 
@@ -727,7 +727,7 @@ datatype RB (α : Type u)
   | mk (a : RA α)
 end
 
-/-- info: RA.Poly.instPolyIsoEta -/
+/-- info: RA.Colean.Poly.instPolyIsoEta -/
 #guard_msgs in
 #synth PolyIso RA.{0} _ _
 
@@ -850,11 +850,11 @@ def UTree.const {α : Type u} (a : α) : UTree α :=
 @[simp] theorem UTree.dtor_const {α : Type u} (a : α) :
     (UTree.const a).dtor = .node a (UTree.const a, some (UTree.const a)) := by
   rw [UTree.const, UTree.dtor_corec]
-  simp [UTree.F.map_node, Occ.map_prod, Occ.map_hole, Occ.map_option]
+  simp [UTree.F.fmap_node, Occ.map_prod, Occ.map_hole, Occ.map_option]
 
 /-! Through a generated leaf the definitions are as easy, with the leaf's own `fold`, or its
 constructors in a `corec`, and so are the lemmas: the rules of the leaf's instances compute the
-generated map on its constructors (`L.Poly.map_cons`), as `Occ.map_list` does for a list. -/
+generated map on its constructors (`L.Colean.Poly.map_cons`), as `Occ.map_list` does for a list. -/
 
 /-- The number of nodes of an `LRose`: `L.fold` sums the folded children. -/
 def LRose.size (t : LRose) : Nat :=
@@ -866,7 +866,7 @@ def LInf.spine : LInf :=
   LInf.corec (S := Unit) (fun _ => .node (L.cons () .nil)) ()
 
 theorem LInf.dtor_spine : LInf.spine.dtor = .node (L.cons LInf.spine .nil) := by
-  rw [LInf.spine, LInf.dtor_corec, LInf.F.map_node]
+  rw [LInf.spine, LInf.dtor_corec, LInf.F.fmap_node]
   simp
 
 /-! The hypothesis of a nested argument is stated with the instance that instance search finds
@@ -907,18 +907,18 @@ example : (EProd.mk (.l (.mk (.r 3), 2))).size = 7 := by
 A field with both a parameter and the type is split through its products and sums for the
 presentation, into parts with positions of one kind each: `p : α × PairStr α` gives a parameter
 position and a recursive one, `f : Tm α ⊕ α` one of them on each side. The `simp` rules are then
-stated with the components (`PairStr.Poly.mem_mk` with `p.1` and `p.2`), and once for each side of
-a sum (`Tm.Poly.map_app_inl`, `Tm.Poly.map_app_inr`). So the stream of section 4 can be written
-with a pair, and `Tm` of section 1 is a leaf too. -/
+stated with the components (`PairStr.Colean.Poly.mem_mk` with `p.1` and `p.2`), and once for each
+side of a sum (`Tm.Colean.Poly.map_app_inl`, `Tm.Colean.Poly.map_app_inr`). So the stream of
+section 4 can be written with a pair, and `Tm` of section 1 is a leaf too. -/
 
 codatatype PairStr (α : Type u)
   | mk (p : α × PairStr α)
 
-/-- info: PairStr.Poly.instPolyIsoEta -/
+/-- info: PairStr.Colean.Poly.instPolyIsoEta -/
 #guard_msgs in
 #synth PolyIso PairStr.{0} _ _
 
-/-- info: Tm.Poly.instPolyIsoEta -/
+/-- info: Tm.Colean.Poly.instPolyIsoEta -/
 #guard_msgs in
 #synth PolyIso Tm.{0} _ _
 
@@ -934,17 +934,17 @@ example (t a b : ThroughTm) : PolyIso.Mem Tm t (.app (.inl (.var a)) (.var b)) �
   simp
 
 /-! Under a named type constructor or a function the split stops: `p : List (α × LPair α)` and
-`k : Nat → α × FPair α` have positions of both kinds in one argument. Such a field has an
-occurrence structure in two variables (`Occ₂`, `Colean/Model/Occ2.lean`), the parameter at the
-premise of the instance and the recursion, and the `simp` rules map it by `Occ₂.map`
-(`LPair.Poly.map_mk`), which `simp` computes through its combinators, and state its members by the
-structures in each variable alone (`LPair.Poly.mem_mk`). -/
+`k : Nat → α × FPair α` have positions of both kinds in one argument. Such a field has an occurrence
+structure in two variables (`Occ₂`, `Colean/Model/Occ2.lean`), the parameter at the premise of the
+instance and the recursion, and the `simp` rules map it by `Occ₂.map` (`LPair.Colean.Poly.map_mk`),
+which `simp` computes through its combinators, and state its members by the structures in each
+variable alone (`LPair.Colean.Poly.mem_mk`). -/
 
 datatype LPair (α : Type u)
   | nil
   | mk (p : List (α × LPair α))
 
-/-- info: LPair.Poly.instPolyIsoEta -/
+/-- info: LPair.Colean.Poly.instPolyIsoEta -/
 #guard_msgs in
 #synth PolyIso LPair.{0} _ _
 
@@ -952,7 +952,7 @@ datatype FPair (α : Type u)
   | leaf
   | mk (k : Nat → α × FPair α)
 
-/-- info: FPair.Poly.instPolyIsoEta -/
+/-- info: FPair.Colean.Poly.instPolyIsoEta -/
 #guard_msgs in
 #synth PolyIso FPair.{0} _ _
 
@@ -993,7 +993,7 @@ datatype LFam (α : Type u) : Nat → Type u
   | nil {n : Nat} : LFam α n
   | mk {n : Nat} (p : List (α × LFam α n)) : LFam α (n + 1)
 
-/-- info: LFam.Poly.instPolyIso 3 -/
+/-- info: LFam.Colean.Poly.instPolyIso 3 -/
 #guard_msgs in
 #synth PolyIso (fun X : Type => LFam X 3) _ _
 
@@ -1100,7 +1100,7 @@ datatype SB (α : Type u)
   | mk (a : SA α)
 end
 
-#check @SA.Poly.mem_mk
+#check @SA.Colean.Poly.mem_mk
 
 /-! ### 13. Spellings that mean something else
 

@@ -17,7 +17,7 @@ codatatype P : Nat → Type
   | mk (n : Nat) (t : P n) : P (n * 2)
 
 #check @P.mk
-#check @P.B.mk_t
+#check @P.Colean.B.mk_t
 
 /-- Only `P 0` is inhabited: its element unfolds to itself. -/
 def P.zero : P 0 :=

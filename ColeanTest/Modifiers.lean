@@ -166,7 +166,7 @@ private datatype PV (α : Type) : Nat → Type
   | cons {n : Nat} (a : α) (v : PV α n) : PV α (n + 1)
 
 /-- info: [true, true, true] -/
-#guard_msgs in #eval [mkIdent `PV, mkIdent `PV.rec, mkIdent `PV.Shape].mapM priv
+#guard_msgs in #eval [mkIdent `PV, mkIdent `PV.rec, mkIdent `PV.Colean.Shape].mapM priv
 
 example (v : PV α n) : True := by induction v <;> trivial
 

@@ -8,8 +8,8 @@ import Colean.Gen.Iso
 * `T.F.Rel R : T.F params X idx → T.F params Y idx → Prop`, the inductive lifting of a relation:
   the same constructor, the same data, related recursive arguments (`R` at their index, pointwise
   under a telescope, `Occ.Rel` for a nested argument);
-* `T.F.rel_map`: the images of one value under pointwise related functions are related;
-* `T.rel_ofC`: the lifting through the isomorphism is the signature's (`Signature.Obj.Rel`);
+* `T.F.rel_fmap`: the images of one value under pointwise related functions are related;
+* `T.Colean.rel_ofC`: the lifting through the isomorphism is the signature's (`Signature.Obj.Rel`);
 * one step of the lifting, `simp` lemmas: `T.F.rel_cᵢ_cᵢ : T.F.Rel R (F.cᵢ ys) (F.cᵢ ys') ↔ …`,
   the data equal and the premises of `T.F.Rel.cᵢ`, and `T.F.rel_cᵢ_cⱼ : … ↔ False` where the
   results of two constructors meet (`genRelSteps`, also per type of a block, `Gen/Surface.lean`);
@@ -19,14 +19,16 @@ import Colean.Gen.Iso
 `T.F.Rel` belongs to the surface (step 4), but the model's `rel_ofC` and the contract's `bisim`
 are stated with it, so it is generated before them (a boundary violation recorded in
 `architecture.md`), and its lemmas with it. The lemmas are proved by tactic scripts: `cases`,
-then `constructor` and the hypothesis for `rel_map`; for `rel_ofC`, the layers written as
+then `constructor` and the hypothesis for `rel_fmap`; for `rel_ofC`, the layers written as
 `toC a`, `toC a'` (`toC_ofC`), `cases` on the hypothesis, which is then at variables, the layers
 of the nested arguments rewritten with the hypotheses on them, then the witnesses, and the
 positions by cases in general position (`casesPos`); for the one-step lemmas, cases on the
 hypothesis in general position (`casesRel`) and the hypotheses one way, the equations substituted
 and the constructor the other; `Rel.mono` by cases and the constructor at the premises mapped;
-`rel_refl` is `rel_map` at the identity rewritten by `map_id`. A lemma whose name a constructor
-takes (`T.F.Rel.mono` for a constructor `mono`) is not generated.
+`rel_refl` is `rel_fmap` at the identity rewritten by `fmap_id`. A one-step lemma whose name a
+constructor of `F` takes (`T.F.rel_a_b` for a constructor `rel_a_b`) is not generated; the other
+names of `F` and `F.Rel` are refused as constructor names before anything is declared
+(`checkCtorNames`, `Gen/Front.lean`).
 -/
 
 open Lean Meta Elab Term
@@ -122,7 +124,7 @@ def genRelType : TermElabM Unit := do
     ctors := (ctx.ctors.zip ctorTys).toList.map fun (c, t) =>
       { name := ctx.relCtor c, type := t.replaceFVar Rv Rc } }] ctx.ref
 
-/-- `T.F.rel_map`. -/
+/-- `T.F.rel_fmap`. -/
 def genRelMap : TermElabM Unit := do
   let fresh := ctx.freshLevels 3
   let [wX, wY, wZ] := fresh.map fun u => ctx.holeLevel (.param u) | unreachable!
@@ -155,7 +157,7 @@ def genRelMap : TermElabM Unit := do
         | (apply Codata.IOcc.rel_map; intro; intro; apply h))))
   addThm ctx.Frel_map (← ctx.levelParamsOf fresh #[type]) type value ctx.ref
 
-/-- `T.rel_ofC`. -/
+/-- `T.Colean.rel_ofC`. -/
 def genRelOfC : TermElabM Unit := do
   let fresh := ctx.freshLevels 2
   let wX := ctx.holeLevel (.param fresh[0]!)
@@ -251,7 +253,8 @@ structure RelStep where
   repY : Nat → Array Expr → Expr
   wX : Level
   wY : Level
-  /-- The families of the two layers: `X`, `Y`, or `Blk.St X₁ … Xₖ`, `Blk.St Y₁ … Yₖ`. -/
+  /-- The families of the two layers: `X`, `Y`, or `Blk.Colean.St X₁ … Xₖ`, `Blk.Colean.St Y₁ … Yₖ`.
+  -/
   famX : Expr
   famY : Expr
   /-- The lifting at the index arguments of a constructor's result and at two layers. -/
@@ -475,7 +478,7 @@ def relReflN : Name := ctx.nF "rel_refl"
 
 /-- `T.F.Rel.mono`: a larger relation relates more, by cases on the lifting and its constructor,
 the premises mapped by the hypothesis (pointwise under a telescope, by `Occ.Rel.mono` or
-`IOcc.Rel.mono` for a nested argument). Not generated when a constructor is named `mono`. -/
+`IOcc.Rel.mono` for a nested argument). -/
 def genRelMono : TermElabM Unit := do
   if (← getEnv).contains ctx.relMonoN then return
   let fresh := ctx.freshLevels 2
@@ -529,8 +532,8 @@ def genRelMono : TermElabM Unit := do
         (tgt.getAppArgs.extract 0 (ctx.params.size + 3) ++ args ++ hyps))
   addThm ctx.relMonoN (← ctx.levelParamsOf fresh #[type]) type value ctx.ref
 
-/-- `T.F.rel_refl`: a layer is related to itself by a reflexive relation, `T.F.rel_map` at the
-identity, rewritten by `T.F.map_id`. -/
+/-- `T.F.rel_refl`: a layer is related to itself by a reflexive relation, `T.F.rel_fmap` at the
+identity, rewritten by `T.F.fmap_id`. -/
 def genRelRefl : TermElabM Unit := do
   if (← getEnv).contains ctx.relReflN then return
   let fresh := ctx.freshLevels 1

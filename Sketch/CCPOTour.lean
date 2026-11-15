@@ -94,7 +94,7 @@ equation, by `corec_unique`. -/
 theorem ones_eq_corec : ones = corec (fun _ => .cons 1 ()) () :=
   corec_unique (fun _ => .cons 1 ()) (fun _ => ones) (fun _ => by
     conv => lhs; rw [ones.eq_1]
-    rw [dtor_cons, F.map_cons]) ()
+    rw [dtor_cons, F.fmap_cons]) ()
 
 /-! ### 3. Definitions that are not productive
 
@@ -297,7 +297,7 @@ Everything here could be supported. -/
 
 /-! ### 9. Several indices
 
-The contract of a family with several indices is over their packed index (`T.Ix`), and the
+The contract of a family with several indices is over their packed index (`T.Colean.Ix`), and the
 instance and the lemmas would be stated curried, as the command states its own. -/
 
 codatatype Grid : Nat → Nat → Type

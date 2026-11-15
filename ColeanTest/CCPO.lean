@@ -106,11 +106,11 @@ theorem map_ones (f : Nat → Nat) : map f ones = iterate id (f 1) := by
   have h : ∀ s : Unit, map f ones = corec (fun _ => .cons (f 1) ()) s := fun s =>
     corec_unique (fun _ => .cons (f 1) ()) (fun _ => map f ones) (fun _ => by
       conv => lhs; rw [ones.eq_1]
-      rw [map_cons, dtor_cons, F.map_cons]) s
+      rw [map_cons, dtor_cons, F.fmap_cons]) s
   have h' : ∀ s : Unit, iterate id (f 1) = corec (fun _ => .cons (f 1) ()) s := fun s =>
     corec_unique (fun _ => .cons (f 1) ()) (fun _ => iterate id (f 1)) (fun _ => by
       conv => lhs; rw [iterate_eq]
-      rw [dtor_cons, F.map_cons]; rfl) s
+      rw [dtor_cons, F.fmap_cons]; rfl) s
   rw [h (), h' ()]
 
 /-- A definition that is not productive is the bottom: below `nil` by fixpoint induction. -/
@@ -499,6 +499,29 @@ datatype N
 error: with_ccpo: `Nat` is not a type declared by a single `codatatype` declaration (the types of `mutual` and `mixed_mutual` blocks are not supported)
 -/
 #guard_msgs in attribute [with_ccpo] Nat
+
+-- A constructor named like a declaration of the order: refused, and nothing is declared.
+codatatype Ord₁
+  | stop
+  | bot_eq (o : Ord₁)
+
+/--
+error: with_ccpo: constructor `bot_eq` clashes with the declaration `CCPOTest.Ord₁.bot_eq` of the order; rename the constructor
+-/
+#guard_msgs in attribute [with_ccpo] Ord₁
+
+codatatype Ord₂
+  | stop
+  | monotone_next
+  | next (o : Ord₂)
+
+/--
+error: with_ccpo: constructor `monotone_next` clashes with the declaration `CCPOTest.Ord₂.monotone_next` of the order, the monotonicity lemma of `CCPOTest.Ord₂.next`; rename the constructor
+-/
+#guard_msgs in attribute [with_ccpo] Ord₂
+
+/-- error: Unknown constant `CCPOTest.Ord₂.instCCPO` -/
+#guard_msgs in #check Ord₂.instCCPO
 
 end
 

@@ -109,7 +109,7 @@ def Tree.bin {α : Type u} (a : α) : Tree α :=
   Tree.corec (S := Unit) (fun _ => .node a (.cons () (.cons () .nil))) ()
 
 /-- The unfolding of `Tree.bin`, one step: `simp` maps the forest of states through the instance
-of the open forests (`Forest.Open.Poly.map_cons`). -/
+of the open forests (`Forest.Open.Colean.Poly.map_cons`). -/
 theorem Tree.bin_eq {α : Type u} (a : α) :
     Tree.bin a = .node a (.cons (.bin a) (.cons (.bin a) .nil)) := by
   conv_lhs => rw [← Tree.ctor_dtor (Tree.bin a), Tree.bin, Tree.dtor_corec]
@@ -165,7 +165,7 @@ example {α : Type u} (t : Tree α) (f : Forest α) :
 /-! ### Bisimulation on trees
 
 The children of a node are a forest of trees, so a bisimulation step relates two forests
-(`Tree.F.Rel.node`), at the open forests of the functor; `Tree.F.rel_map` provides it for the
+(`Tree.F.Rel.node`), at the open forests of the functor; `Tree.F.rel_fmap` provides it for the
 images of one layer. -/
 
 /-- One step of relabelling: the next states are the children themselves. -/
@@ -185,8 +185,8 @@ theorem Tree.relabel_id {α : Type u} (t : Tree α) : Tree.relabel id t = t := b
   refine Tree.bisim (fun x y => x = Tree.relabel id y) ?_ rfl
   rintro _ y rfl
   rw [Tree.relabel, Tree.dtor_corec, Tree.relabelStep_id]
-  conv => arg 3; rw [← Tree.F.map_id y.dtor]
-  exact Tree.F.rel_map _ _ _ _ fun _ => rfl
+  conv => arg 3; rw [← Tree.F.fmap_id y.dtor]
+  exact Tree.F.rel_fmap _ _ _ _ fun _ => rfl
 
 /-! Coinduction inside induction: a function on forests by the fold, whose step relabels a tree
 corecursively. -/

@@ -45,7 +45,7 @@ datatype FL (α : Type u) : Nat → Type u
   | z : FL α 0
   | s {n : Nat} (p : List (α ⊕ FL α n)) : FL α (n + 1)
 
-/-- info: FL.Poly.instPolyIso 2 -/
+/-- info: FL.Colean.Poly.instPolyIso 2 -/
 #guard_msgs in
 #synth PolyIso (fun X : Type => FL X 2) _ _
 
@@ -64,14 +64,14 @@ datatype FLP (α : Type u) : Nat → Type u
   | z : FLP α 0
   | s {n : Nat} (p : List (α × FLP α n ⊕ Nat)) : FLP α (n + 1)
 
-/-- info: FLP.Poly.instPolyIso 1 -/
+/-- info: FLP.Colean.Poly.instPolyIso 1 -/
 #guard_msgs in
 #synth PolyIso (fun X : Type => FLP X 1) _ _
 
 codatatype CFS (α : Type u) : Nat → Type u
   | mk {n : Nat} (p : Nat → (α ⊕ CFS α n)) : CFS α (n + 1)
 
-/-- info: CFS.Poly.instPolyIso 1 -/
+/-- info: CFS.Colean.Poly.instPolyIso 1 -/
 #guard_msgs in
 #synth PolyIso (fun X : Type => CFS X 1) _ _
 
@@ -84,7 +84,7 @@ datatype SB (α : Type u)
   | mk (a : SA α)
 end
 
-/-- info: SA.Poly.instPolyIsoEta -/
+/-- info: SA.Colean.Poly.instPolyIsoEta -/
 #guard_msgs in
 #synth PolyIso SA.{0} _ _
 
@@ -130,7 +130,7 @@ Hint: Additional diagnostic information may be available using the `set_option d
 #guard_msgs in
 #synth PolyMap (fun X : Type => E (List X) Nat) (fun X : Type => E (Array X) Nat)
 
-/-- info: E.Poly.instPolyMap -/
+/-- info: E.Colean.Poly.instPolyMap -/
 #guard_msgs in
 #synth PolyMap (fun X : Type => E (List X) Nat) (fun X : Type => E (List X) Nat)
 
@@ -212,13 +212,13 @@ datatype FP (α : Type u) : Nat → Type u
   | s {n : Nat} (a : α) (p : List (FP α n × FP α n)) : FP α (n + 1)
 
 /--
-info: @FP.Poly.mem_s : ∀ {H : Type u_2 → Type u_1} {S : Type u_3} {R : S → Type u_4} [inst : PolyIso H S R] {X : Type u_2}
+info: @FP.Colean.Poly.mem_s : ∀ {H : Type u_2 → Type u_1} {S : Type u_3} {R : S → Type u_4} [inst : PolyIso H S R] {X : Type u_2}
   (x : X) {n : ℕ} (a : H X) (p : List (FP (H X) n × FP (H X) n)),
   PolyIso.Mem (fun X => FP (H X) (n + 1)) x (FP.s a p) ↔
     PolyIso.Mem H x a ∨ ∃ p₀ t, IPolyIso.Mem (fun X => List (X n × X n)) p₀ t p ∧ PolyIso.Mem (fun X => FP (H X) p₀) x t
 -/
 #guard_msgs(whitespace := lax) in
-#check @FP.Poly.mem_s
+#check @FP.Colean.Poly.mem_s
 
 -- Without indices.
 datatype PS
@@ -325,7 +325,7 @@ theorem AltInF.ind (P : ∀ b, AltInF b → Prop) (h0 : ∀ b, P b .leaf)
 datatype FnFn (α β γ : Type)
   | mk (x : α → β → γ)
 
-/-- info: FnFn.Poly.instPolyIsoEta -/
+/-- info: FnFn.Colean.Poly.instPolyIsoEta -/
 #guard_msgs in
 #synth PolyIso (FnFn Nat Nat) _ _
 
@@ -337,7 +337,7 @@ datatype Fn (A : Type) (α : Type)
 datatype FnRev (α β : Type)
   | mk (x : Fn β α)
 
-/-- info: FnRev.Poly.instPolyIso -/
+/-- info: FnRev.Colean.Poly.instPolyIso -/
 #guard_msgs in
 #synth PolyIso (fun X : Type => FnRev X Nat) _ _
 
@@ -353,7 +353,7 @@ datatype Big (α : Type u)
   | leaf
   | mk (p : (Many α ⊕ α) × (Big α ⊕ α) × (Big α ⊕ α) × (Big α ⊕ α) × (Big α ⊕ α))
 
-/-- info: Big.Poly.instPolyIsoEta -/
+/-- info: Big.Colean.Poly.instPolyIsoEta -/
 #guard_msgs in
 #synth PolyIso Big.{0} _ _
 
@@ -369,7 +369,7 @@ datatype Tm (α : Type u)
   | app (f : Tm α ⊕ α)
   | app_inl (x : α)
 
-/-- info: Tm.Poly.instPolyIsoEta -/
+/-- info: Tm.Colean.Poly.instPolyIsoEta -/
 #guard_msgs in
 #synth PolyIso Tm.{0} _ _
 
@@ -381,7 +381,7 @@ datatype PF (α : Type u)
   | leaf
   | mk (p : α × PF α) (p_fst : Nat)
 
-/-- info: PF.Poly.instPolyIsoEta -/
+/-- info: PF.Colean.Poly.instPolyIsoEta -/
 #guard_msgs in
 #synth PolyIso PF.{0} _ _
 
@@ -406,11 +406,11 @@ datatype UseNoMap (α : Type)
 
 namespace Short
 
-def Bad.Poly.fix : Nat := 0
+def Bad.Colean.Poly.fix : Nat := 0
 
 /--
 warning: `Bad` cannot be nested through: no `Codata.PolyIso` instance was generated. The type itself is not affected.
-generating the fixpoint `NestFixTest.Short.Bad.Poly.fix` failed, an error of the generator (`set_option codata.deriveDetails true` shows it)
+generating the fixpoint `NestFixTest.Short.Bad.Colean.Poly.fix` failed, an error of the generator (`set_option codata.deriveDetails true` shows it)
 -/
 #guard_msgs in
 datatype Bad (α : Type)
@@ -421,12 +421,12 @@ end Short
 
 namespace Details
 
-def Bad.Poly.fix : Nat := 0
+def Bad.Colean.Poly.fix : Nat := 0
 
 /--
 warning: `Bad` cannot be nested through: no `Codata.PolyIso` instance was generated. The type itself is not affected.
-generating the fixpoint `NestFixTest.Details.Bad.Poly.fix` failed:
-(kernel) constant has already been declared 'NestFixTest.Details.Bad.Poly.fix'
+generating the fixpoint `NestFixTest.Details.Bad.Colean.Poly.fix` failed:
+(kernel) constant has already been declared 'NestFixTest.Details.Bad.Colean.Poly.fix'
 -/
 #guard_msgs in
 set_option codata.deriveDetails true in
@@ -442,7 +442,7 @@ datatype BigH (α : Type (u + 1))
   | nil
   | cons (a : α) (t : BigH α)
 
-/-- info: BigH.Poly.instPolyMapEta -/
+/-- info: BigH.Colean.Poly.instPolyMapEta -/
 #guard_msgs in
 #synth PolyMap BigH.{0} BigH.{1}
 
@@ -457,13 +457,13 @@ codatatype CB (α : Type u)
 end
 
 /--
-info: @CA.Poly.mem_mk : ∀ {H : Type u_2 → Type u_1} {S : Type u_3} {R : S → Type u_4} [inst : PolyIso H S R] {X : Type u_2}
+info: @CA.Colean.Poly.mem_mk : ∀ {H : Type u_2 → Type u_1} {S : Type u_3} {R : S → Type u_4} [inst : PolyIso H S R] {X : Type u_2}
   (x : X) (a : H X) (p : List (CA (H X) × ℕ)),
   PolyIso.Mem (fun X => CA (H X)) x (CA.mk a p) ↔
     PolyIso.Mem H x a ∨ ∃ t, PolyIso.Mem (fun X => List (X × ℕ)) t p ∧ PolyIso.Mem (fun X => CA (H X)) x t
 -/
 #guard_msgs(whitespace := lax) in
-#check @CA.Poly.mem_mk
+#check @CA.Colean.Poly.mem_mk
 
 -- Arguments named as the generated binders.
 datatype HX (α : Type u)
@@ -471,13 +471,13 @@ datatype HX (α : Type u)
   | mk (H : α) (X : List (HX α)) (t : Nat)
 
 /--
-info: @HX.Poly.mem_mk : ∀ {H₀ : Type u_2 → Type u_1} {S : Type u_3} {R : S → Type u_4} [inst : PolyIso H₀ S R] {X₀ : Type u_2}
+info: @HX.Colean.Poly.mem_mk : ∀ {H₀ : Type u_2 → Type u_1} {S : Type u_3} {R : S → Type u_4} [inst : PolyIso H₀ S R] {X₀ : Type u_2}
   (x : X₀) (H : H₀ X₀) (X : List (HX (H₀ X₀))) (t : ℕ),
   PolyIso.Mem (fun X => HX (H₀ X)) x (HX.mk H X t) ↔
     PolyIso.Mem H₀ x H ∨ ∃ t₀, PolyIso.Mem (fun X => List X) t₀ X ∧ PolyIso.Mem (fun X => HX (H₀ X)) x t₀
 -/
 #guard_msgs(whitespace := lax) in
-#check @HX.Poly.mem_mk
+#check @HX.Colean.Poly.mem_mk
 
 /-! ### 12. Quantifiers over the members at several indices
 
@@ -560,20 +560,20 @@ codatatype NDet (α : Type)
 codatatype Game (α : Type)
   | move (label : α) (options : NDet (Game α))
 
-/-- info: Game.Poly.instPolyIsoEta -/
+/-- info: Game.Colean.Poly.instPolyIsoEta -/
 #guard_msgs in
 #synth PolyIso Game _ _
 
 /--
-info: @Game.Poly.instPolyIso : {H : Type → Type} →
+info: @Game.Colean.Poly.instPolyIso : {H : Type → Type} →
   {S : Type} →
     {R : S → Type} →
       [inst : PolyIso H S R] →
-        PolyIso (fun X => Game (H X)) ((shapeSig (Game.Poly.B S R)).Cotype ())
-          (Path (Game.Poly.P S R) (coTree (Game.Poly.B S R)))
+        PolyIso (fun X => Game (H X)) ((shapeSig (Game.Colean.Poly.B S R)).Cotype ())
+          (Path (Game.Colean.Poly.P S R) (coTree (Game.Colean.Poly.B S R)))
 -/
 #guard_msgs in
-#check @Game.Poly.instPolyIso
+#check @Game.Colean.Poly.instPolyIso
 
 example (f : Nat → Int) (a : Nat) (o : NDet (Game Nat)) :
     (Occ.ofIso Game).map (Occ.ofIso Game) f (.move a o) =
@@ -590,12 +590,12 @@ example (x a : Nat) (o : NDet (Game Nat)) :
 codatatype Arena (α : Type)
   | node (a : α) (g : Game (Arena α))
 
-/-- info: Arena.Poly.instPolyIsoEta -/
+/-- info: Arena.Colean.Poly.instPolyIsoEta -/
 #guard_msgs in
 #synth PolyIso Arena _ _
 
 example {X Y : Type} (f : X → Y) (a : Nat) (g : Game X) :
-    Arena.F.map f (.node a g) = .node a ((Occ.ofIso Game).map (Occ.ofIso Game) f g) := by
+    Arena.F.fmap f (.node a g) = .node a ((Occ.ofIso Game).map (Occ.ofIso Game) f g) := by
   simp
 
 -- `datatype` through `datatype`.
@@ -607,7 +607,7 @@ datatype MyList (α : Type)
 datatype Rose2 (α : Type)
   | node (a : α) (kids : MyList (Rose2 α))
 
-/-- info: Rose2.Poly.instPolyIsoEta -/
+/-- info: Rose2.Colean.Poly.instPolyIsoEta -/
 #guard_msgs in
 #synth PolyIso Rose2 _ _
 
@@ -627,7 +627,7 @@ codatatype CoList (α : Type)
 codatatype CoRose (α : Type)
   | node (a : α) (kids : CoList (CoRose α))
 
-/-- info: CoRose.Poly.instPolyIsoEta -/
+/-- info: CoRose.Colean.Poly.instPolyIsoEta -/
 #guard_msgs in
 #synth PolyIso CoRose _ _
 

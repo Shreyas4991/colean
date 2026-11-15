@@ -16,7 +16,7 @@ codatatype Proto : Nat → Type
   | done : Proto 0
 
 #check @Proto.choose
-#check @Proto.B.choose_k
+#check @Proto.Colean.B.choose_k
 #check @Proto.F.Rel.choose
 
 /-- Always choose again; at `0` there is nothing to choose, and `Fin 0` is empty. -/
@@ -33,8 +33,8 @@ codatatype Table
   | leaf (f : (n : Nat) → Fin (n + 1) → Table)
 
 #check @Table.node
-#check @Table.B.node_k
-#check @Table.B.leaf_f
+#check @Table.Colean.B.node_k
+#check @Table.Colean.B.leaf_f
 
 def Table.const (a : Nat) : Table :=
   Table.corec (S := Unit) (fun _ => .node a fun _ _ => ()) ()

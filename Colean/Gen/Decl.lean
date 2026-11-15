@@ -11,8 +11,10 @@ syntax: inductive types with the auxiliary constructions Lean's `inductive` adds
 (`addThm`) or with a proof found by a tactic on a goal metavariable (`prove`, `proveHere`,
 `runTac`, `simpOnly`), and attributes (`addSimp`, `addAttrs`); `mkCasesOnApp`, definition by
 cases on an inductive type; `withUnfolding`, the definitional unfolding of Lean before 4.34 for
-the proofs that need it; and the generated declarations that are `protected`, listed here only
-(`protectedGen`, applied by `protectGenerated` once a command has declared everything). Their
+the proofs that need it; the names of the generated declarations relative to their type
+(`genName`), the internals under `T.Colean` (`coleanNs`); and the generated declarations that are
+`protected`, listed here only (`protectedGen`, applied by `protectGenerated` once a command has
+declared everything). Their
 inputs are closed terms: the generators build types and values over the free variables of the
 analysis (`Gen/Ctx.lean`) and close them with `mkForallFVars`/`mkLambdaFVars`; the universe
 parameters come from `levelParamsOf`. A generated declaration has the declaration range of the
@@ -291,41 +293,48 @@ def addThm (name : Name) (levelParams : List Name) (type value : Expr) (ref : Sy
   addRanges name ref
   enableRealizationsForConst name
 
-/-! ### Protection -/
+/-! ### Names and protection -/
+
+/-- The generated declaration `T.s` of the type (block, open type) `T`. Inside its own namespace
+`T.T` would shadow the type `T`, so a generated name equal to the type's name is primed (`B.B'`
+for `codatatype B`). -/
+def genName (T : Name) (s : String) : Name :=
+  let last := match T with
+    | .str _ l => l
+    | _ => ""
+  .str T (if last == s then s ++ "'" else s)
+
+/-- The namespace `T.Colean` of the internals of the type (block, open type) `T`: the
+declarations no user-facing statement mentions and no user calls, the signature, the isomorphism,
+the model's recursor, the packing of a block's families, the instances of step 5 and their
+lemmas. -/
+def coleanNs (T : Name) : Name := genName T "Colean"
 
 /-- The generated declarations `T.s` that are `protected`, by `s`, relative to their type `T` (a
 block `Blk` and each of its types, an open type `T.Open` of a mixed block): after `open T` they
 are not `s`, only `T.s` (and `t.s` by dot notation). As Lean's `inductive` protects its
 auxiliary constructions (`recOn`, `noConfusion`, `below`, `brecOn`, `ctorIdx`, …, which the
-inductive types generated here get from it), the other generated declarations that are not user
-API: `ctor`, `bisim`, the functor `F`, `contract`; and the internals: the signature (`Shape`,
-`B`, `Ix`, `ShapeP`, `idx`, `sig`), the packing of one family per type of a block (`St`), the
-isomorphism and its laws (`toC`, `ofC`, `ofC_toC`, `toC_ofC`, `ofC_map`, `rel_ofC`), the model's
-recursor and its rule (`recPos`, `recAux`, `recPos_ctor`), the model's `fold_ctor` (and the same
-per type of a block), the cases before the cast (`casesOnAux`, `casesOn_ctor`), and the open
-type `T.Open` of a mixed block. Everything under `T.Poly` (step 5) is protected too
-(`isProtectedGen`). Not protected, as with `inductive`: the types, the constructors `T.cᵢ`, the
-eliminators `rec` and `casesOn` (as Lean leaves them) and our `fold`, `corec`, `dtor`, and the
-user-facing lemmas (`T.cᵢ_inj`, `T.cᵢ_ne_cⱼ`, `T.rec_cᵢ`, `T.fold_cᵢ`, `T.casesOn_cᵢ`,
-`T.dtor_cᵢ`, `T.ctor_cᵢ`, `dtor_corec`, `corec_eq`, `corec_unique`, `fold_eq`, `fold_unique`,
-`ctor_dtor`, `dtor_ctor`, `ctor_injective`, and those of `T.F`). -/
+inductive types generated here get from it), the generated declarations with generic names:
+`ctor`, `bisim`, the functor `F`, `contract` (and the same per type of a block), the
+index `Blk.Ix` of a block, and the open type `T.Open` of a mixed block. Everything under
+`T.Colean` is protected too (`isProtectedGen`). Not protected, as with `inductive`: the types,
+the constructors `T.cᵢ`, the eliminators `rec` and `casesOn` (as Lean leaves them) and our
+`fold`, `corec`, `dtor`, and the user-facing lemmas (`T.cᵢ_inj`, `T.cᵢ_ne_cⱼ`, `T.rec_cᵢ`,
+`T.fold_cᵢ`, `T.casesOn_cᵢ`, `T.dtor_cᵢ`, `T.ctor_cᵢ`, `dtor_corec`, `corec_eq`, `corec_unique`,
+`fold_ctor`, `fold_eq`, `fold_unique`, `ctor_dtor`, `dtor_ctor`, `ctor_injective`, and those of `T.F`). -/
 def protectedGen : List String :=
-  ["ctor", "bisim", "F", "contract",
-    "Shape", "B", "Ix", "ShapeP", "idx", "sig", "St",
-    "toC", "ofC", "ofC_toC", "toC_ofC", "ofC_map", "rel_ofC",
-    "recPos", "recAux", "recPos_ctor", "fold_ctor", "casesOnAux", "casesOn_ctor",
-    "Open"]
+  ["ctor", "bisim", "F", "contract", "Ix", "Open"]
 
 /-- Is `n` a generated declaration of the type (block, open type) `owner` to protect: `owner.s`
 with `s` in `protectedGen` (or `s'`, the name `owner.s` takes when `s` is the type's own name,
-`Ctx.gen`), or under `owner.Poly`? -/
+`genName`), or under `owner.Colean`? -/
 def isProtectedGen (owner n : Name) : Bool :=
   if !owner.isPrefixOf n || owner == n then false else
+  if coleanNs owner |>.isPrefixOf n then true else
   match (n.replacePrefix owner .anonymous).components.map (·.toString (escape := false)) with
   | [s] =>
     let last := match owner with | .str _ l => l | _ => ""
     protectedGen.contains s || (s == last ++ "'" && protectedGen.contains last)
-  | "Poly" :: _ :: _ => true
   | _ => false
 
 /-- Protect the generated declarations of the types (blocks, open types) `owners` that
@@ -336,11 +345,9 @@ def protectGenerated (owners user : Array Name) : CoreM Unit := do
   let mut ns : Array Name := #[]
   for o in owners do
     for s in protectedGen do
-      ns := ns.push (.str o s)
-      if let .str _ l := o then
-        if l == s then ns := ns.push (.str o (s ++ "'"))
+      ns := ns.push (.str o s) |>.push (genName o s)
   ns := env.constants.foldStage2 (fun ns n _ =>
-    if owners.any fun o => (o ++ `Poly).isPrefixOf n then ns.push n else ns) ns
+    if owners.any fun o => (coleanNs o).isPrefixOf n then ns.push n else ns) ns
   for n in ns do
     if env.contains n && !user.contains n && owners.any (isProtectedGen · n) then
       modifyEnv (addProtected · n)

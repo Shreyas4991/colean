@@ -16,9 +16,9 @@ codatatype Rose (α : Type u)
 
 #check @Rose.node
 #check @Rose.F.node
-#check @Rose.Shape.node
-#check @Rose.B.node_children
-#check @Rose.F.map_node
+#check @Rose.Colean.Shape.node
+#check @Rose.Colean.B.node_children
+#check @Rose.F.fmap_node
 #check @Rose.F.Rel.node
 #check @Rose.dtor
 #check @Rose.casesOn
@@ -40,7 +40,7 @@ example {α : Type u} (a : α) (n k : Nat) : Rose.rep a n = Rose.corec (natCoalg
   refine Rose.bisim (fun x y => x = Rose.rep a n ∧ ∃ k, y = Rose.corec (natCoalg a n) k) ?_
     ⟨rfl, k, rfl⟩
   rintro _ _ ⟨rfl, k, rfl⟩
-  simp only [Rose.rep, Rose.dtor_corec, natCoalg, Rose.F.map_node, Codata.Occ.map_list,
+  simp only [Rose.rep, Rose.dtor_corec, natCoalg, Rose.F.fmap_node, Codata.Occ.map_list,
     List.map_ofFn]
   exact .node _ _ _ (Codata.Occ.rel_intro _ _ _ _ _ fun _ => ⟨rfl, _, rfl⟩)
 
@@ -54,7 +54,7 @@ codatatype Rose₂ (α : Type u)
   | node (a : α) (children : List (Option (Rose₂ α)))
 
 #check @Rose₂.node
-#check @Rose₂.B.node_children
+#check @Rose₂.Colean.B.node_children
 #check @Rose₂.F.Rel.node
 
 def Rose₂.rep {α : Type u} (a : α) : Rose₂ α :=
@@ -70,7 +70,7 @@ codatatype Stream? (α : Type u)
   | cons (a : α) (tail : Option (Stream? α))
 
 #check @Stream?.cons
-#check @Stream?.B.cons_tail
+#check @Stream?.Colean.B.cons_tail
 
 def Stream?.const {α : Type u} (a : α) : Stream? α :=
   Stream?.corec (S := Unit) (fun _ => .cons a (some ())) ()

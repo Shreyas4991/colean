@@ -23,7 +23,7 @@ Declarations proposed for generation are written here by hand under their propos
 they are generated, those declarations must go.
 
 Status: items 1, 2 and 7 of the table at the end are implemented (`RelHelp.lean`, whose
-proposals they are): the one-step lemmas of `F.Rel` (but for `T.Poly.rel_cᵢ_cⱼ`),
+proposals they are): the one-step lemmas of `F.Rel` (but for `T.Colean.Poly.rel_cᵢ_cⱼ`),
 `T.dtor_injective`, `T.dtor_inj` and `T.dtor_eq_cᵢ_iff`, and `T.coinduct`, `T.F.Rel.mono`,
 `T.F.rel_refl`, generated under these names; the hand-written `DList.dtor_eq_cons_iff` of
 section 13 is gone.
@@ -265,7 +265,8 @@ example (l : DList Nat) : True := by
 
 example (s : CoList Nat) : True := by
   obtain ⟨raw, wf⟩ := s
-  -- `raw : Raw (CoList.sig ℕ).Idx (CoList.sig ℕ).Lbl` and `wf : IsWf () raw`: the encoding.
+  -- `raw : Raw (CoList.Colean.sig ℕ).Idx (CoList.Colean.sig ℕ).Lbl` and `wf : IsWf () raw`: the
+  -- encoding.
   trivial
 
 -- `match` on a value: the constructor is unfolded down to the encoding, and the pattern is
@@ -286,7 +287,7 @@ def DList.isNil {α : Type u} (l : DList α) : Bool :=
 example (a b : Nat) (l m : DList Nat) (h : DList.cons a l = DList.cons b m) : a = b := by
   have h' := h
   injection h' with h''
-  -- `h'' : Signature.encode () (… (DList.toC (DList.F.cons a l))) = Signature.encode () (…)`.
+  -- `h'' : Signature.encode () (… (DList.Colean.toC (DList.F.cons a l))) = Signature.encode () …`.
   exact ((DList.cons_inj _ _ _ _).mp h).1
 
 -- `cases` and `contradiction` on an equation of constructors fail; `simp` succeeds.
@@ -503,7 +504,7 @@ to equality (`coinduct`, with `F.Rel.mono` and `F.rel_refl`). -/
 
 /-! ### 20. What is missing
 
-* `T.Poly.rel_cᵢ_cⱼ`, the relation of a declared type as a leaf on its constructors
+* `T.Colean.Poly.rel_cᵢ_cⱼ`, the relation of a declared type as a leaf on its constructors
   (`RelHelp.lean`, section 11); the rest of `RelHelp.lean` is implemented (section 19).
 * No `@[ext]` lemma for `codatatype`: `ext` applies extensionality lemmas again to the new goals, so
   a lemma whose premise is an equation of the same type unfolds a stream a hundred levels deep
@@ -647,7 +648,7 @@ end Costructure
 
 | # | Missing | Importance | Effort | Blocker |
 |---|---|---|---|---|
-| 1 | One step of `F.Rel` by `simp`: `T.F.rel_cᵢ_cⱼ`, `Occ.rel_*` (done); `T.Poly.rel_cᵢ_cⱼ` (`RelHelp.lean`, not yet) | high | low | none |
+| 1 | One step of `F.Rel` by `simp`: `T.F.rel_cᵢ_cⱼ`, `Occ.rel_*` (done); `T.Colean.Poly.rel_cᵢ_cⱼ` (`RelHelp.lean`, not yet) | high | low | none |
 | 2 | `T.dtor_injective`, `T.dtor_inj`, `T.dtor_eq_cᵢ_iff` (done) | high | low | none |
 | 3 | Projections for a type with one constructor, with `cᵢ_head_tail` eta, `ext_iff`, coinduction and corecursion by the projections (Part VII) | high (planned) | low to medium | none; names may collide with generated ones, as constructors already can |
 | 4 | `SizeOf` instance and `T.cᵢ.sizeOf_spec` for `datatype`, so that `termination_by` works | high for `datatype` | medium (nested arguments need a rule per leaf) | none |

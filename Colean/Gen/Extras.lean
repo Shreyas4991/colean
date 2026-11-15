@@ -19,12 +19,12 @@ import Colean.Gen.Framework
   `T n × Nat`), or on the value through a sum (`T n ⊕ T n`, `oneIdx`), the hypothesis is by
   `PolyIso.Mem` at that index, the hypothesis at the positions brought to it by these cases
   (`bridgeIH`). It is the `induction` eliminator;
-* `T.recPos`, the same with the hypothesis of a nested argument at every position of its
+* `T.Colean.recPos`, the same with the hypothesis of a nested argument at every position of its
   structure, `∀ q, motive _ ((toC o c).2 q)`: it is `Signature.rec_of` at the packed index, the
-  minor premises assembled by cases on `F T i` (`T.recAux`), with its computation rule
-  `T.recPos_ctor` (propositional: the generic recursor is by well-founded recursion). `T.rec` is
-  `T.recPos` with the hypotheses turned into membership by `PolyIso.memRec`, and through `List`,
-  `Option` and `Array` into theirs by `PolyIso.mem_list`, … (`memIffIH`).
+  minor premises assembled by cases on `F T i` (`T.Colean.recAux`), with its computation rule
+  `T.Colean.recPos_ctor` (propositional: the generic recursor is by well-founded recursion). `T.rec`
+  is `T.Colean.recPos` with the hypotheses turned into membership by `PolyIso.memRec`, and through
+  `List`, `Option` and `Array` into theirs by `PolyIso.mem_list`, … (`memIffIH`).
 
 The minor premises are stated with the constructors `T.cᵢ`, so this runs after them.
 -/
@@ -542,12 +542,12 @@ def memValEq (nm : NestMem) (y : Expr) (recAt : Array Expr → Expr → TermElab
 
 /-! ### The minor premises -/
 
-/-- The induction hypotheses of a constructor `c` with arguments `ys` (as those of `T.c`), for
-the motive given by `app idx x`, the motive at the family-level index arguments `idx` and `x`: one
-per recursive argument, `x_ih`. A nested argument's is by membership, or with `pos` at the
-positions of its structure (`T.recPos`). With `split`, in a block, a hypothesis by `IPolyIso.Mem`
-is one per type of the block in the argument's type (`x_ih_Tₘ` when there are several), for the
-recursors per type. -/
+/-- The induction hypotheses of a constructor `c` with arguments `ys` (as those of `T.c`), for the
+motive given by `app idx x`, the motive at the family-level index arguments `idx` and `x`: one per
+recursive argument, `x_ih`. A nested argument's is by membership, or with `pos` at the positions of
+its structure (`T.Colean.recPos`). With `split`, in a block, a hypothesis by `IPolyIso.Mem` is one
+per type of the block in the argument's type (`x_ih_Tₘ` when there are several), for the recursors
+per type. -/
 def recIHsWith (app : Array Expr → Expr → TermElabM Expr) (c : Ctor) (ys : Array Expr)
     (σ : Expr → Expr) (pos split : Bool := false) : TermElabM (Array (Name × Expr)) := do
   let L ← ctx.tLvl
@@ -585,13 +585,14 @@ def recMinorTyWith (app : Array Expr → Expr → TermElabM Expr) (c : Ctor)
   withLocalDeclsDND ihs fun ihs => do
     mkForallFVars (ys ++ ihs) (← app (c.idx.map σ) (← ctx.tCtorApp c ys))
 
-/-- The minor premise of `T.rec` for `c` (of `T.recPos` with `pos`):
+/-- The minor premise of `T.rec` for `c` (of `T.Colean.recPos` with `pos`):
 `∀ args ihs, motive idx (T.c args)`. -/
 def recMinorTy (motive : Expr) (c : Ctor) (pos : Bool := false) : TermElabM Expr :=
   ctx.recMinorTyWith (motiveApp motive) c pos
 
-/-- The minor premises of `T.recPos` from those of `T.rec`, `minors`: each is the minor premise
-of `T.rec` with the hypotheses of the nested arguments turned into membership (`memOfPos`). -/
+/-- The minor premises of `T.Colean.recPos` from those of `T.rec`, `minors`: each is the minor
+premise of `T.rec` with the hypotheses of the nested arguments turned into membership (`memOfPos`).
+-/
 def posMinors (motive : Expr) (minors : Array Expr) : TermElabM (Array Expr) := do
   let app := motiveApp motive
   ctx.ctors.zipIdx.mapM fun (c, k) => do
@@ -653,7 +654,7 @@ def withTypeMotive (m : Nat) (v : Level) (k : Expr → TermElabM α) (name : Nam
     withLocalDeclD `t (← ctx.tyAt m js) fun t => do mkForallFVars (js.push t) (mkSort v)
   withLocalDecl (← ctx.userName name) .implicit mTy k
 
-/-- `∀ b, motive (σ.idx b) ((toC y).child b)`: the induction hypotheses of `T.recAux` at `y`,
+/-- `∀ b, motive (σ.idx b) ((toC y).child b)`: the induction hypotheses of `T.Colean.recAux` at `y`,
 indexed by the positions of `toC y`. -/
 def recAuxIH (motive : Expr) (idx : Array Expr) (y : Expr) : TermElabM Expr := do
   let L ← ctx.tLvl
@@ -667,7 +668,7 @@ def recAuxIH (motive : Expr) (idx : Array Expr) (y : Expr) : TermElabM Expr := d
     let child := mkApp5 (← ctx.sigConst ``Codata.Signature.Obj.child [L]) σE fam pI tc b
     mkForallFVars #[b] (mkAppN motive ((← ctx.projs i).push child))
 
-/-- `T.recAux`, `T.recPos`, `T.recPos_ctor` and `T.rec`. -/
+/-- `T.Colean.recAux`, `T.Colean.recPos`, `T.Colean.recPos_ctor` and `T.rec`. -/
 def genRec : TermElabM Unit := do
   let L ← ctx.tLvl
   let T ← ctx.tFam
@@ -676,7 +677,7 @@ def genRec : TermElabM Unit := do
   let fresh := ctx.motiveLevels
   let v := Level.param fresh[0]!
   ctx.withMotive v fun motive => do
-  -- `T.recPos` and its parts, with the hypotheses at the positions.
+  -- `T.Colean.recPos` and its parts, with the hypotheses at the positions.
   ctx.withMinors (·.fname) (ctx.recMinorTy motive (pos := true)) fun minors => do
   let ctorAt (idx : Array Expr) (y : Expr) : MetaM Expr := do
     ctx.genAt ctx.ctor [] (idx ++ #[y])

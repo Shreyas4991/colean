@@ -1034,10 +1034,10 @@ end ExistsMem
 
 `Rel o o' R x y` says that the layers of `x` and `y` have one shape and related contents. Through
 `ofC` the two values are substituted away (`rel_iff_ofC`), and every combinator computes by
-definition: `simp` takes the relation through products, sums, functions and composites, down to
-the leaves, whose relations are the library's (`List.Forall₂`, `Option.Rel`), with the generated
-`T.Poly.rel_cᵢ_cⱼ` for a declared type. A map on either side moves into the relation, and a value
-related to itself is a relation at its members (`rel_self`). -/
+definition: `simp` takes the relation through products, sums, functions and composites, down to the
+leaves, whose relations are the library's (`List.Forall₂`, `Option.Rel`), with the generated
+`T.Colean.Poly.rel_cᵢ_cⱼ` for a declared type. A map on either side moves into the relation, and a
+value related to itself is a relation at its members (`rel_self`). -/
 
 section RelGeneric
 

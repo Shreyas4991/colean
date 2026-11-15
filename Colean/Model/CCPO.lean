@@ -117,7 +117,7 @@ namespace Contract
 variable (σ) in
 /-- A presentation of the functor `F` of a contract as the container functor of the signature
 `σ`: an isomorphism `F X i ≃ σ.Obj X i`, natural in the family `X`. The generated types have one,
-`T.toC` and `T.ofC` with their laws. -/
+`T.Colean.toC` and `T.Colean.ofC` with their laws. -/
 structure Container (K : Contract T F) where
   toC {X : σ.I → Type u} {i : σ.I} : F X i → σ.Obj X i
   ofC {X : σ.I → Type u} {i : σ.I} : σ.Obj X i → F X i
@@ -380,7 +380,7 @@ theorem ccpo_rel_iff {i : σ.I} {x y : T i} :
   K.approx_iff e
 
 /-- The order of the `CCPO`, unfolded once, with a lifting `Rel'` equivalent to the canonical one
-(for the generated types, the inductive `T.F.Rel`, by `T.F.rel_map` and `T.rel_ofC`). -/
+(for the generated types, the inductive `T.F.Rel`, by `T.F.rel_fmap` and `T.Colean.rel_ofC`). -/
 theorem ccpo_rel_iff_of {Rel' : (∀ j, T j → T j → Prop) → ∀ {i}, F T i → F T i → Prop}
     (rel_map : ∀ (R : ∀ j, T j → T j → Prop) {i}
       (z : F (fun j => {p : T j × T j // R j p.1 p.2}) i),

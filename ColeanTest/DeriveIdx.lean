@@ -17,7 +17,7 @@ datatype Vec (α : Type u) : Nat → Type u
   | nil : Vec α 0
   | cons {n : Nat} (a : α) (t : Vec α n) : Vec α (n + 1)
 
-/-- info: Vec.Poly.instPolyIso 3 -/
+/-- info: Vec.Colean.Poly.instPolyIso 3 -/
 #guard_msgs in
 #synth PolyIso (fun X : Type => Vec X 3) _ _
 
@@ -85,8 +85,8 @@ codatatype ThroughLRose
 
 /-! ### Types of blocks
 
-The presentation is per block (`Ping_Pong.Poly.*`, over the block's index without the
-parameters that vary, `Ping_Pong.Poly.Ix`), the instances per type (`Ping.Poly.*`). -/
+The presentation is per block (`Ping_Pong.Colean.Poly.*`, over the block's index without the
+parameters that vary, `Ping_Pong.Colean.Poly.Ix`), the instances per type (`Ping.Colean.Poly.*`). -/
 
 mutual
 datatype Ping (α : Type u)
@@ -96,7 +96,7 @@ datatype Pong (α : Type u)
   | cons (a : α) (b : Ping α)
 end
 
-/-- info: Ping.Poly.instPolyIsoEta -/
+/-- info: Ping.Colean.Poly.instPolyIsoEta -/
 #guard_msgs in
 #synth PolyIso Ping.{0} _ _
 #synth PolyIso (fun X : Type => Pong (Option X)) _ _
@@ -126,7 +126,7 @@ datatype Od (α : Type u) : Nat → Type u
   | succ {n : Nat} (a : α) (e : Ev α n) : Od α (n + 1)
 end
 
-/-- info: Od.Poly.instPolyIso 3 -/
+/-- info: Od.Colean.Poly.instPolyIso 3 -/
 #guard_msgs in
 #synth PolyIso (fun X : Type => Od X 3) _ _
 
@@ -177,7 +177,7 @@ def CoThrough.full : CoThrough :=
 theorem CoThrough.dtor_full :
     CoThrough.full.dtor = .mk (Occ.map (Occ.ofIso (fun X => CoVec X 2))
       (Occ.ofIso (fun X => CoVec X 2)) (fun _ => CoThrough.full) (.cons () (.cons () .nil))) := by
-  rw [CoThrough.full, CoThrough.dtor_corec, CoThrough.F.map_mk]
+  rw [CoThrough.full, CoThrough.dtor_corec, CoThrough.F.fmap_mk]
 
 /-- A tree through a block, by `corec`. -/
 def ThroughCPong.spine : ThroughCPong :=
@@ -188,27 +188,29 @@ def ThroughCPong.spine : ThroughCPong :=
 abbrev idH : Type → Type := fun X => X
 
 example {X Y : Type} (f : X → Y) {n : Nat} (a : Vec X n) :
-    Vec.Poly.toL idH (((Vec.Poly.fix idH X).map (Vec.Poly.fix idH Y) f a).dtor) =
-      ⟨(Vec.Poly.toL idH a.dtor).1, fun q => f ((Vec.Poly.toL idH a.dtor).2.1 q),
-        fun b => (Vec.Poly.fix idH X).map (Vec.Poly.fix idH Y) f
-          ((Vec.Poly.toL idH a.dtor).2.2 b)⟩ :=
-  (Vec.Poly.fix idH X).d_map (Vec.Poly.fix idH Y) f a
+    Vec.Colean.Poly.toL idH
+        (((Vec.Colean.Poly.fix idH X).map (Vec.Colean.Poly.fix idH Y) f a).dtor) =
+      ⟨(Vec.Colean.Poly.toL idH a.dtor).1, fun q => f ((Vec.Colean.Poly.toL idH a.dtor).2.1 q),
+        fun b => (Vec.Colean.Poly.fix idH X).map (Vec.Colean.Poly.fix idH Y) f
+          ((Vec.Colean.Poly.toL idH a.dtor).2.2 b)⟩ :=
+  (Vec.Colean.Poly.fix idH X).d_map (Vec.Colean.Poly.fix idH Y) f a
 
 -- In a block, at the index of a type, with the block's `dtor` (`a.dtor` is `CPong.dtor`, into the
 -- layer per type).
 example {X Y : Type} (f : X → Y) (a : CPong X) :
-    CPing_CPong.Poly.toL idH (i := .CPong) (CPing_CPong.dtor
-      ((CPing_CPong.Poly.fix idH X).map (CPing_CPong.Poly.fix idH Y) f (i := .CPong) a)) =
-      ⟨(CPing_CPong.Poly.toL idH (i := .CPong) (CPing_CPong.dtor a)).1,
-        fun q => f ((CPing_CPong.Poly.toL idH (i := .CPong) (CPing_CPong.dtor a)).2.1 q),
-        fun b => (CPing_CPong.Poly.fix idH X).map (CPing_CPong.Poly.fix idH Y) f
-          ((CPing_CPong.Poly.toL idH (i := .CPong) (CPing_CPong.dtor a)).2.2 b)⟩ :=
-  (CPing_CPong.Poly.fix idH X).d_map (CPing_CPong.Poly.fix idH Y) f (i := .CPong) a
+    CPing_CPong.Colean.Poly.toL idH (i := .CPong) (CPing_CPong.dtor
+      ((CPing_CPong.Colean.Poly.fix idH X).map (CPing_CPong.Colean.Poly.fix idH Y) f
+        (i := .CPong) a)) =
+      ⟨(CPing_CPong.Colean.Poly.toL idH (i := .CPong) (CPing_CPong.dtor a)).1,
+        fun q => f ((CPing_CPong.Colean.Poly.toL idH (i := .CPong) (CPing_CPong.dtor a)).2.1 q),
+        fun b => (CPing_CPong.Colean.Poly.fix idH X).map (CPing_CPong.Colean.Poly.fix idH Y) f
+          ((CPing_CPong.Colean.Poly.toL idH (i := .CPong) (CPing_CPong.dtor a)).2.2 b)⟩ :=
+  (CPing_CPong.Colean.Poly.fix idH X).d_map (CPing_CPong.Colean.Poly.fix idH Y) f (i := .CPong) a
 
 -- The map of the instance is the one of the fixpoint.
 example {X Y : Type} (f : X → Y) {n : Nat} (a : Vec X n) :
     (inferInstance : PolyMap (fun X : Type => Vec X n) (fun X : Type => Vec X n)).map f a =
-      (Vec.Poly.fix idH X).map (Vec.Poly.fix idH Y) f a :=
+      (Vec.Colean.Poly.fix idH X).map (Vec.Colean.Poly.fix idH Y) f a :=
   rfl
 
 end
@@ -229,7 +231,7 @@ end
 
 noncomputable example : QB Nat := .mk (.mk 0 (.nil, 1))
 
-/-- info: QB.Poly.instPolyIsoEta -/
+/-- info: QB.Colean.Poly.instPolyIsoEta -/
 #guard_msgs in
 #synth PolyIso QB.{0} _ _
 
@@ -255,7 +257,7 @@ end
 
 noncomputable example : RB Nat := .mk (.mk 0 [])
 
-/-- info: RA.Poly.instPolyIsoEta -/
+/-- info: RA.Colean.Poly.instPolyIsoEta -/
 #guard_msgs in
 #synth PolyIso RA.{0} _ _
 

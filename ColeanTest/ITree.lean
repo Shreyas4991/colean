@@ -21,7 +21,7 @@ inductive ITree.FF (E : Type → Type) (R : Type)
 #check @ITree.Vis
 #check @ITree.corec
 #check ITree.bisim
-#check @ITree.B.Vis_k
+#check @ITree.Colean.B.Vis_k
 #check @ITree.F.Rel.Vis
 #check @ITree.bisim
 
@@ -44,10 +44,10 @@ def ITree.bindStep (f : R → ITree E S) :
     ITree E R ⊕ ITree E S → ITree.F E S (ITree E R ⊕ ITree E S)
   | .inl t =>
     match t.dtor with
-    | .Ret r => (f r).dtor.map .inr
+    | .Ret r => (f r).dtor.fmap .inr
     | .Tau u => .Tau (.inl u)
     | .Vis e k => .Vis e fun a => .inl (k a)
-  | .inr u => u.dtor.map .inr
+  | .inr u => u.dtor.fmap .inr
 
 /-- Monadic bind, by corecursion: run `t`, then run `f r` on its result. -/
 def ITree.bind (t : ITree E R) (f : R → ITree E S) : ITree E S :=
@@ -58,9 +58,9 @@ theorem ITree.corec_bindStep_inr (f : R → ITree E S) (u : ITree E S) :
     ITree.corec (ITree.bindStep f) (.inr u) = u := by
   refine ITree.bisim (fun x y => x = ITree.corec (ITree.bindStep f) (.inr y)) ?_ rfl
   rintro _ y rfl
-  rw [ITree.dtor_corec, ITree.bindStep, ← ITree.F.map_comp]
-  conv => rhs; rw [← ITree.F.map_id y.dtor]
-  exact ITree.F.rel_map _ _ _ _ fun _ => rfl
+  rw [ITree.dtor_corec, ITree.bindStep, ← ITree.F.fmap_comp]
+  conv => rhs; rw [← ITree.F.fmap_id y.dtor]
+  exact ITree.F.rel_fmap _ _ _ _ fun _ => rfl
 
 theorem ITree.dtor_bind (t : ITree E R) (f : R → ITree E S) :
     (ITree.bind t f).dtor = match t.dtor with
@@ -69,8 +69,8 @@ theorem ITree.dtor_bind (t : ITree E R) (f : R → ITree E S) :
       | .Vis e k => .Vis e fun a => ITree.bind (k a) f := by
   rw [ITree.bind, ITree.dtor_corec, ITree.bindStep]
   split
-  · rw [← ITree.F.map_comp]
-    conv => rhs; rw [← ITree.F.map_id (f _).dtor]
+  · rw [← ITree.F.fmap_comp]
+    conv => rhs; rw [← ITree.F.fmap_id (f _).dtor]
     congr 1
     funext u
     exact ITree.corec_bindStep_inr f u
@@ -111,13 +111,13 @@ theorem ITree.bind_assoc {T : Type} (t : ITree E R) (f : R → ITree E S) (g : S
     x = ITree.bind (ITree.bind t f) g ∧ y = ITree.bind t fun r => ITree.bind (f r) g) ?_
     (.inr ⟨t, rfl, rfl⟩)
   rintro x y (rfl | ⟨t, rfl, rfl⟩)
-  · rw [← ITree.F.map_id x.dtor]
-    exact ITree.F.rel_map _ _ _ _ fun _ => Or.inl rfl
+  · rw [← ITree.F.fmap_id x.dtor]
+    exact ITree.F.rel_fmap _ _ _ _ fun _ => Or.inl rfl
   rw [ITree.dtor_bind (ITree.bind t f), ITree.dtor_bind t, ITree.dtor_bind t]
   rcases t.dtor with r | u | ⟨e, k⟩
   · dsimp only
-    rw [← ITree.dtor_bind, ← ITree.F.map_id (ITree.bind (f r) g).dtor]
-    exact ITree.F.rel_map _ _ _ _ fun _ => Or.inl rfl
+    rw [← ITree.dtor_bind, ← ITree.F.fmap_id (ITree.bind (f r) g).dtor]
+    exact ITree.F.rel_fmap _ _ _ _ fun _ => Or.inl rfl
   · exact .Tau _ _ (.inr ⟨u, rfl, rfl⟩)
   · exact .Vis e _ _ fun a => .inr ⟨k a, rfl, rfl⟩
 

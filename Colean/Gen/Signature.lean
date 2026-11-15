@@ -7,14 +7,14 @@ import Colean.Model.Intype
 *Spec.* Input: the context. Output: the fixed data format of `Model/Cotype.lean` for the
 declaration:
 
-* `T.Shape (params) : ∀ idx, Type _`, one constructor per constructor of `T` with its data
+* `T.Colean.Shape (params) : ∀ idx, Type _`, one constructor per constructor of `T` with its data
   arguments and the shape `x_s` of each nested argument `x`;
-* `T.B (params) : ∀ idx, T.Shape params idx → Type _`, the positions: one constructor `c_x` per
-  recursive argument `x`, with the data and shapes implicit, and the telescope of `x` (under a
-  telescope) or a position `q` of its structure (nested);
-* with indices, `T.idx`, the index of a position, by cases; with several, `T.Ix`, the packed
-  index type, and `T.ShapeP`, the shapes on it;
-* `T.sig : Codata.Signature`, all of it bundled.
+* `T.Colean.B (params) : ∀ idx, T.Colean.Shape params idx → Type _`, the positions: one constructor
+  `c_x` per recursive argument `x`, with the data and shapes implicit, and the telescope of `x`
+  (under a telescope) or a position `q` of its structure (nested);
+* with indices, `T.Colean.idx`, the index of a position, by cases; with several, `T.Colean.Ix`, the
+  packed index type, and `T.Colean.ShapeP`, the shapes on it;
+* `T.Colean.sig : Codata.Signature`, all of it bundled.
 
 It also holds the helpers of the later steps for the model's terms: the packed index type, the
 signature and its universes, and the conversions between curried families (`∀ j₁ j₂, X j₁ j₂`)
@@ -43,15 +43,15 @@ variable (ctx : Ctx)
 
 /-! ### Terms of the model -/
 
-/-- The packed index type as the generated declarations state it: `T.Ix params` for several
+/-- The packed index type as the generated declarations state it: `T.Colean.Ix params` for several
 indices, the index type for one, `Unit` for none. -/
 def ixp : MetaM Expr := do
   if ctx.k ≥ 2 then return mkAppN (← ctx.constWith ctx.Ix []) ctx.params else return ctx.J
 
-/-- `T.sig params`. -/
+/-- `T.Colean.sig params`. -/
 def sigE : MetaM Expr := return mkAppN (← ctx.constWith ctx.sig []) ctx.params
 
-/-- The universes `w, u, v` of `T.sig params : Signature.{w, u, v}`. -/
+/-- The universes `w, u, v` of `T.Colean.sig params : Signature.{w, u, v}`. -/
 def sigLvls : MetaM (Level × Level × Level) := do
   match ← whnfR (← inferType (← ctx.sigE)) with
   | .const _ [w, u, v] => return (w, u, v)
@@ -67,7 +67,8 @@ def sigConst (n : Name) (extra : List Level := []) : MetaM Expr := do
   let (w, u, v) ← ctx.sigLvls
   return .const n ([w, u, v] ++ extra)
 
-/-- `Cotype (T.sig params)`, or `Intype` for `datatype`: the model's family on the packed index. -/
+/-- `Cotype (T.Colean.sig params)`, or `Intype` for `datatype`: the model's family on the packed
+index. -/
 def modelFam : MetaM Expr := do
   return mkApp (← ctx.sigConst (if ctx.co then ``Codata.Signature.Cotype
     else ``Codata.Signature.Intype)) (← ctx.sigE)
@@ -125,23 +126,23 @@ def ofStructure (e : Expr) : MetaM Expr := do
       defined, which is not supported:{indentExpr e}"
   return e
 
-/-- `T.Shape params idx`. -/
+/-- `T.Colean.Shape params idx`. -/
 def shapeAt (idx : Array Expr) : MetaM Expr := do
   ctx.genAt ctx.Shape [] idx
 
-/-- `T.B params idx s`. -/
+/-- `T.Colean.B params idx s`. -/
 def bAt (idx : Array Expr) (s : Expr) : MetaM Expr := do
   ctx.genAt ctx.B [] (idx |>.push s)
 
-/-- `T.idx params idx s b`. -/
+/-- `T.Colean.idx params idx s b`. -/
 def idxAt (idx : Array Expr) (s b : Expr) : MetaM Expr := do
   ctx.genAt ctx.idxN [] (idx ++ #[s, b])
 
-/-- `@T.Shape.c params data… shapes…`. -/
+/-- `@T.Colean.Shape.c params data… shapes…`. -/
 def shapeCtorApp (c : Ctor) (args : Array Expr) : MetaM Expr := do
   ctx.genAt (ctx.shapeCtor c) [] args
 
-/-- `@T.B.c_x params data… shapes… extra…`. -/
+/-- `@T.Colean.B.c_x params data… shapes… extra…`. -/
 def bCtorApp (c : Ctor) (a : ArgInfo) (args : Array Expr) : MetaM Expr := do
   ctx.genAt (ctx.bCtor c a) [] args
 
@@ -170,14 +171,14 @@ def withShapeBinders (c : Ctor) (bi : BinderInfo) (k : Array Expr → TermElabM 
     else k acc
   go 0 #[]
 
-/-- The universe of `T.Shape`. -/
+/-- The universe of `T.Colean.Shape`. -/
 def shapeLevel : TermElabM Level := do
   let lvls ← ctx.ctors.foldlM (init := #[]) fun acc c =>
     ctx.withShapeBinders c .default fun shs => do
       return acc ++ (← (c.dataArgs.map (·.fvar) ++ shs).mapM fun x => do getLevel (← inferType x))
   return resultLevel lvls
 
-/-- `T.Shape`, in the universe `r` (`shapeLevel`). -/
+/-- `T.Colean.Shape`, in the universe `r` (`shapeLevel`). -/
 def genShape (r : Level) : TermElabM Unit := do
   let ty ← mkForallFVars (ctx.params ++ ctx.idx) (mkSort r.succ)
   withLocalDeclD `Shape ty fun Sv => do
@@ -202,7 +203,7 @@ def withPosArgs (c : Ctor) (a : ArgInfo) (shs : Array Expr) (k : Array Expr → 
     withLocalDeclD `q (mkApp n.pos shs[m]!).headBeta fun q => k #[q]
   | _ => k #[]
 
-/-- The universe of `T.B`, from the arguments of every position constructor. -/
+/-- The universe of `T.Colean.B`, from the arguments of every position constructor. -/
 def bLevel : TermElabM Level := do
   let lvls ← ctx.ctors.foldlM (init := #[]) fun acc c =>
     ctx.withShapeBinders c .implicit fun shs =>
@@ -211,7 +212,7 @@ def bLevel : TermElabM Level := do
         return acc ++ (← (data ++ shs ++ ys).mapM fun x => do getLevel (← inferType x))
   return resultLevel lvls
 
-/-- `T.B`, in the universe `r` (`bLevel`). -/
+/-- `T.Colean.B`, in the universe `r` (`bLevel`). -/
 def genB (r : Level) : TermElabM Unit := do
   let data (c : Ctor) := c.dataArgs.map (·.fvar)
   let ty ← withLocalDeclD `s (← ctx.shapeAt ctx.idx) fun s =>
@@ -255,7 +256,7 @@ def posIdx (c : Ctor) (a : ArgInfo) (bargs : Array Expr) : MetaM Expr := do
     return (mkApp2 (σ pidx) bargs[nd + m]! extra[0]!).headBeta
   | .data => throwError "internal error: a data argument has no position"
 
-/-- `T.idx`, the packed index of a position, by cases. -/
+/-- `T.Colean.idx`, the packed index of a position, by cases. -/
 def genIdx : TermElabM Unit := do
   let ixp ← ctx.ixp
   withLocalDecl `s .implicit (← ctx.shapeAt ctx.idx) fun s => do
@@ -295,7 +296,7 @@ partial def casesPacked (p : Expr) (n : Nat) (motive : Expr → TermElabM Expr)
       (← casesPacked b (n - 1) (fun b' => motive (mkApp mk b')) fun rest => k (#[a] ++ rest))
   mkAppOptM ``PSigma.casesOn #[α, β, mot, p, minor]
 
-/-- `T.Ix` and `T.ShapeP`, for several indices. -/
+/-- `T.Colean.Ix` and `T.Colean.ShapeP`, for several indices. -/
 def genIx (rShape : Level) : TermElabM Unit := do
   let ty ← mkForallFVars ctx.params (mkSort ctx.Jlvl.succ)
   let value ← mkLambdaFVars ctx.params ctx.J
@@ -306,7 +307,7 @@ def genIx (rShape : Level) : TermElabM Unit := do
     let value ← mkLambdaFVars (ctx.params.push p) value
     addDef ctx.ShapeP (← ctx.levelParamsOf [] #[ty, value]) ty value ctx.ref
 
-/-- `T.sig`. With several indices, its positions and their index go by cases on the packed
+/-- `T.Colean.sig`. With several indices, its positions and their index go by cases on the packed
 index (`casesPacked`). -/
 def genSig (rShape rB : Level) : TermElabM Unit := do
   let ixp ← ctx.ixp
@@ -315,7 +316,7 @@ def genSig (rShape rB : Level) : TermElabM Unit := do
     | 1 => ctx.shapeAt #[]
     | _ => pure (mkAppN (← ctx.constWith ctx.ShapeP []) ctx.params)
   let shapeOf (p : Expr) := (mkApp shapeFn p).headBeta
-  -- `fun s => T.B params idx s`, at the components of `p`.
+  -- `fun s => T.Colean.B params idx s`, at the components of `p`.
   let bAt' (p : Expr) : TermElabM Expr :=
     casesPacked p ctx.k (fun p => do mkArrow (shapeOf p) (mkSort rB.succ)) fun is => do
       withLocalDeclD `s (← ctx.shapeAt is) fun s => do mkLambdaFVars #[s] (← ctx.bAt is s)
@@ -347,13 +348,13 @@ def modelLevelAt (rShape rB : Level) : Level :=
   (mkLevelMax' (mkLevelMax' ctx.Jlvl rShape) rB).normalize
 
 /-- The universe `L` of the types, `Type L`, before anything is declared: the model's (`tLvl`,
-once `T.sig` is declared). -/
+once `T.Colean.sig` is declared). -/
 def modelLevel : TermElabM Level := do
   return ctx.modelLevelAt (← ctx.shapeLevel) (← ctx.bLevel)
 
-/-- Step 2, the signature. The model's universe, `tLvl` once `T.sig` is declared, must be the
+/-- Step 2, the signature. The model's universe, `tLvl` once `T.Colean.sig` is declared, must be the
 one the constructors fixed, if they did: checked before the signature is declared. What is
-declared before it (`T.F`, `T.F.map`, and for `codatatype` `T.F.Rel`) is rolled back with the rest
+declared before it (`T.F`, `T.F.fmap`, and for `codatatype` `T.F.Rel`) is rolled back with the rest
 when the command fails (`allOrNothing`). -/
 def genSignature : TermElabM Unit := do
   let rShape ← ctx.shapeLevel

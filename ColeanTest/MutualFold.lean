@@ -3,13 +3,13 @@ import Colean.MutualCmd
 /-! # Test: folding per type in a `datatype` block
 
 Each type of a `mutual` block of `datatype` gets the interface of a single type, with the shape of
-Lean's mutual recursors: a family, an algebra and a morphism per type, and nothing about the
-block's index `Blk.Ix` (`dtor`, `ctor`, Lambek's lemma, `fold`, `fold_ctor`, `fold_eq`,
-`fold_unique`, the rules `fold_cᵢ`, the laws of the layer). The layer of a type at a family per
-type is `Tₘ.F params S₁ … Sₖ idx`, the block's functor at the families packed by cases on
-`Blk.Ix` (`Blk.St`); patterns and dot notation find the block functor's constructors through it.
-The block-level `Blk.fold` takes one family and one algebra over `Blk.Ix`; its rules are
-`Blk.fold_cᵢ`. -/
+Lean's mutual recursors: a family, an algebra and a morphism per type, and nothing about the block's
+index `Blk.Ix` (`dtor`, `ctor`, Lambek's lemma, `fold`, `fold_ctor`, `fold_eq`, `fold_unique`, the
+rules `fold_cᵢ`, the laws of the layer). The layer of a type at a family per type is
+`Tₘ.F params S₁ … Sₖ idx`, the block's functor at the families packed by cases on `Blk.Ix`
+(`Blk.Colean.St`); patterns and dot notation find the block functor's constructors through it. The
+block-level `Blk.fold` takes one family and one algebra over `Blk.Ix`; its rules are `Blk.fold_cᵢ`.
+-/
 
 universe u
 
@@ -48,21 +48,21 @@ info: @Forest.fold_cons : ∀ {α : Type} {S₁ S₂ : Type u_1} (a₁ : Tree.F 
 /--
 info: @Tree.fold_ctor : ∀ {α : Type} {S₁ S₂ : Type u_1} (a₁ : Tree.F α S₁ S₂ → S₁) (a₂ : Forest.F α S₁ S₂ → S₂)
   (y : Tree.F α (Tree α) (Forest α)),
-  Tree.fold a₁ a₂ (Tree.ctor y) = a₁ (Tree.F.map (Tree.fold a₁ a₂) (Forest.fold a₁ a₂) y)
+  Tree.fold a₁ a₂ (Tree.ctor y) = a₁ (Tree.F.fmap (Tree.fold a₁ a₂) (Forest.fold a₁ a₂) y)
 -/
 #guard_msgs in #check @Tree.fold_ctor
 
 /--
 info: @Tree.fold_eq : ∀ {α : Type} {S₁ S₂ : Type u_1} (a₁ : Tree.F α S₁ S₂ → S₁) (a₂ : Forest.F α S₁ S₂ → S₂) (t : Tree α),
-  Tree.fold a₁ a₂ t = a₁ (Tree.F.map (Tree.fold a₁ a₂) (Forest.fold a₁ a₂) t.dtor)
+  Tree.fold a₁ a₂ t = a₁ (Tree.F.fmap (Tree.fold a₁ a₂) (Forest.fold a₁ a₂) t.dtor)
 -/
 #guard_msgs in #check @Tree.fold_eq
 
 /--
 info: @Tree.fold_unique : ∀ {α : Type} {S₁ S₂ : Type u_1} (a₁ : Tree.F α S₁ S₂ → S₁) (a₂ : Forest.F α S₁ S₂ → S₂)
   (h₁ : Tree α → S₁) (h₂ : Forest α → S₂),
-  (∀ (y : Tree.F α (Tree α) (Forest α)), h₁ (Tree.ctor y) = a₁ (Tree.F.map h₁ h₂ y)) →
-    (∀ (y : Forest.F α (Tree α) (Forest α)), h₂ (Forest.ctor y) = a₂ (Forest.F.map h₁ h₂ y)) →
+  (∀ (y : Tree.F α (Tree α) (Forest α)), h₁ (Tree.ctor y) = a₁ (Tree.F.fmap h₁ h₂ y)) →
+    (∀ (y : Forest.F α (Tree α) (Forest α)), h₂ (Forest.ctor y) = a₂ (Forest.F.fmap h₁ h₂ y)) →
       ∀ (t : Tree α), h₁ t = Tree.fold a₁ a₂ t
 -/
 #guard_msgs in #check @Tree.fold_unique
@@ -80,10 +80,10 @@ info: @Tree.fold_unique : ∀ {α : Type} {S₁ S₂ : Type u_1} (a₁ : Tree.F 
 #guard_msgs in #check @Forest.ctor_cons
 
 /--
-info: @Tree.F.map_node : ∀ {α : Type} {X₁ X₂ : Type u_1} {Y₁ Y₂ : Type u_2} (f₁ : X₁ → Y₁) (f₂ : X₂ → Y₂) (a : α)
-  (children : X₂), Tree.F.map f₁ f₂ (Tree_Forest.F.node a children) = Tree_Forest.F.node a (f₂ children)
+info: @Tree.F.fmap_node : ∀ {α : Type} {X₁ X₂ : Type u_1} {Y₁ Y₂ : Type u_2} (f₁ : X₁ → Y₁) (f₂ : X₂ → Y₂) (a : α)
+  (children : X₂), Tree.F.fmap f₁ f₂ (Tree_Forest.F.node a children) = Tree_Forest.F.node a (f₂ children)
 -/
-#guard_msgs in #check @Tree.F.map_node
+#guard_msgs in #check @Tree.F.fmap_node
 
 -- The block-level fold and its rules.
 /--
@@ -136,7 +136,7 @@ example :
 
 -- The same through `fold_eq`, `fold_ctor` and the destructor.
 example {α : Type} (a : α) (cs : Forest α) : (Tree.node a cs).size = cs.size + 1 := by
-  rw [Tree.size, Tree.fold_eq, Tree.dtor_node, Tree.F.map_node]
+  rw [Tree.size, Tree.fold_eq, Tree.dtor_node, Tree.F.fmap_node]
   rfl
 
 /-- The number of nodes, by the recursors per type. -/
@@ -199,8 +199,8 @@ info: @Even.fold_succ : ∀ {S₁ S₂ : ℕ → Type u_1} (a₁ : (i₁ : ℕ) 
 /--
 info: @Odd.fold_unique : ∀ {S₁ S₂ : ℕ → Type u_1} (a₁ : (i₁ : ℕ) → Even.F S₁ S₂ i₁ → S₁ i₁)
   (a₂ : (i₁ : ℕ) → Odd.F S₁ S₂ i₁ → S₂ i₁) (h₁ : (i₁ : ℕ) → Even i₁ → S₁ i₁) (h₂ : (i₁ : ℕ) → Odd i₁ → S₂ i₁),
-  (∀ (i₁ : ℕ) (y : Even.F Even Odd i₁), h₁ i₁ (Even.ctor y) = a₁ i₁ (Even.F.map h₁ h₂ y)) →
-    (∀ (i₁ : ℕ) (y : Odd.F Even Odd i₁), h₂ i₁ (Odd.ctor y) = a₂ i₁ (Odd.F.map h₁ h₂ y)) →
+  (∀ (i₁ : ℕ) (y : Even.F Even Odd i₁), h₁ i₁ (Even.ctor y) = a₁ i₁ (Even.F.fmap h₁ h₂ y)) →
+    (∀ (i₁ : ℕ) (y : Odd.F Even Odd i₁), h₂ i₁ (Odd.ctor y) = a₂ i₁ (Odd.F.fmap h₁ h₂ y)) →
       ∀ {i₁ : ℕ} (t : Odd i₁), h₂ i₁ t = Odd.fold a₁ a₂ t
 -/
 #guard_msgs in #check @Odd.fold_unique

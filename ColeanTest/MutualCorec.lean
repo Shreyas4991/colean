@@ -7,7 +7,7 @@ Lean's mutual recursors: a state, a step, a morphism and a relation per type, an
 the block's index `Blk.Ix` (`ctor`, `dtor`, Lambek's lemma, `corec`, `dtor_corec`, `corec_eq`,
 `corec_unique`, `bisim`, the laws of the layer). The layer of a type at a family per type is
 `Tₘ.F params S₁ … Sₖ idx`, the block's functor at the families packed by cases on `Blk.Ix`
-(`Blk.St`); dot notation finds the block functor's constructors through it. -/
+(`Blk.Colean.St`); dot notation finds the block functor's constructors through it. -/
 
 universe u
 
@@ -34,7 +34,7 @@ info: @Tree.corec : {α : Type} → {S₁ S₂ : Type u_1} → (S₁ → Tree.F 
 
 /--
 info: @Tree.dtor_corec : ∀ {α : Type} {S₁ S₂ : Type u_1} (c₁ : S₁ → Tree.F α S₁ S₂) (c₂ : S₂ → Forest.F α S₁ S₂) (s : S₁),
-  (Tree.corec c₁ c₂ s).dtor = Tree.F.map (Tree.corec c₁ c₂) (Forest.corec c₁ c₂) (c₁ s)
+  (Tree.corec c₁ c₂ s).dtor = Tree.F.fmap (Tree.corec c₁ c₂) (Forest.corec c₁ c₂) (c₁ s)
 -/
 #guard_msgs in #check @Tree.dtor_corec
 
@@ -49,10 +49,10 @@ info: @Tree.bisim : ∀ {α : Type} (R₁ : Tree α → Tree α → Prop) (R₂ 
 #guard_msgs in #check @Tree.dtor
 
 /--
-info: @Tree.F.map_node : ∀ {α : Type} {X₁ X₂ : Type u_1} {Y₁ Y₂ : Type u_2} (f₁ : X₁ → Y₁) (f₂ : X₂ → Y₂) (a : α)
-  (children : X₂), Tree.F.map f₁ f₂ (Tree_Forest.F.node a children) = Tree_Forest.F.node a (f₂ children)
+info: @Tree.F.fmap_node : ∀ {α : Type} {X₁ X₂ : Type u_1} {Y₁ Y₂ : Type u_2} (f₁ : X₁ → Y₁) (f₂ : X₂ → Y₂) (a : α)
+  (children : X₂), Tree.F.fmap f₁ f₂ (Tree_Forest.F.node a children) = Tree_Forest.F.node a (f₂ children)
 -/
-#guard_msgs in #check @Tree.F.map_node
+#guard_msgs in #check @Tree.F.fmap_node
 
 /--
 info: @Forest.dtor_cons : ∀ {α : Type} (t : Tree α) (f : Forest α), (Forest.cons t f).dtor = Tree_Forest.F.cons t f
@@ -104,7 +104,7 @@ def Forest.head? {α : Type} (f : Forest α) : Option (Tree α) :=
 example {α : Type} (a : α) : (Tree.full a).label = a := by simp [Tree.label]
 
 -- The fields are shown as the types they are by definition (`Gen/Pack.lean`), not as the block's
--- packing `Tree_Forest.St (Tree α) (Forest α) .Forest`.
+-- packing `Tree_Forest.Colean.St (Tree α) (Forest α) .Forest`.
 /--
 trace: α : Type
 t : Tree α
@@ -134,10 +134,10 @@ theorem Tree.full'_eq {α : Type} (a : α) : Tree.full' a = Tree.full a := by
     (fun x y => ∃ n, x = Forest.corec (fun n : Nat => .node a (n + 1))
       (fun n : Nat => .cons (n + 1) (n + 2)) n ∧ y = Forest.full a) ?_ ?_ ⟨0, rfl, rfl⟩
   · rintro _ _ ⟨n, rfl, rfl⟩
-    simp only [Tree.dtor_corec, Tree.dtor_full, Tree.F.map_node]
+    simp only [Tree.dtor_corec, Tree.dtor_full, Tree.F.fmap_node]
     exact .node _ _ _ ⟨_, rfl, rfl⟩
   · rintro _ _ ⟨n, rfl, rfl⟩
-    simp only [Forest.dtor_corec, Forest.dtor_full, Forest.F.map_cons]
+    simp only [Forest.dtor_corec, Forest.dtor_full, Forest.F.fmap_cons]
     exact .cons _ _ _ _ ⟨_, rfl, rfl⟩ ⟨_, rfl, rfl⟩
 
 /-! The constructor per type, Lambek's lemma, the unfolding equation and uniqueness, as for a
@@ -163,25 +163,25 @@ info: @Tree.ctor_node : ∀ {α : Type} (a : α) (children : Forest α),
 
 /--
 info: @Tree.corec_eq : ∀ {α : Type} {S₁ S₂ : Type u_1} (c₁ : S₁ → Tree.F α S₁ S₂) (c₂ : S₂ → Forest.F α S₁ S₂) (s : S₁),
-  Tree.corec c₁ c₂ s = Tree.ctor (Tree.F.map (Tree.corec c₁ c₂) (Forest.corec c₁ c₂) (c₁ s))
+  Tree.corec c₁ c₂ s = Tree.ctor (Tree.F.fmap (Tree.corec c₁ c₂) (Forest.corec c₁ c₂) (c₁ s))
 -/
 #guard_msgs in #check @Tree.corec_eq
 
 /--
 info: @Tree.corec_unique : ∀ {α : Type} {S₁ S₂ : Type u_1} (c₁ : S₁ → Tree.F α S₁ S₂) (c₂ : S₂ → Forest.F α S₁ S₂)
   (h₁ : S₁ → Tree α) (h₂ : S₂ → Forest α),
-  (∀ (s : S₁), (h₁ s).dtor = Tree.F.map h₁ h₂ (c₁ s)) →
-    (∀ (s : S₂), (h₂ s).dtor = Forest.F.map h₁ h₂ (c₂ s)) → ∀ (s : S₁), h₁ s = Tree.corec c₁ c₂ s
+  (∀ (s : S₁), (h₁ s).dtor = Tree.F.fmap h₁ h₂ (c₁ s)) →
+    (∀ (s : S₂), (h₂ s).dtor = Forest.F.fmap h₁ h₂ (c₂ s)) → ∀ (s : S₁), h₁ s = Tree.corec c₁ c₂ s
 -/
 #guard_msgs in #check @Tree.corec_unique
 
 /--
-info: @Forest.F.rel_map : ∀ {α : Type} {X₁ X₂ : Type u_1} {Y₁ Y₂ : Type u_2} {Z₁ Z₂ : Type u_3} (R₁ : Y₁ → Z₁ → Prop)
+info: @Forest.F.rel_fmap : ∀ {α : Type} {X₁ X₂ : Type u_1} {Y₁ Y₂ : Type u_2} {Z₁ Z₂ : Type u_3} (R₁ : Y₁ → Z₁ → Prop)
   (R₂ : Y₂ → Z₂ → Prop) (f₁ : X₁ → Y₁) (f₂ : X₂ → Y₂) (g₁ : X₁ → Z₁) (g₂ : X₂ → Z₂) (a : Forest.F α X₁ X₂),
   (∀ (x : X₁), R₁ (f₁ x) (g₁ x)) →
-    (∀ (x : X₂), R₂ (f₂ x) (g₂ x)) → Forest.F.Rel R₁ R₂ (Forest.F.map f₁ f₂ a) (Forest.F.map g₁ g₂ a)
+    (∀ (x : X₂), R₂ (f₂ x) (g₂ x)) → Forest.F.Rel R₁ R₂ (Forest.F.fmap f₁ f₂ a) (Forest.F.fmap g₁ g₂ a)
 -/
-#guard_msgs in #check @Forest.F.rel_map
+#guard_msgs in #check @Forest.F.rel_fmap
 
 -- Round trips through the constructor per type.
 example {α : Type} (t : Tree α) : Tree.ctor t.dtor = t := Tree.ctor_dtor t
@@ -211,16 +211,16 @@ example {α : Type} (a : α) : Tree.full a = Tree.full' a :=
 
 -- The laws of the layer per type.
 example {α : Type} (a : Tree.F α Nat Nat) :
-    Tree.F.Rel (fun m n => m ≤ n) (fun m n => m ≤ n) (Tree.F.map id id a)
-      (Tree.F.map (· + 1) (· + 1) a) :=
-  Tree.F.rel_map _ _ _ _ _ _ a (fun _ => Nat.le_succ _) (fun _ => Nat.le_succ _)
+    Tree.F.Rel (fun m n => m ≤ n) (fun m n => m ≤ n) (Tree.F.fmap id id a)
+      (Tree.F.fmap (· + 1) (· + 1) a) :=
+  Tree.F.rel_fmap _ _ _ _ _ _ a (fun _ => Nat.le_succ _) (fun _ => Nat.le_succ _)
 
-example {α : Type} (a : Forest.F α Nat Nat) : Forest.F.map id id a = a := Forest.F.map_id a
+example {α : Type} (a : Forest.F α Nat Nat) : Forest.F.fmap id id a = a := Forest.F.fmap_id a
 
 example {α : Type} (a : Forest.F α Nat Nat) :
-    Forest.F.map ((· * 2) ∘ (· + 1)) ((· * 2) ∘ (· + 1)) a =
-      Forest.F.map (· * 2) (· * 2) (Forest.F.map (· + 1) (· + 1) a) :=
-  Forest.F.map_comp _ _ _ _ a
+    Forest.F.fmap ((· * 2) ∘ (· + 1)) ((· * 2) ∘ (· + 1)) a =
+      Forest.F.fmap (· * 2) (· * 2) (Forest.F.fmap (· + 1) (· + 1) a) :=
+  Forest.F.fmap_comp _ _ _ _ a
 
 -- The states may live in another universe, the same for all types.
 example {α : Type} (a : α) : Tree α :=
@@ -246,7 +246,7 @@ info: @Even.corec : {S₁ S₂ : ℕ → Type u_1} →
 /--
 info: @Even.dtor_corec : ∀ {S₁ S₂ : ℕ → Type u_1} (c₁ : (i₁ : ℕ) → S₁ i₁ → Even.F S₁ S₂ i₁)
   (c₂ : (i₁ : ℕ) → S₂ i₁ → Odd.F S₁ S₂ i₁) {i₁ : ℕ} (s : S₁ i₁),
-  (Even.corec c₁ c₂ s).dtor = Even.F.map (fun i₁ s => Even.corec c₁ c₂ s) (fun i₁ s => Odd.corec c₁ c₂ s) (c₁ i₁ s)
+  (Even.corec c₁ c₂ s).dtor = Even.F.fmap (fun i₁ s => Even.corec c₁ c₂ s) (fun i₁ s => Odd.corec c₁ c₂ s) (c₁ i₁ s)
 -/
 #guard_msgs in #check @Even.dtor_corec
 
@@ -270,17 +270,17 @@ example (n : Nat) : Even.nat n = Even.corec (S₁ := fun _ => Nat) (S₂ := fun 
       ∃ k, y = Odd.corec (S₁ := fun _ => Nat) (S₂ := fun _ => Nat)
         (fun n k => .Even_succ n (k + 1)) (fun _ k => .Odd_succ (k + 1)) k) ?_ ?_ ⟨rfl, 0, rfl⟩
   · rintro n _ _ ⟨rfl, k, rfl⟩
-    simp only [Even.nat, Even.dtor_corec, Even.F.map_succ]
+    simp only [Even.nat, Even.dtor_corec, Even.F.fmap_succ]
     exact .Even_succ _ _ _ ⟨rfl, _, rfl⟩
   · rintro n _ _ ⟨rfl, k, rfl⟩
-    simp only [Odd.dtor_corec, Odd.F.map_succ]
+    simp only [Odd.dtor_corec, Odd.F.fmap_succ]
     exact .Odd_succ _ _ ⟨rfl, _, rfl⟩
 
 /--
 info: @Even.corec_unique : ∀ {S₁ S₂ : ℕ → Type u_1} (c₁ : (i₁ : ℕ) → S₁ i₁ → Even.F S₁ S₂ i₁)
   (c₂ : (i₁ : ℕ) → S₂ i₁ → Odd.F S₁ S₂ i₁) (h₁ : (i₁ : ℕ) → S₁ i₁ → Even i₁) (h₂ : (i₁ : ℕ) → S₂ i₁ → Odd i₁),
-  (∀ (i₁ : ℕ) (s : S₁ i₁), (h₁ i₁ s).dtor = Even.F.map h₁ h₂ (c₁ i₁ s)) →
-    (∀ (i₁ : ℕ) (s : S₂ i₁), (h₂ i₁ s).dtor = Odd.F.map h₁ h₂ (c₂ i₁ s)) →
+  (∀ (i₁ : ℕ) (s : S₁ i₁), (h₁ i₁ s).dtor = Even.F.fmap h₁ h₂ (c₁ i₁ s)) →
+    (∀ (i₁ : ℕ) (s : S₂ i₁), (h₂ i₁ s).dtor = Odd.F.fmap h₁ h₂ (c₂ i₁ s)) →
       ∀ {i₁ : ℕ} (s : S₁ i₁), h₁ i₁ s = Even.corec c₁ c₂ s
 -/
 #guard_msgs in #check @Even.corec_unique

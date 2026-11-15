@@ -123,7 +123,7 @@ theorem Forest.size_pos {α : Type u} (f : Forest α) (t : Tree α) (h : t ∈ f
   | cons t' f ih => simp
 
 /-! Bisimulation relates the children of two nodes as forests: `Tree.F.Rel` relates them through
-the open forests, and `Tree.F.rel_map` gives it for the images of one layer. -/
+the open forests, and `Tree.F.rel_fmap` gives it for the images of one layer. -/
 
 /-- Relabel every node, with the tree itself as the state. -/
 def Tree.relabel {α : Type u} (h : α → α) : Tree α → Tree α :=
@@ -136,8 +136,8 @@ theorem Tree.relabel_id {α : Type u} (t : Tree α) : Tree.relabel id t = t := b
   have : (match y.dtor with | .node a cs => Tree.F.node (id a) cs) = y.dtor := by
     cases y.dtor; rfl
   rw [this]
-  conv => arg 3; rw [← Tree.F.map_id y.dtor]
-  exact Tree.F.rel_map _ _ _ _ fun _ => rfl
+  conv => arg 3; rw [← Tree.F.fmap_id y.dtor]
+  exact Tree.F.rel_fmap _ _ _ _ fun _ => rfl
 
 end Classic
 
@@ -216,7 +216,7 @@ theorem map_rep {α : Type u} {X Y : Type v} (g : X → Y) (x : X) (n : Nat) :
   | succ n ih => simp [rep, ih]
 
 theorem Tree.dtor_fan (n : Nat) : (Tree.fan n).dtor = .node n (rep (Tree.fan (n + 1)) n) := by
-  rw [Tree.fan, Tree.dtor_corec, Tree.F.map_node, map_rep]
+  rw [Tree.fan, Tree.dtor_corec, Tree.F.fmap_node, map_rep]
   rfl
 
 end Classic
@@ -438,10 +438,10 @@ end Params
 /-! ### 9. `simp` through the nesting
 
 Two kinds of rules let `simp` see through the nesting. The membership rules `Forest.mem_cons`
-compute `x ∈ c` on the constructors of the inner types, through all the runs between. The map
-rules of the open types, `Forest.Open.Poly.map_cons` and the like, compute the map that the rules
-of the outer run apply to their children (`Tree.dtor_corec`, `Tree.fold_node`); they are the
-reason the unfoldings of sections 2 to 7 are a `simp` call. -/
+compute `x ∈ c` on the constructors of the inner types, through all the runs between. The map rules
+of the open types, `Forest.Open.Colean.Poly.map_cons` and the like, compute the map that the rules
+of the outer run apply to their children (`Tree.dtor_corec`, `Tree.fold_node`); they are the reason
+the unfoldings of sections 2 to 7 are a `simp` call. -/
 
 namespace Classic
 
@@ -639,14 +639,16 @@ Each of these either deserves a clear error or should simply work. -/
 
 /-! ### 13. Internal names that show
 
-A constructor named `Open` in an inner run is lost without a word. Its name is that of the open
-type, `Ival.Open`, so the closed constructor is never declared: `Ival.Open` below is a type, the
-recursor and `casesOn` are stated with the open constructor `Ival.Open.Open`, the lemma
-`Ival.mem_Open` is missing, and a linter warns about the name `Ival.Open.Open`, which the user never
-wrote. The command should refuse the name, or pick another one for the open type. -/
+A constructor named `Open` in an inner run was lost without a word: its name is that of the open
+type, `Ival.Open`, so the closed constructor was never declared. The command now refuses the name
+before declaring anything, as it refuses every constructor named like a generated declaration. -/
 
 namespace CtorOpen
 
+/--
+error: constructor `Open` clashes with the generated declaration `MixedTour.CtorOpen.Ival.Open`; rename the constructor
+-/
+#guard_msgs in
 mixed_mutual
 codatatype Tree
   | node (cs : Ival)
@@ -654,9 +656,6 @@ datatype Ival
   | Open (t : Tree)
   | Closed
 end
-
-#check @Ival.Open
-#check @Ival.casesOn
 
 end CtorOpen
 

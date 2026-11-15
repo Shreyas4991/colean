@@ -3,9 +3,9 @@ import Colean.MutualCmd
 /-! # Test: `simp` through the instances of declared types
 
 A type declared with `datatype` or `codatatype` gets, with its instances, `simp` lemmas for the map
-and for membership on each constructor (`T.Poly.map_c`, `T.Poly.mem_c`). So another type's rules,
-which go through the map of the instance, compute on constructors, and the induction hypotheses
-of its recursor, by membership, become hypotheses on the arguments. -/
+and for membership on each constructor (`T.Colean.Poly.map_c`, `T.Colean.Poly.mem_c`). So another
+type's rules, which go through the map of the instance, compute on constructors, and the induction
+hypotheses of its recursor, by membership, become hypotheses on the arguments. -/
 
 universe u
 
@@ -25,7 +25,7 @@ datatype Tree
   | node (n : Nat) (cs : Forest Tree)
 
 /--
-info: @Forest.Poly.map_cons : ∀ {H : Type u_2 → Type u_1} {H' : Type u_3 → Type u_6} {S : Type u_4} {R : S → Type u_5}
+info: @Forest.Colean.Poly.map_cons : ∀ {H : Type u_2 → Type u_1} {H' : Type u_3 → Type u_6} {S : Type u_4} {R : S → Type u_5}
   [inst : PolyIso H S R] [inst' : PolyIso H' S R] {X : Type u_2} {Y : Type u_3} (g : X → Y) (t : H X)
   (f : Forest (H X)),
   (Occ.ofIso fun X => Forest (H X)).map (Occ.ofIso fun X => Forest (H' X)) g (Forest.cons t f) =
@@ -33,15 +33,15 @@ info: @Forest.Poly.map_cons : ∀ {H : Type u_2 → Type u_1} {H' : Type u_3 →
       ((Occ.ofIso fun X => Forest (H X)).map (Occ.ofIso fun X => Forest (H' X)) g f)
 -/
 #guard_msgs(whitespace := lax) in
-#check @Forest.Poly.map_cons
+#check @Forest.Colean.Poly.map_cons
 
 /--
-info: @Forest.Poly.mem_cons : ∀ {H : Type u_2 → Type u_1} {S : Type u_3} {R : S → Type u_4} [inst : PolyIso H S R]
+info: @Forest.Colean.Poly.mem_cons : ∀ {H : Type u_2 → Type u_1} {S : Type u_3} {R : S → Type u_4} [inst : PolyIso H S R]
   {X : Type u_2} (x : X) (t : H X) (f : Forest (H X)),
   PolyIso.Mem (fun X => Forest (H X)) x (Forest.cons t f) ↔ PolyIso.Mem H x t ∨ PolyIso.Mem (fun X => Forest (H X)) x f
 -/
 #guard_msgs(whitespace := lax) in
-#check @Forest.Poly.mem_cons
+#check @Forest.Colean.Poly.mem_cons
 
 /-- The sum of a forest of numbers. -/
 def Forest.sum : Forest Nat → Nat :=
@@ -79,7 +79,8 @@ theorem Forest.map_congr {f g : Tree → Nat} (cs : Forest Tree)
   induction cs with
   | nil => simp
   | cons t r ih =>
-    simp only [Forest.Poly.map_cons, Occ.map_ofIso_id, Forest.Poly.mem_cons, PolyIso.mem_id] at h ⊢
+    simp only [Forest.Colean.Poly.map_cons, Occ.map_ofIso_id, Forest.Colean.Poly.mem_cons,
+      PolyIso.mem_id] at h ⊢
     rw [h t (.inl rfl), ih fun s hs => h s (.inr hs)]
 
 /-- The size by `sum'`. -/
@@ -120,7 +121,7 @@ def CTree.two (s₀ : CStr Unit) : CTree :=
 example (s₀ : CStr Unit) :
     (CTree.two s₀).dtor = .node 1 (.cons (CTree.two s₀) (.cons (CTree.two s₀)
       ((Occ.ofIso CStr).map (Occ.ofIso CStr) (fun _ => CTree.two s₀) s₀))) := by
-  simp only [CTree.two, CTree.dtor_corec, CTree.F.map_node, CStr.Poly.map_cons,
+  simp only [CTree.two, CTree.dtor_corec, CTree.F.fmap_node, CStr.Colean.Poly.map_cons,
     Occ.map_ofIso_id]
 
 -- `datatype` through `codatatype`.
@@ -141,7 +142,7 @@ theorem Bush.ind_head (P : Bush → Prop) (hl : P .leaf) (hn : ∀ a s, P a → 
   | node c ih =>
     cases c with
     | cons a s =>
-      simp only [CStr.Poly.mem_cons, PolyIso.mem_id] at ih
+      simp only [CStr.Colean.Poly.mem_cons, PolyIso.mem_id] at ih
       exact hn a s (ih a (.inl rfl))
 
 /-! ### Through an indexed family -/
@@ -151,7 +152,7 @@ datatype Vec (α : Type u) : Nat → Type u
   | cons {n : Nat} (a : α) (t : Vec α n) : Vec α (n + 1)
 
 /--
-info: @Vec.Poly.map_cons : ∀ {H : Type u_2 → Type u_1} {H' : Type u_3 → Type u_6} {S : Type u_4} {R : S → Type u_5}
+info: @Vec.Colean.Poly.map_cons : ∀ {H : Type u_2 → Type u_1} {H' : Type u_3 → Type u_6} {S : Type u_4} {R : S → Type u_5}
   [inst : PolyIso H S R] [inst' : PolyIso H' S R] {X : Type u_2} {Y : Type u_3} (f : X → Y) {n : ℕ} (a : H X)
   (t : Vec (H X) n),
   (Occ.ofIso fun X => Vec (H X) (n + 1)).map (Occ.ofIso fun X => Vec (H' X) (n + 1)) f (Vec.cons a t) =
@@ -159,15 +160,15 @@ info: @Vec.Poly.map_cons : ∀ {H : Type u_2 → Type u_1} {H' : Type u_3 → Ty
       ((Occ.ofIso fun X => Vec (H X) n).map (Occ.ofIso fun X => Vec (H' X) n) f t)
 -/
 #guard_msgs(whitespace := lax) in
-#check @Vec.Poly.map_cons
+#check @Vec.Colean.Poly.map_cons
 
 /--
-info: @Vec.Poly.mem_cons : ∀ {H : Type u_2 → Type u_1} {S : Type u_3} {R : S → Type u_4} [inst : PolyIso H S R] {X : Type u_2}
+info: @Vec.Colean.Poly.mem_cons : ∀ {H : Type u_2 → Type u_1} {S : Type u_3} {R : S → Type u_4} [inst : PolyIso H S R] {X : Type u_2}
   (x : X) {n : ℕ} (a : H X) (t : Vec (H X) n),
   PolyIso.Mem (fun X => Vec (H X) (n + 1)) x (Vec.cons a t) ↔ PolyIso.Mem H x a ∨ PolyIso.Mem (fun X => Vec (H X) n) x t
 -/
 #guard_msgs(whitespace := lax) in
-#check @Vec.Poly.mem_cons
+#check @Vec.Colean.Poly.mem_cons
 
 datatype Tri
   | leaf (n : Nat)
@@ -194,7 +195,8 @@ theorem Tri.ind_three (t : Tri) (P : Tri → Prop) (hl : ∀ n, P (.leaf n))
       | cons b cs => cases cs with
         | cons c cs => cases cs with
           | nil =>
-            simp only [Vec.Poly.mem_cons, Vec.Poly.mem_nil, PolyIso.mem_id, or_false] at ih
+            simp only [Vec.Colean.Poly.mem_cons, Vec.Colean.Poly.mem_nil, PolyIso.mem_id,
+              or_false] at ih
             exact hn a b c (ih a (.inl rfl)) (ih b (.inr (.inl rfl))) (ih c (.inr (.inr rfl)))
 
 -- A family through a family, at its own index: the leaf is at a fixed index of the family
@@ -226,22 +228,22 @@ datatype Pong (α : Type u)
 end
 
 /--
-info: @Ping.Poly.map_cons : ∀ {H : Type u_2 → Type u_1} {H' : Type u_3 → Type u_6} {S : Type u_4} {R : S → Type u_5}
+info: @Ping.Colean.Poly.map_cons : ∀ {H : Type u_2 → Type u_1} {H' : Type u_3 → Type u_6} {S : Type u_4} {R : S → Type u_5}
   [inst : PolyIso H S R] [inst' : PolyIso H' S R] {X : Type u_2} {Y : Type u_3} (f : X → Y) (a : H X) (b : Pong (H X)),
   (Occ.ofIso fun X => Ping (H X)).map (Occ.ofIso fun X => Ping (H' X)) f (Ping.cons a b) =
     Ping.cons ((Occ.ofIso H).map (Occ.ofIso H') f a)
       ((Occ.ofIso fun X => Pong (H X)).map (Occ.ofIso fun X => Pong (H' X)) f b)
 -/
 #guard_msgs(whitespace := lax) in
-#check @Ping.Poly.map_cons
+#check @Ping.Colean.Poly.map_cons
 
 /--
-info: @Ping.Poly.mem_cons : ∀ {H : Type u_2 → Type u_1} {S : Type u_3} {R : S → Type u_4} [inst : PolyIso H S R]
+info: @Ping.Colean.Poly.mem_cons : ∀ {H : Type u_2 → Type u_1} {S : Type u_3} {R : S → Type u_4} [inst : PolyIso H S R]
   {X : Type u_2} (x : X) (a : H X) (b : Pong (H X)),
   PolyIso.Mem (fun X => Ping (H X)) x (Ping.cons a b) ↔ PolyIso.Mem H x a ∨ PolyIso.Mem (fun X => Pong (H X)) x b
 -/
 #guard_msgs(whitespace := lax) in
-#check @Ping.Poly.mem_cons
+#check @Ping.Colean.Poly.mem_cons
 
 datatype Chain
   | leaf
@@ -296,10 +298,10 @@ theorem T₃.ind_mem (P : T₃ → Prop) (hl : P .leaf) (hL : ∀ l, (∀ a ∈ 
   | mk p ih =>
     cases p with
     | l l =>
-      simp only [E.Poly.mem_l, PolyIso.mem_list] at ih
+      simp only [E.Colean.Poly.mem_l, PolyIso.mem_list] at ih
       exact hL l ih
     | r a =>
-      simp only [E.Poly.mem_r, PolyIso.mem_id] at ih
+      simp only [E.Colean.Poly.mem_r, PolyIso.mem_id] at ih
       exact hR a (ih a rfl)
 
 /-! ### Fields with a structure in the parameter -/
