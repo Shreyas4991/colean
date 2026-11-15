@@ -66,7 +66,7 @@ example (f : Nat → Nat) (a : Nat) (l : LS Nat) :
 
 example (x : Nat) (p : List (Nat ⊕ LS Nat)) :
     PolyIso.Mem LS x (LS.mk p) ↔ Sum.inl x ∈ p ∨ ∃ t, Sum.inr t ∈ p ∧ PolyIso.Mem LS x t := by
-  simp
+  simp [Sum.exists]
 
 /-- Induction: `simp` makes the hypothesis by membership one on the right injections. -/
 theorem LS.ind {α : Type u} (P : LS α → Prop) (h0 : P .nil)
@@ -114,7 +114,7 @@ datatype L2 (α : Type u)
 example (x : Nat) (p : List (Nat ⊕ L2 Nat × L2 Nat)) :
     PolyIso.Mem L2 x (L2.mk p) ↔
       Sum.inl x ∈ p ∨ ∃ a b, Sum.inr (a, b) ∈ p ∧ (PolyIso.Mem L2 x a ∨ PolyIso.Mem L2 x b) := by
-  simp
+  simp [Sum.exists, and_assoc]
 
 /-! ### In a mixed block
 
@@ -134,7 +134,7 @@ end
 
 /--
 info: @Forest.mem_cons : ∀ {α : Type u_1} (p : List (Tree α ⊕ Forest α)) (x : Tree α),
-  x ∈ Forest.cons p ↔ Sum.inl x ∈ p ∨ ∃ b, Sum.inr b ∈ p ∧ x ∈ b
+  x ∈ Forest.cons p ↔ Sum.inl x ∈ p ∨ ∃ z, z ∈ p ∧ ∃ b, z = Sum.inr b ∧ x ∈ b
 -/
 #guard_msgs in
 #check @Forest.mem_cons
@@ -144,7 +144,7 @@ def Tree.loop {α : Type u} (a : α) : Tree α :=
   Tree.corec (S := Unit) (fun _ => .node a (.cons [.inl ()])) ()
 
 theorem Tree.loop_eq {α : Type u} (a : α) : Tree.loop a = .node a (.cons [.inl (.loop a)]) := by
-  conv_lhs => rw [← Tree.ctor_dtor (Tree.loop a), Tree.loop, Tree.dtor_corec]
+  conv => lhs; rw [← Tree.ctor_dtor (Tree.loop a), Tree.loop, Tree.dtor_corec]
   simp [Tree.loop]
 
 example {α : Type u} (s t : Tree α) : t ∈ Forest.cons [.inl s, .inr (.cons [.inl t])] := by
@@ -164,7 +164,7 @@ datatype LF (α : Type u) : Nat → Type u
 
 /--
 info: @LF.Colean.Poly.map_mk : ∀ {H : Type u_2 → Type u_1} {H' : Type u_3 → Type u_6} {S : Type u_4} {R : S → Type u_5}
-  [inst : PolyIso H S R] [inst' : PolyIso H' S R] {X : Type u_2} {Y : Type u_3} (f : X → Y) {n : ℕ}
+  [inst : PolyIso H S R] [inst' : PolyIso H' S R] {X : Type u_2} {Y : Type u_3} (f : X → Y) {n : Nat}
   (p : List (H X × LF (H X) n)),
   (Occ.ofIso fun X => LF (H X) (n + 1)).map (Occ.ofIso fun X => LF (H' X) (n + 1)) f (LF.mk p) =
     LF.mk
@@ -177,7 +177,7 @@ info: @LF.Colean.Poly.map_mk : ∀ {H : Type u_2 → Type u_1} {H' : Type u_3 �
 
 /--
 info: @LF.Colean.Poly.mem_mk : ∀ {H : Type u_2 → Type u_1} {S : Type u_3} {R : S → Type u_4} [inst : PolyIso H S R] {X : Type u_2}
-  (x : X) {n : ℕ} (p : List (H X × LF (H X) n)),
+  (x : X) {n : Nat} (p : List (H X × LF (H X) n)),
   PolyIso.Mem (fun X => LF (H X) (n + 1)) x (LF.mk p) ↔
     PolyIso.Mem (fun X_1 => List (H X_1 × LF (H X) n)) x p ∨
       ∃ t, PolyIso.Mem (fun X_1 => List (H X × X_1)) t p ∧ PolyIso.Mem (fun X => LF (H X) n) x t
@@ -238,11 +238,11 @@ end
 /--
 info: @RA.Colean.Poly.map_mk : ∀ {H : Type u_2 → Type u_1} {H' : Type u_3 → Type u_6} {S : Type u_4} {R : S → Type u_5}
   [inst : PolyIso H S R] [inst' : PolyIso H' S R] {X : Type u_2} {Y : Type u_3} (f : X → Y) (a : H X)
-  (p : List (RA (H X) × ℕ)),
+  (p : List (RA (H X) × Nat)),
   (Occ.ofIso fun X => RA (H X)).map (Occ.ofIso fun X => RA (H' X)) f (RA.mk a p) =
     RA.mk ((Occ.ofIso H).map (Occ.ofIso H') f a)
-      ((Occ₂.ofY ((Occ.ofIso List).comp (Occ.hole.prod (Occ.const ℕ)))).map
-        (Occ₂.ofY ((Occ.ofIso List).comp (Occ.hole.prod (Occ.const ℕ)))) f
+      ((Occ₂.ofY ((Occ.ofIso List).comp (Occ.hole.prod (Occ.const Nat)))).map
+        (Occ₂.ofY ((Occ.ofIso List).comp (Occ.hole.prod (Occ.const Nat)))) f
         (fun t => (Occ.ofIso fun X => RA (H X)).map (Occ.ofIso fun X => RA (H' X)) f t) p)
 -/
 #guard_msgs(whitespace := lax) in
@@ -286,7 +286,7 @@ datatype Ch (α : Type u) : Nat → Type u
 
 /--
 info: @Ch.Colean.Poly.mem_mk : ∀ {H : Type u_2 → Type u_1} {S : Type u_3} {R : S → Type u_4} [inst : PolyIso H S R] {X : Type u_2}
-  (x : X) {n : ℕ} (p : List (H X × Ch (H X) n × Ch (H X) (n + 1))),
+  (x : X) {n : Nat} (p : List (H X × Ch (H X) n × Ch (H X) (n + 1))),
   PolyIso.Mem (fun X => Ch (H X) (n + 2)) x (Ch.mk p) ↔
     (IOcc₂.comp (Occ.ofIso List)
             ((IOcc₂.ofX (Occ.ofIso H)).prod ((IOcc₂.ofY (IOcc.hole n)).prod (IOcc₂.ofY (IOcc.hole (n + 1)))))).MemX

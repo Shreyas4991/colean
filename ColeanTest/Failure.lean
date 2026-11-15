@@ -109,9 +109,7 @@ class Deep (n : Nat) : Prop
 
 instance [Deep (n + 1)] : Deep n := ⟨⟩
 
--- An instance whose search does not terminate. Mathlib's linter for instance assumptions without
--- variables would search for `Deep 0` itself, and time out.
-set_option linter.concreteInstances false in
+-- An instance whose search does not terminate.
 instance [Deep 0] : Codata.PolyIso LBox Unit (fun _ => Unit) where
   equiv := ⟨fun b => ⟨(), fun _ => b.val⟩, fun z => ⟨z.2 ()⟩, fun _ => rfl, fun _ => rfl⟩
 

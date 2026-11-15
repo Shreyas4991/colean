@@ -37,7 +37,7 @@ info: @CoList.approx_coind : ∀ {α : Type u_1} (R : CoList α → CoList α �
 #guard_msgs in #check @CoList.approx_coind
 
 /--
-info: @CoList.monotone_cons : ∀ {α : Type u_1} {γ : Sort u_2} [inst : Lean.Order.PartialOrder γ] (a : α) {t : γ → CoList α},
+info: @CoList.monotone_cons : ∀ {α : Type u_1} {γ : Sort u_2} [inst : PartialOrder γ] (a : α) {t : γ → CoList α},
   monotone t → monotone fun x => CoList.cons a (t x)
 -/
 #guard_msgs in #check @CoList.monotone_cons
@@ -198,14 +198,14 @@ codatatype Tree (α : Type)
 attribute [with_ccpo] Tree
 
 /--
-info: @Tree.monotone_node : ∀ {α : Type} {γ : Sort u_1} [inst : Lean.Order.PartialOrder γ] (a : α) {k : γ → ℕ → Tree α},
+info: @Tree.monotone_node : ∀ {α : Type} {γ : Sort u_1} [inst : PartialOrder γ] (a : α) {k : γ → Nat → Tree α},
   monotone k → monotone fun x => Tree.node a (k x)
 -/
 #guard_msgs in #check @Tree.monotone_node
 
 /--
-info: @Tree.monotone_rose : ∀ {α : Type} {γ : Sort u_1} [inst : Lean.Order.PartialOrder γ] {cs : γ → List (Tree α)}
-  {next : γ → Tree α}, monotone cs → monotone next → monotone fun x => Tree.rose (cs x) (next x)
+info: @Tree.monotone_rose : ∀ {α : Type} {γ : Sort u_1} [inst : PartialOrder γ] {cs : γ → List (Tree α)} {next : γ → Tree α},
+  monotone cs → monotone next → monotone fun x => Tree.rose (cs x) (next x)
 -/
 #guard_msgs in #check @Tree.monotone_rose
 
@@ -277,7 +277,7 @@ example (n : Nat) :
   | mixed (s : List CPair × CPair)
 
 /--
-info: @CPair.monotone_both : ∀ {γ : Sort u_1} [inst : Lean.Order.PartialOrder γ] {p : γ → CPair × CPair},
+info: @CPair.monotone_both : ∀ {γ : Sort u_1} [inst : PartialOrder γ] {p : γ → CPair × CPair},
   monotone p → monotone fun x => CPair.both (p x)
 -/
 #guard_msgs in #check @CPair.monotone_both
@@ -312,11 +312,11 @@ codatatype Delay : Nat → Type
 
 attribute [with_ccpo] Delay
 
-/-- info: @Delay.instCCPO : {i₁ : ℕ} → CCPO (Delay i₁) -/
+/-- info: @Delay.instCCPO : {i₁ : Nat} → CCPO (Delay i₁) -/
 #guard_msgs in #check @Delay.instCCPO
 
 /--
-info: @Delay.monotone_later : ∀ {γ : Sort u_1} [inst : Lean.Order.PartialOrder γ] {n : ℕ} {d : γ → Delay (n + 1)},
+info: @Delay.monotone_later : ∀ {γ : Sort u_1} [inst : PartialOrder γ] {n : Nat} {d : γ → Delay (n + 1)},
   monotone d → monotone fun x => (d x).later
 -/
 #guard_msgs in #check @Delay.monotone_later
@@ -339,7 +339,7 @@ codatatype DTree : Nat → Type
 attribute [with_ccpo] DTree
 
 /--
-info: @DTree.monotone_kids : ∀ {γ : Sort u_1} [inst : Lean.Order.PartialOrder γ] {n : ℕ} {cs : γ → List (DTree (n + 1))},
+info: @DTree.monotone_kids : ∀ {γ : Sort u_1} [inst : PartialOrder γ] {n : Nat} {cs : γ → List (DTree (n + 1))},
   monotone cs → monotone fun x => DTree.kids (cs x)
 -/
 #guard_msgs in #check @DTree.monotone_kids
@@ -362,8 +362,8 @@ codatatype ITree (E : Type → Type) (R : Type)
 attribute [with_ccpo] ITree
 
 /--
-info: @ITree.monotone_vis : ∀ {E : Type → Type} {R : Type} {γ : Sort u_1} [inst : Lean.Order.PartialOrder γ] {X : Type}
-  (e : E X) {k : γ → X → ITree E R}, monotone k → monotone fun x => ITree.vis e (k x)
+info: @ITree.monotone_vis : ∀ {E : Type → Type} {R : Type} {γ : Sort u_1} [inst : PartialOrder γ] {X : Type} (e : E X)
+  {k : γ → X → ITree E R}, monotone k → monotone fun x => ITree.vis e (k x)
 -/
 #guard_msgs in #check @ITree.monotone_vis
 

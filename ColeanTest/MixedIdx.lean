@@ -23,18 +23,18 @@ datatype IForest (α : Type u) : Nat → Type u
   | cons {n : Nat} (t : ITree α) (f : IForest α n) : IForest α (n + 1)
 end
 
-/-- info: @ITree.node : {α : Type u_1} → α → (n : ℕ) → IForest α n → ITree α -/
+/-- info: @ITree.node : {α : Type u_1} → α → (n : Nat) → IForest α n → ITree α -/
 #guard_msgs in #check @ITree.node
 /--
-info: @IForest.cons : {α : Type u_1} → {n : ℕ} → ITree α → IForest α n → IForest α (n + 1)
+info: @IForest.cons : {α : Type u_1} → {n : Nat} → ITree α → IForest α n → IForest α (n + 1)
 -/
 #guard_msgs in #check @IForest.cons
 /--
 info: @IForest.rec : {α : Type u_2} →
-  {motive : (j₁ : ℕ) → IForest α j₁ → Sort u_1} →
+  {motive : (j₁ : Nat) → IForest α j₁ → Sort u_1} →
     motive 0 IForest.nil →
-      ({n : ℕ} → (t : ITree α) → (f : IForest α n) → motive n f → motive (n + 1) (IForest.cons t f)) →
-        {i₁ : ℕ} → (t : IForest α i₁) → motive i₁ t
+      ({n : Nat} → (t : ITree α) → (f : IForest α n) → motive n f → motive (n + 1) (IForest.cons t f)) →
+        {i₁ : Nat} → (t : IForest α i₁) → motive i₁ t
 -/
 #guard_msgs in #check @IForest.rec
 
@@ -56,7 +56,7 @@ def ITree.bin {α : Type u} (a : α) : ITree α :=
 
 theorem ITree.bin_eq {α : Type u} (a : α) :
     ITree.bin a = .node a 2 (.cons (.bin a) (.cons (.bin a) .nil)) := by
-  conv_lhs => rw [← ITree.ctor_dtor (ITree.bin a), ITree.bin, ITree.dtor_corec]
+  conv => lhs; rw [← ITree.ctor_dtor (ITree.bin a), ITree.bin, ITree.dtor_corec]
   simp [ITree.bin]
 
 -- The other order: induction over trees through coinductive families of trees.
@@ -71,12 +71,12 @@ end
 /--
 info: @JTree.rec : {α : Type u_2} →
   {motive : JTree α → Sort u_1} →
-    ((a : α) → (n : ℕ) → (cs : JForest α n) → ((t : JTree α) → t ∈ cs → motive t) → motive (JTree.node a n cs)) →
+    ((a : α) → (n : Nat) → (cs : JForest α n) → ((t : JTree α) → t ∈ cs → motive t) → motive (JTree.node a n cs)) →
       (t : JTree α) → motive t
 -/
 #guard_msgs in #check @JTree.rec
 /--
-info: @JForest.mem_cons : ∀ {α : Type u_1} {n : ℕ} (t : JTree α) (f : JForest α n) (x : JTree α),
+info: @JForest.mem_cons : ∀ {α : Type u_1} {n : Nat} (t : JTree α) (f : JForest α n) (x : JTree α),
   x ∈ JForest.cons t f ↔ x = t ∨ x ∈ f
 -/
 #guard_msgs in #check @JForest.mem_cons

@@ -29,7 +29,7 @@ def Rose.rep {α : Type u} (a : α) (n : Nat) : Rose α :=
 
 @[simp] theorem Rose.dtor_rep {α : Type u} (a : α) (n : Nat) :
     (Rose.rep a n).dtor = .node a (List.ofFn fun _ : Fin n => Rose.rep a n) := by
-  simp [Rose.rep, Rose.dtor_corec]
+  simp [Rose.rep, Rose.dtor_corec, Function.comp_def]
 
 /-- A coalgebra with a counter that is never looked at. -/
 def natCoalg {α : Type u} (a : α) (n : Nat) (k : Nat) : Rose.F α Nat :=

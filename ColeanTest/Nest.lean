@@ -136,7 +136,7 @@ noncomputable instance : Codata.PolyIso NBox.{u} Unit (fun _ => Unit) where
 
 noncomputable instance : Codata.PolyMap NBox.{u} NBox.{u'} where
   map f b := .mk (f b.val)
-  equiv_map f b := by simp [Equiv.coe_fn_mk, Codata.PolyIso.equiv, Codata.Poly.map]
+  equiv_map f b := by simp [Colean.Equiv.coe_fn_mk, Codata.PolyIso.equiv, Codata.Poly.map]
 
 codatatype NStream
   | cons (tail : NBox NStream)

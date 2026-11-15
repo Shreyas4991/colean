@@ -64,7 +64,7 @@ def Trace.idle {α : Type u} (m : Menu α) : Trace α :=
   Trace.corec (S := Unit) (fun _ => .tick m ()) ()
 
 theorem Trace.idle_eq {α : Type u} (m : Menu α) : Trace.idle m = .tick m (.idle m) := by
-  conv_lhs => rw [← Trace.ctor_dtor (Trace.idle m), Trace.idle, Trace.dtor_corec]
+  conv => lhs; rw [← Trace.ctor_dtor (Trace.idle m), Trace.idle, Trace.dtor_corec]
   simp [Trace.idle]
 
 /-- The open traces at any type of menus: what the processes' corecursion builds. -/

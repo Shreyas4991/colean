@@ -66,6 +66,15 @@ datatype A2 : (α : Type _) → Type _
 /-- info: A2 : Type → Type 1 -/
 #guard_msgs in #check @A2
 
+/-- Mathlib's `Type*` (`Mathlib.Tactic.TypeStar`), restated here: `Type u_i` with a fresh universe
+parameter `u_i`. -/
+elab "Type*" : term => do
+  let names ← Lean.Elab.Term.getLevelNames
+  let u := (List.range (names.length + 1)).map (fun i => Lean.Name.appendIndexAfter `u (i + 1))
+    |>.find? (!names.contains ·) |>.getD `u
+  Lean.Elab.Term.setLevelNames (u :: names)
+  return .sort (.succ (.param u))
+
 -- Mathlib's `Type*`.
 datatype TS (α : Type*) (β : Type*)
   | mk (a : α) (b : β) (t : TS α β)
@@ -140,7 +149,7 @@ datatype TV (v : Fin n)
   | mk (t : TV v)
   | nil
 
-/-- info: @TV : {n : ℕ} → Fin n → Type -/
+/-- info: @TV : {n : Nat} → Fin n → Type -/
 #guard_msgs in #check @TV
 
 example : TV (3 : Fin 5) := .mk .nil
@@ -153,7 +162,7 @@ datatype DB {α : Type} : Nat → Type
 /-- info: @DB.mk : {α : Type} → α → DB 1 → DB 0 -/
 #guard_msgs in #check @DB.mk
 
-/-- info: @DB.F : {α : Type} → (ℕ → Type u_1) → ℕ → Type u_1 -/
+/-- info: @DB.F : {α : Type} → (Nat → Type u_1) → Nat → Type u_1 -/
 #guard_msgs in #check @DB.F
 
 /-- error: the types of a mutual block must have the same parameters as `BA`, with the same binder
@@ -203,7 +212,7 @@ end
 
 -- The proof is left out of the conjunction, and does not stop the lemma.
 /--
-info: @SV.mk_inj : ∀ {α : Type} [inst : Inhabited α] {n : ℕ} (a : α) (h : a = default) (v : Fin n) (t : SV) (a' : α)
+info: @SV.mk_inj : ∀ {α : Type} [inst : Inhabited α] {n : Nat} (a : α) (h : a = default) (v : Fin n) (t : SV) (a' : α)
   (h' : a' = default) (v' : Fin n) (t' : SV), SV.mk a h v t = SV.mk a' h' v' t' ↔ a = a' ∧ v = v' ∧ t = t'
 -/
 #guard_msgs in #check @SV.mk_inj
@@ -231,13 +240,13 @@ datatype IM
   | mk₂ ⦃n : Nat⦄ (v : Fin n)
 
 /--
-info: @IM.mk_inj : ∀ {n : ℕ} (v : Fin n) (h : n > 0) {n' : ℕ} (v' : Fin n') (h' : n' > 0),
+info: @IM.mk_inj : ∀ {n : Nat} (v : Fin n) (h : n > 0) {n' : Nat} (v' : Fin n') (h' : n' > 0),
   IM.mk v h = IM.mk v' h' ↔ n = n' ∧ v ≍ v'
 -/
 #guard_msgs in #check @IM.mk_inj
 
 /--
-info: IM.mk₂_inj : ∀ ⦃n : ℕ⦄ (v : Fin n) ⦃n' : ℕ⦄ (v' : Fin n'), IM.mk₂ v = IM.mk₂ v' ↔ n = n' ∧ v ≍ v'
+info: IM.mk₂_inj : ∀ ⦃n : Nat⦄ (v : Fin n) ⦃n' : Nat⦄ (v' : Fin n'), IM.mk₂ v = IM.mk₂ v' ↔ n = n' ∧ v ≍ v'
 -/
 #guard_msgs in #check @IM.mk₂_inj
 
@@ -250,7 +259,7 @@ datatype PD
   | nil
 
 /--
-info: PD.mk_inj : ∀ (n : ℕ) (h : n % 2 = 0) (t : PD) (n' : ℕ) (h' : n' % 2 = 0) (t' : PD),
+info: PD.mk_inj : ∀ (n : Nat) (h : n % 2 = 0) (t : PD) (n' : Nat) (h' : n' % 2 = 0) (t' : PD),
   PD.mk n h t = PD.mk n' h' t' ↔ n = n' ∧ t = t'
 -/
 #guard_msgs in #check @PD.mk_inj
@@ -263,16 +272,17 @@ datatype DT
 
 /--
 info: @DT.rec : {motive : DT → Sort u_1} →
-  motive DT.nil → ((n : ℕ) → (t : DT) → (m : ℕ) → motive t → motive (DT.mk n t m)) → (t : DT) → motive t
+  motive DT.nil → ((n : Nat) → (t : DT) → (m : Nat) → motive t → motive (DT.mk n t m)) → (t : DT) → motive t
 -/
 #guard_msgs in #check @DT.rec
 
 /--
-info: DT.mk_inj : ∀ (n : ℕ) (t : DT) (m n' : ℕ) (t' : DT) (m' : ℕ), DT.mk n t m = DT.mk n' t' m' ↔ n = n' ∧ t = t' ∧ m = m'
+info: DT.mk_inj : ∀ (n : Nat) (t : DT) (m n' : Nat) (t' : DT) (m' : Nat),
+  DT.mk n t m = DT.mk n' t' m' ↔ n = n' ∧ t = t' ∧ m = m'
 -/
 #guard_msgs in #check @DT.mk_inj
 
-/-- info: @DT.F.mk : {X : Type u_1} → ℕ → X → ℕ → DT.F X -/
+/-- info: @DT.F.mk : {X : Type u_1} → Nat → X → Nat → DT.F X -/
 #guard_msgs in #check @DT.F.mk
 
 -- The constructor keeps them.
@@ -281,7 +291,7 @@ example : DT.mk (t := .nil) = DT.mk 3 .nil 2 := rfl
 datatype DO
   | mk (n : Nat := 3)
 
-/-- info: @DO.mk : optParam ℕ 3 → DO -/
+/-- info: @DO.mk : optParam Nat 3 → DO -/
 #guard_msgs in #check @DO.mk
 
 /-! ### Dotted names in a block -/
@@ -573,8 +583,8 @@ case nil
 ⊢ True
 
 case cons
-head✝ : ℕ
-tail✝ : ICo ℕ
+head✝ : Nat
+tail✝ : ICo Nat
 ⊢ True
 -/
 #guard_msgs in

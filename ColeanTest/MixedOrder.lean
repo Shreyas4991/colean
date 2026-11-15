@@ -44,7 +44,7 @@ def Entry.loop {α : Type u} (a : α) : Entry α :=
 
 theorem Entry.loop_eq {α : Type u} (a : α) :
     Entry.loop a = .mk a (.cons (.loop a) .nil) (.loop a) := by
-  conv_lhs => rw [← Entry.ctor_dtor (Entry.loop a), Entry.loop, Entry.dtor_corec]
+  conv => lhs; rw [← Entry.ctor_dtor (Entry.loop a), Entry.loop, Entry.dtor_corec]
   simp [Entry.loop]
 
 /-- The loop is a member of its own contents. -/

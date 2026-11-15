@@ -185,24 +185,24 @@ datatype Odd : Nat → Type
 end
 
 /--
-info: @Even.fold : {S₁ S₂ : ℕ → Type u_1} →
-  ((i₁ : ℕ) → Even.F S₁ S₂ i₁ → S₁ i₁) → ((i₁ : ℕ) → Odd.F S₁ S₂ i₁ → S₂ i₁) → {i₁ : ℕ} → Even i₁ → S₁ i₁
+info: @Even.fold : {S₁ S₂ : Nat → Type u_1} →
+  ((i₁ : Nat) → Even.F S₁ S₂ i₁ → S₁ i₁) → ((i₁ : Nat) → Odd.F S₁ S₂ i₁ → S₂ i₁) → {i₁ : Nat} → Even i₁ → S₁ i₁
 -/
 #guard_msgs in #check @Even.fold
 
 /--
-info: @Even.fold_succ : ∀ {S₁ S₂ : ℕ → Type u_1} (a₁ : (i₁ : ℕ) → Even.F S₁ S₂ i₁ → S₁ i₁)
-  (a₂ : (i₁ : ℕ) → Odd.F S₁ S₂ i₁ → S₂ i₁) {n : ℕ} (o : Odd n),
+info: @Even.fold_succ : ∀ {S₁ S₂ : Nat → Type u_1} (a₁ : (i₁ : Nat) → Even.F S₁ S₂ i₁ → S₁ i₁)
+  (a₂ : (i₁ : Nat) → Odd.F S₁ S₂ i₁ → S₂ i₁) {n : Nat} (o : Odd n),
   Even.fold a₁ a₂ (Even.succ o) = a₁ (n + 1) (Even.F.succ (Odd.fold a₁ a₂ o))
 -/
 #guard_msgs in #check @Even.fold_succ
 
 /--
-info: @Odd.fold_unique : ∀ {S₁ S₂ : ℕ → Type u_1} (a₁ : (i₁ : ℕ) → Even.F S₁ S₂ i₁ → S₁ i₁)
-  (a₂ : (i₁ : ℕ) → Odd.F S₁ S₂ i₁ → S₂ i₁) (h₁ : (i₁ : ℕ) → Even i₁ → S₁ i₁) (h₂ : (i₁ : ℕ) → Odd i₁ → S₂ i₁),
-  (∀ (i₁ : ℕ) (y : Even.F Even Odd i₁), h₁ i₁ (Even.ctor y) = a₁ i₁ (Even.F.fmap h₁ h₂ y)) →
-    (∀ (i₁ : ℕ) (y : Odd.F Even Odd i₁), h₂ i₁ (Odd.ctor y) = a₂ i₁ (Odd.F.fmap h₁ h₂ y)) →
-      ∀ {i₁ : ℕ} (t : Odd i₁), h₂ i₁ t = Odd.fold a₁ a₂ t
+info: @Odd.fold_unique : ∀ {S₁ S₂ : Nat → Type u_1} (a₁ : (i₁ : Nat) → Even.F S₁ S₂ i₁ → S₁ i₁)
+  (a₂ : (i₁ : Nat) → Odd.F S₁ S₂ i₁ → S₂ i₁) (h₁ : (i₁ : Nat) → Even i₁ → S₁ i₁) (h₂ : (i₁ : Nat) → Odd i₁ → S₂ i₁),
+  (∀ (i₁ : Nat) (y : Even.F Even Odd i₁), h₁ i₁ (Even.ctor y) = a₁ i₁ (Even.F.fmap h₁ h₂ y)) →
+    (∀ (i₁ : Nat) (y : Odd.F Even Odd i₁), h₂ i₁ (Odd.ctor y) = a₂ i₁ (Odd.F.fmap h₁ h₂ y)) →
+      ∀ {i₁ : Nat} (t : Odd i₁), h₂ i₁ t = Odd.fold a₁ a₂ t
 -/
 #guard_msgs in #check @Odd.fold_unique
 
@@ -228,13 +228,13 @@ example : (Even.succ (Odd.succ Even.zero)).toNat = 2 := by
 -- The fields are shown as the types they are by definition, at their indices.
 /--
 trace: case Even_succ
-z : Even.F (fun x => ℕ) (fun x => ℕ) 3
+z : Even.F (fun x => Nat) (fun x => Nat) 3
 o : Odd (0 + 2)
 ⊢ True
 ---
 trace: case Even_succ.Even_succ
 o✝ : Odd (0 + 2)
-o : ℕ
+o : Nat
 ⊢ True
 -/
 #guard_msgs in

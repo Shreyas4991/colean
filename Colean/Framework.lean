@@ -1,5 +1,3 @@
-import Mathlib.Logic.Function.Basic
-
 /-!
 # The framework: contracts and what follows from them
 

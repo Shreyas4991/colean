@@ -201,7 +201,7 @@ example {α : Type} (x y : Forest.F α (Tree α) (Forest α)) (h : Forest.ctor x
 
 /-- The unfolding equation, by `corec_eq` (not a `simp` lemma: it loops). -/
 theorem Tree.full_eq {α : Type} (a : α) : Tree.full a = Tree.node a (Forest.full a) := by
-  conv_lhs => rw [Tree.full, Tree.corec_eq]
+  conv => lhs; rw [Tree.full, Tree.corec_eq]
   simp [Forest.full]
 
 /-- `Tree.full'_eq` again, by uniqueness of the corecursor: the constant functions into
@@ -239,14 +239,14 @@ end
 
 -- The index binders are unnamed in the declaration, hence `i₁`.
 /--
-info: @Even.corec : {S₁ S₂ : ℕ → Type u_1} →
-  ((i₁ : ℕ) → S₁ i₁ → Even.F S₁ S₂ i₁) → ((i₁ : ℕ) → S₂ i₁ → Odd.F S₁ S₂ i₁) → {i₁ : ℕ} → S₁ i₁ → Even i₁
+info: @Even.corec : {S₁ S₂ : Nat → Type u_1} →
+  ((i₁ : Nat) → S₁ i₁ → Even.F S₁ S₂ i₁) → ((i₁ : Nat) → S₂ i₁ → Odd.F S₁ S₂ i₁) → {i₁ : Nat} → S₁ i₁ → Even i₁
 -/
 #guard_msgs in #check @Even.corec
 
 /--
-info: @Even.dtor_corec : ∀ {S₁ S₂ : ℕ → Type u_1} (c₁ : (i₁ : ℕ) → S₁ i₁ → Even.F S₁ S₂ i₁)
-  (c₂ : (i₁ : ℕ) → S₂ i₁ → Odd.F S₁ S₂ i₁) {i₁ : ℕ} (s : S₁ i₁),
+info: @Even.dtor_corec : ∀ {S₁ S₂ : Nat → Type u_1} (c₁ : (i₁ : Nat) → S₁ i₁ → Even.F S₁ S₂ i₁)
+  (c₂ : (i₁ : Nat) → S₂ i₁ → Odd.F S₁ S₂ i₁) {i₁ : Nat} (s : S₁ i₁),
   (Even.corec c₁ c₂ s).dtor = Even.F.fmap (fun i₁ s => Even.corec c₁ c₂ s) (fun i₁ s => Odd.corec c₁ c₂ s) (c₁ i₁ s)
 -/
 #guard_msgs in #check @Even.dtor_corec
@@ -280,15 +280,15 @@ example (n : Nat) : Even.nat n = Even.corec (S₁ := fun _ => Nat) (S₂ := fun 
     exact .Odd_succ _ _ ⟨rfl, _, rfl⟩
 
 /--
-info: @Even.corec_unique : ∀ {S₁ S₂ : ℕ → Type u_1} (c₁ : (i₁ : ℕ) → S₁ i₁ → Even.F S₁ S₂ i₁)
-  (c₂ : (i₁ : ℕ) → S₂ i₁ → Odd.F S₁ S₂ i₁) (h₁ : (i₁ : ℕ) → S₁ i₁ → Even i₁) (h₂ : (i₁ : ℕ) → S₂ i₁ → Odd i₁),
-  (∀ (i₁ : ℕ) (s : S₁ i₁), (h₁ i₁ s).dtor = Even.F.fmap h₁ h₂ (c₁ i₁ s)) →
-    (∀ (i₁ : ℕ) (s : S₂ i₁), (h₂ i₁ s).dtor = Odd.F.fmap h₁ h₂ (c₂ i₁ s)) →
-      ∀ {i₁ : ℕ} (s : S₁ i₁), h₁ i₁ s = Even.corec c₁ c₂ s
+info: @Even.corec_unique : ∀ {S₁ S₂ : Nat → Type u_1} (c₁ : (i₁ : Nat) → S₁ i₁ → Even.F S₁ S₂ i₁)
+  (c₂ : (i₁ : Nat) → S₂ i₁ → Odd.F S₁ S₂ i₁) (h₁ : (i₁ : Nat) → S₁ i₁ → Even i₁) (h₂ : (i₁ : Nat) → S₂ i₁ → Odd i₁),
+  (∀ (i₁ : Nat) (s : S₁ i₁), (h₁ i₁ s).dtor = Even.F.fmap h₁ h₂ (c₁ i₁ s)) →
+    (∀ (i₁ : Nat) (s : S₂ i₁), (h₂ i₁ s).dtor = Odd.F.fmap h₁ h₂ (c₂ i₁ s)) →
+      ∀ {i₁ : Nat} (s : S₁ i₁), h₁ i₁ s = Even.corec c₁ c₂ s
 -/
 #guard_msgs in #check @Even.corec_unique
 
-/-- info: @Odd.ctor : {i₁ : ℕ} → Odd.F Even Odd i₁ → Odd i₁ -/
+/-- info: @Odd.ctor : {i₁ : Nat} → Odd.F Even Odd i₁ → Odd i₁ -/
 #guard_msgs in #check @Odd.ctor
 
 -- Uniqueness at every index: the morphisms are families over the indices.
@@ -322,7 +322,7 @@ example (n : Nat) : (Even.nat n).dtor = .Even_succ n (Odd.corec (S₁ := fun _ =
 
 -- Goals show the constructors of the layer per type.
 /--
-trace: n : ℕ
+trace: n : Nat
 ⊢ (Even.nat n).dtor = Even.F.succ n (Odd.corec (fun n x => Even.F.succ n ()) (fun x x_1 => Odd.F.succ ()) ())
 -/
 #guard_msgs in

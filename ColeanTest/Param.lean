@@ -67,7 +67,7 @@ def Tree.bin {α : Type u} (a : α) : Tree α :=
 
 theorem Tree.bin_eq {α : Type u} (a : α) :
     Tree.bin a = .node a (.cons (.bin a) (.cons (.bin a) .nil)) := by
-  conv_lhs => rw [← Tree.ctor_dtor (Tree.bin a), Tree.bin, Tree.dtor_corec]
+  conv => lhs; rw [← Tree.ctor_dtor (Tree.bin a), Tree.bin, Tree.dtor_corec]
   simp [Tree.bin]
 
 -- Parameter positions under a function type and nested in a list.

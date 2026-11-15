@@ -112,7 +112,7 @@ def Tree.bin {α : Type u} (a : α) : Tree α :=
 of the open forests (`Forest.Open.Colean.Poly.map_cons`). -/
 theorem Tree.bin_eq {α : Type u} (a : α) :
     Tree.bin a = .node a (.cons (.bin a) (.cons (.bin a) .nil)) := by
-  conv_lhs => rw [← Tree.ctor_dtor (Tree.bin a), Tree.bin, Tree.dtor_corec]
+  conv => lhs; rw [← Tree.ctor_dtor (Tree.bin a), Tree.bin, Tree.dtor_corec]
   simp [Tree.bin]
 
 example {α : Type u} (t : Tree α) : ∃ a cs, t = Tree.node a cs := by
@@ -133,7 +133,7 @@ def Forest.size {α : Type u} (f : Forest α) : Nat :=
   simp [Forest.size]
 
 example {α : Type u} (a : α) : (Tree.bin a).dtor = .node a (.cons (.bin a) (.cons (.bin a) .nil)) := by
-  conv_lhs => rw [Tree.bin_eq]
+  conv => lhs; rw [Tree.bin_eq]
   simp
 
 /-- The children of `Tree.bin a`, by cases on the tree. -/

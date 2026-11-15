@@ -1,9 +1,10 @@
-import Mathlib.Logic.Equiv.Defs
 import Colean.DataCmd
 
 /-! # Test: `datatype`, a plain inductive type -/
 
 universe u
+
+open Colean
 
 namespace DataTest
 

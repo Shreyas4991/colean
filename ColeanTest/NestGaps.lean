@@ -38,7 +38,7 @@ datatype P2 (α β : Type u)
 #guard_msgs in
 #synth PolyIso (fun X : Type => P2 X Nat) _ _
 
-/-- info: P2.Colean.Poly.instPolyIsoEta ℕ -/
+/-- info: P2.Colean.Poly.instPolyIsoEta Nat -/
 #guard_msgs in
 #synth PolyIso (P2 Nat) _ _
 
@@ -135,7 +135,7 @@ datatype K (α β : Type)
 
 /--
 error: failed to synthesize
-  PolyIso (fun X => K X ℕ) ?m.1 ?m.2
+  PolyIso (fun X => K X Nat) ?m.1 ?m.2
 
 Hint: Additional diagnostic information may be available using the `set_option diagnostics true` command.
 -/
@@ -168,7 +168,7 @@ end
 def A.leaf {α : Type u} : A α := A.corec (S := Unit) (fun _ => .mk .nil) ()
 
 theorem A.leaf_eq {α : Type u} : (A.leaf : A α) = .mk .nil := by
-  conv_lhs => rw [← A.ctor_dtor A.leaf, A.leaf, A.dtor_corec]
+  conv => lhs; rw [← A.ctor_dtor A.leaf, A.leaf, A.dtor_corec]
   simp
 
 end Distant
@@ -192,7 +192,7 @@ end
 -- `α` is constant: there is no instance in it.
 /--
 error: failed to synthesize
-  PolyIso (fun X => B.Open X ℕ) ?m.1 ?m.2
+  PolyIso (fun X => B.Open X Nat) ?m.1 ?m.2
 
 Hint: Additional diagnostic information may be available using the `set_option diagnostics true` command.
 -/
@@ -211,8 +211,8 @@ info: @PairStr.Colean.Poly.map_mk : ∀ {H : Type u_2 → Type u_1} {H' : Type u
   [inst : PolyIso H S R] [inst' : PolyIso H' S R] {X : Type u_2} {Y : Type u_3} (f : X → Y) (p : H X × PairStr (H X)),
   (Occ.ofIso fun X => PairStr (H X)).map (Occ.ofIso fun X => PairStr (H' X)) f (PairStr.mk p) =
     PairStr.mk
-      ((Occ.ofIso H).map (Occ.ofIso H') f p.1,
-        (Occ.ofIso fun X => PairStr (H X)).map (Occ.ofIso fun X => PairStr (H' X)) f p.2)
+      ((Occ.ofIso H).map (Occ.ofIso H') f p.fst,
+        (Occ.ofIso fun X => PairStr (H X)).map (Occ.ofIso fun X => PairStr (H' X)) f p.snd)
 -/
 #guard_msgs(whitespace := lax) in
 #check @PairStr.Colean.Poly.map_mk
@@ -221,7 +221,7 @@ info: @PairStr.Colean.Poly.map_mk : ∀ {H : Type u_2 → Type u_1} {H' : Type u
 info: @PairStr.Colean.Poly.mem_mk : ∀ {H : Type u_2 → Type u_1} {S : Type u_3} {R : S → Type u_4} [inst : PolyIso H S R]
   {X : Type u_2} (x : X) (p : H X × PairStr (H X)),
   PolyIso.Mem (fun X => PairStr (H X)) x (PairStr.mk p) ↔
-    PolyIso.Mem H x p.1 ∨ PolyIso.Mem (fun X => PairStr (H X)) x p.2
+    PolyIso.Mem H x p.fst ∨ PolyIso.Mem (fun X => PairStr (H X)) x p.snd
 -/
 #guard_msgs(whitespace := lax) in
 #check @PairStr.Colean.Poly.mem_mk
@@ -240,13 +240,13 @@ def PairStr.const {α : Type u} (a : α) : PairStr α :=
   PairStr.corec (S := Unit) (fun _ => .mk (a, ())) ()
 
 theorem PairStr.const_eq {α : Type u} (a : α) : PairStr.const a = .mk (a, .const a) := by
-  conv_lhs => rw [← PairStr.ctor_dtor (PairStr.const a), PairStr.const, PairStr.dtor_corec]
+  conv => lhs; rw [← PairStr.ctor_dtor (PairStr.const a), PairStr.const, PairStr.dtor_corec]
   simp [PairStr.const]
 
 -- The members of the constant stream, through the instance.
 example (t a : ThroughPairStr) : PolyIso.Mem PairStr t (PairStr.const a) ↔
     t = a ∨ PolyIso.Mem PairStr t (PairStr.const a) := by
-  conv_lhs => rw [PairStr.const_eq]
+  conv => lhs; rw [PairStr.const_eq]
   simp
 
 /-! Through a sum: a constructor of the presentation, and a rule, for each side. -/
@@ -338,7 +338,7 @@ datatype Forest (α : Type u)
 end
 
 /--
-info: @Forest.mem_cons : ∀ {α : Type u_1} (p : Tree α × Forest α) (x : Tree α), x ∈ Forest.cons p ↔ x = p.1 ∨ x ∈ p.2
+info: @Forest.mem_cons : ∀ {α : Type u_1} (p : Tree α × Forest α) (x : Tree α), x ∈ Forest.cons p ↔ x = p.fst ∨ x ∈ p.snd
 -/
 #guard_msgs in
 #check @Forest.mem_cons
@@ -349,7 +349,7 @@ def Tree.bin {α : Type u} (a : α) : Tree α :=
 
 theorem Tree.bin_eq {α : Type u} (a : α) :
     Tree.bin a = .node a (.cons (.bin a, .cons (.bin a, .nil))) := by
-  conv_lhs => rw [← Tree.ctor_dtor (Tree.bin a), Tree.bin, Tree.dtor_corec]
+  conv => lhs; rw [← Tree.ctor_dtor (Tree.bin a), Tree.bin, Tree.dtor_corec]
   simp [Tree.bin]
 
 example {α : Type u} (s t : Tree α) : t ∈ Forest.cons (s, .cons (t, .nil)) := by simp
@@ -379,8 +379,8 @@ info: @QA.Colean.Poly.map_mk : ∀ {H : Type u_2 → Type u_1} {H' : Type u_3 �
   (p : QA (H X) × QB (H X)),
   (Occ.ofIso fun X => QA (H X)).map (Occ.ofIso fun X => QA (H' X)) f (QA.mk a p) =
     QA.mk ((Occ.ofIso H).map (Occ.ofIso H') f a)
-      ((Occ.ofIso fun X => QA (H X)).map (Occ.ofIso fun X => QA (H' X)) f p.1,
-        (Occ.ofIso fun X => QB (H X)).map (Occ.ofIso fun X => QB (H' X)) f p.2)
+      ((Occ.ofIso fun X => QA (H X)).map (Occ.ofIso fun X => QA (H' X)) f p.fst,
+        (Occ.ofIso fun X => QB (H X)).map (Occ.ofIso fun X => QB (H' X)) f p.snd)
 -/
 #guard_msgs(whitespace := lax) in
 #check @QA.Colean.Poly.map_mk
@@ -442,9 +442,9 @@ datatype Chain2 (α : Type u) : Nat → Type u
 
 /--
 info: @Chain2.Colean.Poly.mem_link : ∀ {H : Type u_2 → Type u_1} {S : Type u_3} {R : S → Type u_4} [inst : PolyIso H S R]
-  {X : Type u_2} (x : X) {n : ℕ} (p : Chain2 (H X) n × Chain2 (H X) (n + 1)),
+  {X : Type u_2} (x : X) {n : Nat} (p : Chain2 (H X) n × Chain2 (H X) (n + 1)),
   PolyIso.Mem (fun X => Chain2 (H X) (n + 2)) x (Chain2.link p) ↔
-    PolyIso.Mem (fun X => Chain2 (H X) n) x p.1 ∨ PolyIso.Mem (fun X => Chain2 (H X) (n + 1)) x p.2
+    PolyIso.Mem (fun X => Chain2 (H X) n) x p.fst ∨ PolyIso.Mem (fun X => Chain2 (H X) (n + 1)) x p.snd
 -/
 #guard_msgs(whitespace := lax) in
 #check @Chain2.Colean.Poly.mem_link
@@ -470,12 +470,12 @@ datatype Twin : Nat → Type
   | node {n : Nat} (p : Twin n × Twin n) : Twin (n + 1)
 
 /--
-info: @Twin.rec : {motive : (j₁ : ℕ) → Twin j₁ → Sort u_1} →
-  ({n : ℕ} → motive n Twin.leaf) →
-    ({n : ℕ} →
+info: @Twin.rec : {motive : (j₁ : Nat) → Twin j₁ → Sort u_1} →
+  ({n : Nat} → motive n Twin.leaf) →
+    ({n : Nat} →
         (p : Twin n × Twin n) →
           ((t : Twin n) → PolyIso.Mem (fun X => X × X) t p → motive n t) → motive (n + 1) (Twin.node p)) →
-      {i₁ : ℕ} → (t : Twin i₁) → motive i₁ t
+      {i₁ : Nat} → (t : Twin i₁) → motive i₁ t
 -/
 #guard_msgs in
 #check @Twin.rec
@@ -502,12 +502,12 @@ datatype TwinL : Nat → Type
   | node {n : Nat} (p : List (TwinL n × TwinL n)) : TwinL (n + 1)
 
 /--
-info: @TwinL.rec : {motive : (j₁ : ℕ) → TwinL j₁ → Sort u_1} →
-  ({n : ℕ} → motive n TwinL.leaf) →
-    ({n : ℕ} →
+info: @TwinL.rec : {motive : (j₁ : Nat) → TwinL j₁ → Sort u_1} →
+  ({n : Nat} → motive n TwinL.leaf) →
+    ({n : Nat} →
         (p : List (TwinL n × TwinL n)) →
           ((t : TwinL n) → PolyIso.Mem (fun X => List (X × X)) t p → motive n t) → motive (n + 1) (TwinL.node p)) →
-      {i₁ : ℕ} → (t : TwinL i₁) → motive i₁ t
+      {i₁ : Nat} → (t : TwinL i₁) → motive i₁ t
 -/
 #guard_msgs in
 #check @TwinL.rec
@@ -524,7 +524,7 @@ end
 info: @BA.rec : {motive_1 : BA → Sort u_1} →
   {motive_2 : BB → Sort u_1} →
     motive_1 BA.nil →
-      ((p : BA × ℕ) → ((t : BA) → PolyIso.Mem (fun X => X × ℕ) t p → motive_1 t) → motive_1 (BA.mk p)) →
+      ((p : BA × Nat) → ((t : BA) → PolyIso.Mem (fun X => X × Nat) t p → motive_1 t) → motive_1 (BA.mk p)) →
         ((a : BA) → motive_1 a → motive_2 (BB.mk a)) → (t : BA) → motive_1 t
 -/
 #guard_msgs in
