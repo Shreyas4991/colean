@@ -299,12 +299,12 @@ end
 
 /-- info: @Tree.F.rel_node_node : ∀ {α : Type u_1} {X₁ X₂ : Type u_2} {Y₁ Y₂ : Type u_3} {R₁ : X₁ → Y₁ → Prop}
   {R₂ : X₂ → Y₂ → Prop} (a : α) (children : X₂) (a' : α) (children' : Y₂),
-  Tree.F.Rel R₁ R₂ (Tree_Forest.F.node a children) (Tree_Forest.F.node a' children') ↔ a = a' ∧ R₂ children children' -/
+  Tree.F.Rel R₁ R₂ (Tree.F.node a children) (Tree.F.node a' children') ↔ a = a' ∧ R₂ children children' -/
 #guard_msgs in #check @Tree.F.rel_node_node
 
 /-- info: @Forest.F.rel_cons_cons : ∀ {α : Type u_1} {X₁ X₂ : Type u_2} {Y₁ Y₂ : Type u_3} {R₁ : X₁ → Y₁ → Prop}
   {R₂ : X₂ → Y₂ → Prop} (t : X₁) (f : X₂) (t' : Y₁) (f' : Y₂),
-  Forest.F.Rel R₁ R₂ (Tree_Forest.F.cons t f) (Tree_Forest.F.cons t' f') ↔ R₁ t t' ∧ R₂ f f' -/
+  Forest.F.Rel R₁ R₂ (Forest.F.cons t f) (Forest.F.cons t' f') ↔ R₁ t t' ∧ R₂ f f' -/
 #guard_msgs in #check @Forest.F.rel_cons_cons
 
 /-- info: @Forest.F.Rel.mono : ∀ {α : Type u_1} {X₁ X₂ : Type u_2} {Y₁ Y₂ : Type u_3} {R₁ : X₁ → Y₁ → Prop} {R₂ : X₂ → Y₂ → Prop}

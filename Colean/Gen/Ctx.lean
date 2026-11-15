@@ -131,9 +131,10 @@ def Ctor.fvars (c : Ctor) : Array Expr := c.args.map (·.fvar)
 def Ctor.hasNest (c : Ctor) : Bool := c.args.any (·.kind.isNest)
 
 /-- A binder name users may refer to: `n` itself, unless a name of the declaration, `used`, is
-`n`; then an inaccessible one, so that the declaration's own `n` is not shadowed. -/
-def plainOr (used : Array Name) (n : Name) : CoreM Name :=
-  if used.contains n then mkFreshUserName n else pure n
+`n`; then `n` primed as often as needed for a name not in `used` (`S'`, `S''`, …), so that the
+declaration's own `n` is not shadowed and the binder can still be named (`T.corec (S' := …)`). -/
+partial def plainOr (used : Array Name) (n : Name) : Name :=
+  if used.contains n then plainOr used (n.appendAfter "'") else n
 
 /-- A type being defined. -/
 structure TypeInfo where
@@ -613,12 +614,12 @@ def tyGenP (m : Nat) (s : String) : Name :=
 /-- The internal declaration `Tₘ.Colean.s` of the `m`-th type (`coleanNs`). -/
 def tyColean (m : Nat) (s : String) : Name := .str (coleanNs (ctx.tyName m)) s
 
-/-- A binder name users may refer to (`motive := …`, `S := …`): plain, unless the declaration
-uses it (`plainOr`). -/
+/-- A binder name users may refer to (`motive := …`, `S := …`): plain, or primed when the
+declaration uses it (`plainOr`). -/
 def userName (n : Name) : TermElabM Name := do
   let used := ctx.params.map (·.fvarId!) ++ ctx.idx.map (·.fvarId!) ++
     ctx.ctors.flatMap (·.fvars.map (·.fvarId!))
-  plainOr ((← used.mapM (·.getUserName)) ++ ctx.ctors.map (·.name)) n
+  return plainOr ((← used.mapM (·.getUserName)) ++ ctx.ctors.map (·.name)) n
 
 /-! ### Universes -/
 

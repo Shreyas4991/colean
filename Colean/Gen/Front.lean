@@ -63,8 +63,9 @@ no type, block or index of a block declared already, no two types with one const
 block's index, and no constructor twice in a type or named as a type, with the messages of
 `inductive` (`checkCtorDups`); then no constructor named as a declaration the command generates
 for its type, from its name or another constructor's or none, or, through the functor's
-constructor of the same name, for the functor, and no two declarations generated from
-constructors with one name (`checkCtorNames`).
+constructor of the same name, for the functor, or in a block, through the constructor of the
+layer per type, for that layer, and no two declarations generated from constructors with one
+name (`checkCtorNames`).
 
 The universe of the declared sort does not make the types': theirs is the model's. A declared
 sort with a universe written, without `_`, is kept (`Ctx.written`), and the pipeline checks it
@@ -345,12 +346,22 @@ def functorGenNames (co : Bool) (fnames : Array Name) : Array String :=
   (if co then #["Rel", "rel_fmap", "rel_refl"] else #[]) ++
   fnames.map ("fmap_" ++ ·.toString)
 
+/-- The generated declarations `Tₘ.F.s` of the layer `Tₘ.F` of a type of a block, by `s`, that its
+constructor `Tₘ.F.c` for a constructor `c` may clash with: its map, the laws and the rules of the
+constructors `cs` of the type, and for `codatatype` (`co`) its lifting and the laws of that. The
+layer is a definition, without the auxiliary constructions of an inductive type. -/
+def layerGenNames (co : Bool) (cs : Array Name) : Array String :=
+  #["fmap", "fmap_id", "fmap_comp"] ++ (if co then #["Rel", "rel_fmap", "rel_refl"] else #[]) ++
+  cs.map ("fmap_" ++ ·.toString)
+
 /-- The constructor names of the declarations `decls`, a single type or the types of a block,
 before anything is declared: a constructor `T.c` must not be a generated declaration of `T`
 (`typeGenNames`, `typeRuleNames`), one generated from another constructor or from itself
 (`ctorGenNames`), or the namespace `T.Colean` of its internals, nor its constructor `F.c` of the
 functor one of the functor (`functorGenNames`, and the one-step lemmas `F.rel_cᵢ_cⱼ` of a single
-`codatatype`), nor, for `codatatype`, `F.Rel.c` the lemma `F.Rel.mono`; the map's rule at a
+`codatatype`), nor, for `codatatype`, `F.Rel.c` the lemma `F.Rel.mono`; in a block, its
+constructor `Tₘ.F.c` of the layer per type must not be one of the layer (`layerGenNames`, and the
+one-step lemmas `Tₘ.F.rel_cᵢ_cⱼ`); the map's rule at a
 constructor must not be its law (`F.fmap_id` for `id`, in a block per type `Tₘ.F.fmap_id` too);
 and no declaration generated from constructors may be a fixed one (`T.dtor_inj` for a
 constructor `inj`) or have the name of another (`T.b_ne_ne_b`, from `b` and `ne_b` and from
@@ -393,6 +404,14 @@ def checkCtorNames (decls : Array DeclStx) (inner : Bool) (others : Array Name :
       if co && fname == `mono then
         clash c.name (F ++ `Rel.mono)
           m!": the lifting `{F ++ `Rel}` has a constructor `{F ++ `Rel ++ fname}` for it"
+      -- In a block, the layer per type `Tₘ.F` has a constructor `Tₘ.F.c` too.
+      unless single do
+        let L := genName T "F"
+        let lc := L ++ c.name.getId
+        if (layerGenNames co cs).contains c.name.getId.toString then
+          clash c.name lc m!": the layer `{L}` has a constructor `{lc}` for it"
+        if let some g := derived.find? (·.name == lc) then
+          clash c.name lc m!" ({g.what}): the layer `{L}` has a constructor `{lc}` for it"
       -- The map's rule at the constructor named as its law (`F.fmap_id` for `id`; in a block,
       -- per type, `Tₘ.F.fmap_id`).
       if let some law := [`id, `comp].find? (· == c.name.getId) then
@@ -977,7 +996,7 @@ def withCtx (decls : Array DeclStx) (ref : Syntax) (vars : Array Expr) (k : Ctx 
   let usedNames ← params.mapM fun (p : Expr) => p.fvarId!.getUserName
   let xNames ← need.mapIdxM fun i _ => do
     let n := if need.size == 1 then `X else Name.mkSimple s!"X{Nat.toSubscriptString (i + 1)}"
-    plainOr (usedNames ++ allShorts) n
+    pure (plainOr (usedNames ++ allShorts) n)
   let xLevels := need.foldl (init := #[]) fun acc k => Id.run do
     let some mx := mix? | return acc
     let base := Name.mkSimple ("u_" ++ (all[mx.runs[k]!.decls[0]!]!.T.getId).toString)
@@ -1073,7 +1092,7 @@ def withCtx (decls : Array DeclStx) (ref : Syntax) (vars : Array Expr) (k : Ctx 
         pure (cs, some I)
     else pure (#[], none)
   let usedNames ← (params ++ idxs.flatten ++ opened.flatMap (·.1)).mapM (·.fvarId!.getUserName)
-  let mName ← plainOr (usedNames ++ ctors.map (·.2.1)) `m
+  let mName := plainOr (usedNames ++ ctors.map (·.2.1)) `m
   let withFamIdx (k : Array Expr → TermElabM α) : TermElabM α :=
     match ixType? with
     | some I => withLocalDeclD mName I fun mv => k #[mv]

@@ -33,9 +33,12 @@ tactic proofs from what exists:
   where the block-level declarations take one family over `Blk.Ix`, as Lean's mutual recursors
   have a motive per type (`genLayers`, `genTypeLambek`, `genTypeCorecs`, `genTypeFolds`):
   `Blk.Colean.St`, packing a family per type into one on `Blk.Ix` by cases; the layer
-  `Tₘ.F params S₁ … Sₖ idx`, its map `Tₘ.F.fmap f₁ … fₖ` with the rules `Tₘ.F.fmap_cᵢ`, and for
-  `codatatype` its lifting `Tₘ.F.Rel R₁ … Rₖ`, the block's at the packed families (reducible, so
-  patterns and dot notation find the block functor's constructors), with the laws
+  `Tₘ.F params S₁ … Sₖ idx`, its constructors `Tₘ.F.cᵢ` (the block functor's `Blk.F.cᵢ`, or
+  `Blk.F.Tₘ_cᵢ` for a name that two types share, at the packed family, under the type's own
+  name, for dot notation and patterns, `@[match_pattern]`), its map `Tₘ.F.fmap f₁ … fₖ` with the
+  rules `Tₘ.F.fmap_cᵢ`, and for `codatatype` its lifting `Tₘ.F.Rel R₁ … Rₖ`, the block's at the
+  packed families (reducible, so patterns and dot notation find the block functor's constructors
+  too), with the laws
   `Tₘ.F.fmap_id`, `Tₘ.F.fmap_comp` and `Tₘ.F.rel_fmap`; the destructor `Tₘ.dtor` into the layer at
   the types and the constructor `Tₘ.ctor` out of it, with Lambek's lemma `Tₘ.dtor_ctor`,
   `Tₘ.ctor_dtor`, `Tₘ.ctor_injective` and the rules `Tₘ.dtor_cᵢ`, `Tₘ.ctor_cᵢ`; for `codatatype`,
@@ -223,6 +226,8 @@ def stN : Name := ctx.colean "St"
 def layerN (m : Nat) : Name := ctx.tyGenP m "F"
 def layerMapN (m : Nat) : Name := .str (ctx.layerN m) "fmap"
 def layerRelN (m : Nat) : Name := .str (ctx.layerN m) "Rel"
+/-- `Tₘ.F.c`, the constructor `c` of the `m`-th type in its layer, for the block functor's. -/
+def layerCtorN (c : Ctor) : Name := ctx.layerN c.owner ++ c.name
 
 /-- `Blk.Colean.St params S₁ … Sₖ`, the families of the types packed into one family on `Blk.Ix`, at
 universe `w`. -/
@@ -420,7 +425,9 @@ def genLayerLaws : TermElabM Unit := do
 
 /-- In a block, the layer per type: `Blk.Colean.St`, which packs one family per type into one on
 `Blk.Ix` by cases, the layer of each type at a family per type `Tₘ.F params S₁ … Sₖ idx` (the
-block's functor at the packed family, at the type's constructor of `Blk.Ix`), its map `Tₘ.F.fmap`
+block's functor at the packed family, at the type's constructor of `Blk.Ix`), its constructors
+`Tₘ.F.cᵢ` (the block functor's at the packed family, under the type's own names, usable in
+patterns, and recorded for their display, `Gen/Pack.lean`), its map `Tₘ.F.fmap`
 with one function per type and the rules `Tₘ.F.fmap_cᵢ`, and for `codatatype` its lifting to
 relations `Tₘ.F.Rel` with one relation per type, all reducible; the laws `Tₘ.F.fmap_id`,
 `Tₘ.F.fmap_comp` and for `codatatype` `Tₘ.F.rel_fmap`, the block's at the packed functions, equal to
@@ -458,6 +465,24 @@ def genLayers : TermElabM Unit := do
       let type ← mkForallFVars xs (← inferType body)
       addDef (ctx.layerN m) (← ctx.levelParamsOf fresh #[type, value]) type value (ref m)
         (reducible := true)
+  -- `Tₘ.F.cᵢ`: the block functor's constructor `Blk.F.cᵢ` (or `Blk.F.Tₘ_cᵢ`) at the packed
+  -- family, with the arguments as written, the occurrences at `S₁ … Sₖ`.
+  do
+    let fresh := ctx.freshLevels 1
+    let w := ctx.holeLevel (.param fresh[0]!)
+    ctx.withPerType "S" .implicit (ctx.tyFamType · w) fun Ss => do
+    let St ← ctx.stAt w Ss
+    for c in ctx.ctors do
+      ctx.withArgsAtU c (fun j idx => mkAppN Ss[j]! idx) w (post := ctx.foldTy) (annotated := true)
+          fun ys σ => do
+        let xs := ctx.params ++ Ss ++ ys
+        let (type, value) ← withBinderInfo ctx.params .implicit do
+          return (← mkForallFVars xs (← ctx.layerAt c.owner w Ss (c.uidx.map σ)),
+            ← mkLambdaFVars xs (← ctx.fCtorApp c w St ys))
+        let n := ctx.layerCtorN c
+        addDef n (← ctx.levelParamsOf fresh #[type, value]) type value c.ref (reducible := true)
+        addAttrs n #[← `(Parser.Term.attrInstance| match_pattern)]
+        modifyEnv (layerCtorExt.insert · (ctx.fCtor c) (n, ctx.params.size))
   -- `Tₘ.F.fmap`, `Tₘ.F.fmap_cᵢ`, `Tₘ.F.Rel`
   do
     let fresh := ctx.freshLevels 2
