@@ -149,12 +149,14 @@ codata Stream' (α : Type u)
 def Stream'.const (a : Nat) : Stream' Nat := .cons a (const a)
 partial_fixpoint
 
-/-! ### 5. Arguments under a function, and nested through a leaf
+/-! ### 5. Arguments under a function, and nested ones
 
-Under a function the order is Lean's, pointwise. A nested argument through a leaf (`List T`,
-`Option T`, `Array T`, a declared type) is ordered through the leaf's structure
-(`Codata.Occ.order`: the same shape, the contents ordered), and the maps of the library's leaves
-are monotone for it (`Codata.Occ.monotone_list_map`, …). -/
+Under a function the order is Lean's, pointwise. A nested argument (`List T`, `Option T`,
+`Array T`, a declared type, `T × T`) is ordered through its occurrence structure
+(`Codata.Occ.order`: the same shape, the contents ordered), and the maps and the constructors of
+the library's leaves, and the pairs of a product, are monotone for it
+(`Codata.Occ.monotone_list_map`, `Codata.Occ.monotone_list_cons`,
+`Codata.Occ.monotone_prod_mk_hole`, …). -/
 
 codata Tree (α : Type)
   | leaf
@@ -174,6 +176,24 @@ def Tree.map {α β : Type} (f : α → β) (t : Tree α) : Tree β :=
   | .leaf => .leaf
   | .node a k => .node (f a) fun i => map f (k i)
   | .rose a cs => .rose (f a) (cs.map (map f))
+partial_fixpoint
+
+-- Recursive calls written out: a list literal, `some`, a pair.
+codata Rose
+  | leaf
+  | node (cs : List Rose)
+  | opt (o : Option Rose)
+  | pair (p : Rose × Rose)
+
+attribute [with_ccpo] Rose
+
+def Rose.twins : Rose := .node [twins, twins]
+partial_fixpoint
+
+def Rose.opts : Rose := .opt (some opts)
+partial_fixpoint
+
+def Rose.pairs : Rose := .pair (pairs, .leaf)
 partial_fixpoint
 
 /-! ### 6. Families
@@ -322,31 +342,22 @@ attribute [with_ccpo] Strm
 
 end Inner
 
-/-! ### 12. Recursion through a nested argument other than by a map
+/-! ### 12. Recursion through a composite or a function into a leaf
 
 The order of a nested argument is that of its occurrence structure, which is not Lean's order on
-products and functions, and the only monotone functions into it are the maps of the leaves. A
-list built by `List.cons`, a product, a composite (`Option (List T)`), and a function into a list
-need their own orders and lemmas: an order per structure, defined structurally to be Lean's where
-Lean has one (functions, `PProd`), and the monotonicity of the constructors of the leaves
-(`List.cons`, `Option.some`). -/
+functions, and is not the order of the outer leaf at the order of the inner one for a composite:
+the lemmas of the leaves and products (section 5) do not apply. A composite (`Option (List T)`)
+and a function into a list need their own orders and lemmas: an order per structure, defined
+structurally to be Lean's where Lean has one (functions, `PProd`). -/
 
 namespace Nested
 
 codata Rose
   | leaf
-  | node (cs : List Rose)
-  | pair (p : Rose × Rose)
   | opt (o : Option (List Rose))
   | fan (k : Nat → List Rose)
 
 attribute [with_ccpo] Rose
-
-def twins : Rose := .node [twins, twins]
-partial_fixpoint
-
-def pairs : Rose := .pair (pairs, pairs)
-partial_fixpoint
 
 def opts : Rose := .opt (some [opts])
 partial_fixpoint

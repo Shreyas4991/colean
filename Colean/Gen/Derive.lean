@@ -37,6 +37,11 @@ products and sums into parts with only holes or only occurrences, or into such p
 with both under a named type constructor or a function that have a structure in two variables
 (`splitParts`, `mixOcc`, `imixOcc`).
 
+The variables of the step are at universes of their own, unless a field fixes the universe of
+the occurrences (`NDet (T α)` with `NDet : Type → Type`, `fixedLvl?`): then the layer's `Y` is at
+it, and so must be the states of the fixpoint, made of the premises' shapes, and for `codata` of
+their positions and of `X`, which are at fixed universes too (`stepLevels`).
+
 With the holes fixed, the constructors of the presentation are those of `T` with such nested
 arguments split (`VCtor`, `withVCtors`): an argument `p : α × T α` becomes its parts `p.1`, a field
 at a parameter position, and `p.2`, a recursive argument, and through a sum `f : T α ⊕ α` the
@@ -118,11 +123,14 @@ def genPoly (holes : Array Expr) : TermElabM Unit := do
   let primeable := (holeTys.foldl collectLevelParams {}).params.filter (!constLvls.contains ·)
   -- One more for the eta instance across universes.
   let fresh := ctx.freshLevels (5 + 2 * nh + primeable.size)
-  let lv (i : Nat) : Level := .param fresh[i]!
-  let primes := primeable.toList.zipIdx.map fun (u, j) => (u, lv (5 + 2 * nh + j))
+  let primes := primeable.toList.zipIdx.map fun (u, j) => (u, Level.param fresh[5 + 2 * nh + j]!)
+  -- Fresh, unless a field fixes the universe of the occurrences (`stepLevels`).
+  let lvls := ctx.stepLevels fresh nh fun l =>
+    l.instantiateParams (primes.map (·.1)) (primes.map (·.2))
+  let lv (i : Nat) : Level := lvls[i]!
   let P0 : Poly := {
     holes, consts, Hs := #[], Hs' := #[], Ss := #[], Rs := #[], insts := #[], insts' := #[]
-    fields := #[], fresh, primes }
+    fields := #[], fresh, lvls, primes }
   -- The names of the premises, unlike those of the other parameters and of the arguments,
   -- binders of the same lemmas.
   let taken := (← consts.mapM fun p => p.fvarId!.getUserName) ++

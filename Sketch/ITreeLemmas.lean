@@ -10,6 +10,8 @@ coalgebra of `X ↦ α × (I → X)` is the type of functions on paths, for ever
 branching over `ℝ` closes the file.
 -/
 
+open Codata
+
 universe u v w
 
 namespace ITree

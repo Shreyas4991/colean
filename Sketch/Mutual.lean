@@ -1,5 +1,7 @@
 import Colean.Raw
 
+open Codata
+
 -- Lean 4.34 compares implicit arguments and metavariable types without unfolding definitions.
 set_option backward.isDefEq.respectTransparency false
 set_option backward.isDefEq.respectTransparency.types false

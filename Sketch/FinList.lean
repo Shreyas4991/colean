@@ -23,6 +23,8 @@ What the inductive subtype supports:
 * the isomorphism `FinList α ≃ List α` with the native type.
 -/
 
+open Codata
+
 universe u v
 
 open CoList

@@ -10,6 +10,8 @@ operator is empty (`not_isFinStr`), exactly as the native `inductive` with this 
 would be.
 -/
 
+open Codata
+
 universe u v
 
 namespace Str

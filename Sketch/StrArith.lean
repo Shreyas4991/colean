@@ -25,11 +25,13 @@ shows that they stay inside it.
   `Str.add_cons_cons` and `Str.mul_cons_cons`, with no positions in sight.
 -/
 
+open Codata
+
 universe u v
 
 open Lean.Order
 
-namespace Raw
+namespace Codata.Raw
 
 variable {I : Type u} {L : Type v}
 
@@ -56,7 +58,7 @@ noncomputable instance instCCPO : CCPO (Raw I L) where
 theorem bot_eq_empty : (Lean.Order.bot : Raw I L) = empty :=
   Lean.Order.PartialOrder.rel_antisymm (bot_le _) (empty_le _)
 
-end Raw
+end Codata.Raw
 
 namespace Str
 

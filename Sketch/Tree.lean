@@ -17,6 +17,8 @@ corecursor returns two states.
 `FinTree.lean` has the inductive type defined by the same operator.
 -/
 
+open Codata
+
 universe u v
 
 /-- The non-recursive data of each constructor. -/

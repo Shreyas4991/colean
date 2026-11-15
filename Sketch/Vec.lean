@@ -18,6 +18,8 @@ inductive type here, the recursor is the induction principle `Vec.induction`, ob
 generated `IsVec.induct`; case analysis follows the index (`eq_nil`, `exists_cons`).
 -/
 
+open Codata
+
 universe u
 
 namespace Vec

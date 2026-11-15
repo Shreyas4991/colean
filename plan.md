@@ -210,7 +210,8 @@ DONE (2026-11-11, `ColeanTest/NestGaps3.lean`):
   and in a block a type of the block inside a named type constructor at one type after cases
   (`List (RA α × Nat)`); at one index the structure is a plain one there (`IOcc₂.ofOcc₂`), and the
   rules are stated as without indices;
-* `forall_or_eq_imp` (Lean's) is a `simp` lemma, so `∀ t, t ∈ p.1 ∨ t = p.2 → P t` splits.
+* `∀ t, t ∈ p.1 ∨ t = p.2 → P t` splits by `simp [forall_or_eq_imp]` (Lean's lemma; since
+  2026-11-15 no longer made a global `simp` lemma, which leaked to every importer).
 
 DONE (2026-11-11, `ColeanTest/NestFix.lean`), after a review of nesting:
 

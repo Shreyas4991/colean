@@ -19,15 +19,15 @@ file of theory and one generator file.
 
 Theory, in dependency order:
 
-- `Raw.lean`: the general type `Raw I L := List I → Option L` (the model's carrier).
+- `Raw.lean`: the general type `Codata.Raw I L := List I → Option L` (the model's carrier).
 - `PolyIso.lean`: the user interface for nesting: `PolyIso` and `PolyMap` (and `IPolyIso`, `IPolyMap` for functors on families) say that a functor is isomorphic to a polynomial functor, and `PolyIso.Mem` (`IPolyIso.Mem`, at an index) says what the members of a value are. Instances for constants, the identity, `List`, `Option`, `Array`, and for products, sums, functions, dependent pairs and composites of functors with instances, functors on families among them, with `simp` lemmas for membership through all of them (through a sum at any value, `mem_sum`), and for a property of every member, or of some member, at any index, rewritten before the membership inside (`simp ↓`, `IPolyIso.forall_mem_prod`, `exists_mem_compC`, …) so that the index and the member are taken away at the holes (`forall_eq_heq_imp`, `exists_eq_heq_and`, …). Depends on Mathlib only.
 - `Framework.lean`: `Codata.Rel`, `Codata.Contract`, `Data.All`, `Data.Contract` and every theorem that follows from a contract alone; and `rel_of_map_heq`, a lifting of relations read along a map between equal families, for the bisimulation per type of a block. Depends on Mathlib only.
 - `Model/Cotype.lean`: signatures, the container functor `Obj`, the encoding, the greatest fixpoint `IsWf`, `Cotype`, its contract pieces and the transport theorems to a functor `F ≃ Obj`.
 - `Model/Intype.lean`: the least fixpoint `IsFin`, `Intype`, the dependent recursor by well-founded recursion, fold, and the transports.
 - `Model/Poly.lean`: a least or greatest fixpoint of a layer polynomial in a parameter is polynomial in that parameter: trees of shapes, `Path`, `PolyFix`, `coFix`, `inFix`; for a family, at every index (`ILay`, `IPath`, `IPolyFix`, `icoFix`, `iinFix`), on the total space of the plain case. The map through a right inverse of the destructor (`map_eq_of_d`) and membership in one step (`exists_val_iff`), for the `simp` lemmas of step 5.
-- `Model/Occ.lean`: occurrence structures `Occ`/`IOcc`, internal to the command: their combinators, laws and computation lemmas (`simp`, for `IOcc` as for `Occ`), the relation of two values through the combinators down to the leaves (`rel_prod`, …, `rel_list` as `List.Forall₂`, `rel_option` as `Option.Rel`), a map on either side moved into it and a value related to itself (`rel_map_left`, `rel_self`, `simp`), the members of a value (`Occ.Mem`, `simp` through the combinators), and the map of an indexed structure at one index as the plain one's (`IOcc.map_flat_sum`, …); the leaves are `Occ.ofIso F`, from the `PolyIso` instances, and the instances of the built-in forms are the combinators by definition (`Occ.ofIso_prod`, …, `simp` lemmas but for the identity's).
+- `Model/Occ.lean`: occurrence structures `Occ`/`IOcc`, internal to the command: their combinators, laws and computation lemmas (`simp`, for `IOcc` as for `Occ`; the map through a sum at any value as `Sum.map`, `map_sum`), the relation of two values through the combinators down to the leaves (`rel_prod`, …, `rel_list` as `List.Forall₂`, `rel_option` as `Option.Rel`), a map on either side moved into it and a value related to itself (`rel_map_left`, `rel_self`, `simp`), the members of a value (`Occ.Mem`, `simp` through the combinators), and the map of an indexed structure at one index as the plain one's (`IOcc.map_flat_sum`, …); the leaves are `Occ.ofIso F`, from the `PolyIso` instances, and the instances of the built-in forms are the combinators by definition (`Occ.ofIso_prod`, …, `simp` lemmas but for the identity's).
 - `Model/Occ2.lean`: occurrence structures in two variables `Occ₂`, `G X Y ≃ Lay PX PY X Y` with the layer of `Model/Poly.lean`, for a field with a parameter and the recursion in one argument: combinators, laws, the computation of the map, `AgreeY`, the agreement of its map in `Y` with that of the structure in `Y` alone, and membership in each variable (`MemX`, `MemY`, `simp` through the combinators down to the parts in one variable, whose members are `Occ.Mem`).
-- `Model/CCPO.lean`: the order of approximation on a coinductive type with a bottom layer, from a contract and a presentation of its functor as a container (`Contract.Container`): `Approx`, its unfolding and coinduction, the supremum of a chain by `corec` (`csup`), Lean's `Lean.Order.CCPO` (`Contract.ccpo`), the monotonicity of the constructor; the order on a nested argument through its occurrence structure (`Occ.order`) and the monotonicity of the maps of the library's leaves, for `partial_fixpoint` (step 6).
+- `Model/CCPO.lean`: the order of approximation on a coinductive type with a bottom layer, from a contract and a presentation of its functor as a container (`Contract.Container`): `Approx`, its unfolding and coinduction, the supremum of a chain by `corec` (`csup`), Lean's `Lean.Order.CCPO` (`Contract.ccpo`), the monotonicity of the constructor; the order on a nested argument through its occurrence structure (`Occ.order`) and the monotonicity for it of the maps and constructors of the library's leaves and of the pairs of a product, for `partial_fixpoint` (step 6).
 - `Model/IOcc2.lean`: the same over a family, `IOcc₂`, the recursive variable a family over an index, each position in it at its index (the layer of `ILay`), for families and blocks: combinators, among them a plain structure at one index (`ofOcc₂`), laws, the map, `AgreeY` with the indexed structure in `Y` alone read along a map of the indices, and membership, a member in `Y` with its index.
 
 Generators, on `Expr`, in dependency order. `Syntax.lean` holds the command syntax: a declaration is Lean's `inductive` with its keyword swapped (`declModifiers`, `declId`, `optDeclSig`, `where`, Lean's `ctor`, `deriving`), and a `mixed_mutual` block holds commands up to `end`, as `mutual` does.
@@ -286,7 +286,11 @@ says so and why.
 It generates one instance per type, `PolyIso (fun X => T (H₁ X) … (Hₙ X))` with premises on the
 `Hᵢ`, over the parameters that may vary, and the eta-reduced form `T A₁ … Aₙ₋₁`, with the
 `PolyMap` instance from `PolyMap Hᵢ H'ᵢ` premises, as the instances of the built-in forms (the
-eta form across universes when the universe of the last parameter is its own). Only the layer
+eta form across universes when the universe of the last parameter is its own). When a field fixes the
+universe of the occurrences (`NDet (T α)` with `NDet : Type → Type`), the layer's `Y` is at it, and
+so are the states of the fixpoint: the premises' shapes are in `Type`, and for `codata` their
+positions too and `X` at that universe (`stepLevels`); for `data` above `Type`, the trees of
+shapes must reach it (`checkStateLevel`, a limit otherwise). Only the layer
 `T.Poly.toL`/`ofL` and its laws are per declaration; the fixpoint is `Model/Poly.lean`, one proof
 for `data` and `codata`, from the contract. The structure of a field in the parameters is that of
 `Gen/Occ.lean`, with each premise's structure at its parameter; a field may mention several, and
@@ -404,15 +408,19 @@ family's.
 `partial_fixpoint` proves a definition monotone with the lemmas tagged
 `@[partial_fixpoint_monotone]`, by the head of the body, and splits `match`es (on `t.dtor`). A
 constructor gets `T.monotone_c`: its recursive arguments, plain, under a function (Lean's order on
-functions) or nested through a leaf, `List T` (the order through the leaf's structure,
+functions) or nested with a plain structure, `List T`, `T × T` (the order through the structure,
 `Occ.order`, which is `T.F.Rel`'s), are monotone functions, the others fixed; the proof is the
 constructor of `T.F.Rel`, its premises the hypotheses, or reflexivity (`Occ.rel_refl`,
-`IOcc.rel_refl`) for a fixed nested argument. Through a leaf the maps are monotone
-(`Occ.monotone_list_map`, `monotone_option_map`, `monotone_array_map`). The user's own functions
-(`bind` of interaction trees) are proved monotone by `T.approx_coind`, coinduction up to the order.
+`IOcc.rel_refl`) for a fixed nested argument. Through a leaf the maps and the constructors are
+monotone (`Occ.monotone_list_map`, `monotone_option_map`, `monotone_array_map`,
+`monotone_list_cons`, `monotone_option_some`), and through a product the pairs, with the type's
+own order at a component that is the type, where `partial_fixpoint` proves a recursive call
+monotone (`monotone_prod_mk_hole`, `_hole_left`, `_hole_right`, then `monotone_prod_mk`, in this
+order since the first lemma that applies is taken). The user's own functions (`bind` of
+interaction trees) are proved monotone by `T.approx_coind`, coinduction up to the order.
 
 Not supported: the types of `mutual` and `mixed_mutual` blocks (the outer `codata` of a mixed block
-is a single type and is supported), several indices, and recursion through a nested argument other
-than by the map of a leaf (`List.cons`, a product, a composite `Option (List T)`, a function into a
-list): these arguments stay fixed (`Sketch/CCPOTour.lean`, Part II).
+is a single type and is supported), several indices, and recursion through a composite
+(`some [f n]` in `Option (List T)`) or a function into a list, whose orders through the structure
+are not the leaves' (`Sketch/CCPOTour.lean`, Part II).
 

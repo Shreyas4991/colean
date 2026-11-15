@@ -15,6 +15,8 @@ and the isomorphism `equivNative` with the native `inductive`. Here the two fixp
 visibly: the full infinite tree is not a finite tree (`not_isFinTree_full`).
 -/
 
+open Codata
+
 universe u v
 
 open Tree

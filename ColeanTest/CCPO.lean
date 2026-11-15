@@ -240,6 +240,69 @@ def ORose.map {α β : Type} (f : α → β) (t : ORose α) : ORose β :=
   | .node a l r => .node (f a) (l.map (map f)) (r.map (map f))
 partial_fixpoint
 
+/-! ### Recursive calls written out in a nested argument
+
+A list literal, `some`, and a pair: `partial_fixpoint` goes through the constructors of the leaves
+and the pairs of a product (`Codata.Occ.monotone_list_cons`, `Codata.Occ.monotone_option_some`,
+`Codata.Occ.monotone_prod_mk_hole`, …), and a product argument is ordered through its structure
+too. -/
+
+@[with_ccpo] codata CT
+  | leaf
+  | node (n : Nat) (kids : List CT)
+
+def CT.full (n : Nat) : CT := .node n [CT.full (n + 1), CT.full (n + 2)]
+partial_fixpoint
+
+example (n : Nat) : CT.full n = .node n [CT.full (n + 1), CT.full (n + 2)] := by
+  rw [CT.full.eq_1]
+
+@[with_ccpo] codata COpt
+  | leaf
+  | node (n : Nat) (next : Option COpt)
+
+def COpt.down (n : Nat) : COpt :=
+  if n = 0 then .node 0 none else .node n (some (COpt.down (n - 1)))
+partial_fixpoint
+
+example (n : Nat) :
+    COpt.down n = if n = 0 then .node 0 none else .node n (some (COpt.down (n - 1))) := by
+  rw [COpt.down.eq_1]
+
+@[with_ccpo] codata CPair
+  | leaf
+  | both (p : CPair × CPair)
+  | left (q : Nat × CPair)
+  | right (r : CPair × Nat)
+  | mixed (s : List CPair × CPair)
+
+/--
+info: @CPair.monotone_both : ∀ {γ : Sort u_1} [inst : Lean.Order.PartialOrder γ] {p : γ → CPair × CPair},
+  monotone p → monotone fun x => CPair.both (p x)
+-/
+#guard_msgs in #check @CPair.monotone_both
+
+def CPair.spine (n : Nat) : CPair := .both (CPair.spine (n + 1), .leaf)
+partial_fixpoint
+
+example (n : Nat) : CPair.spine n = .both (CPair.spine (n + 1), .leaf) := by
+  rw [CPair.spine.eq_1]
+
+def CPair.full (n : Nat) : CPair := .both (CPair.full (n + 1), CPair.full (n + 2))
+partial_fixpoint
+
+def CPair.count (n : Nat) : CPair := .left (n, CPair.count (n + 1))
+partial_fixpoint
+
+example (n : Nat) : CPair.count n = .left (n, CPair.count (n + 1)) := by
+  rw [CPair.count.eq_1]
+
+def CPair.count' (n : Nat) : CPair := .right (CPair.count' (n + 1), n)
+partial_fixpoint
+
+def CPair.wide (n : Nat) : CPair := .mixed ([CPair.wide (n + 1), .leaf], CPair.wide (n + 2))
+partial_fixpoint
+
 /-! ### A family, with the bottom at every index -/
 
 codata Delay : Nat → Type

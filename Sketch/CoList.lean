@@ -25,6 +25,8 @@ isomorphism with Mathlib's `Seq`; `FinList.lean` has the inductive type defined 
 operator.
 -/
 
+open Codata
+
 universe u v
 
 /-- The non-recursive data of each constructor. -/

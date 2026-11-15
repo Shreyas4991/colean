@@ -15,6 +15,8 @@ and nothing requires it to be countable: `ITree ℝ α` has a continuum of child
 coalgebras are `S → α × (I → S)`, handled directly by `Raw.corec`.
 -/
 
+open Codata
+
 universe u v w
 
 namespace ITree

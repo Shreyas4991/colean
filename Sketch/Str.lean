@@ -17,6 +17,8 @@ just `S → α × S`, and `corec_eq` is `Subtype.ext` of `Raw.corecList_eq`.
 inductive twin; `StrArith.lean` defines arithmetic by `partial_fixpoint` on `Raw`.
 -/
 
+open Codata
+
 universe u v
 
 namespace Str

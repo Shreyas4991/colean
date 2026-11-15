@@ -216,12 +216,6 @@ end IPolyIso
 
 open PolyIso (Mem)
 
-/-! A property of the members of a pair, one of them through a container, splits by `simp`:
-`∀ t, t ∈ p.1 ∨ t = p.2 → P t` is `(∀ t ∈ p.1, P t) ∧ P p.2`, as `forall_eq_or_imp` does with the
-equation first. The lemma is Lean's own; it is a `simp` lemma from here on. -/
-
-attribute [simp] forall_or_eq_imp
-
 /-! ### The identity and constants
 
 What the instances of a functor with several arguments compose with: `Pair Nat X` is `Pair` at

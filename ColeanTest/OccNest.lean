@@ -178,6 +178,47 @@ theorem Tree.size_node (l r : Tree) : (Tree.node (Two.mk (l, r))).size = l.size 
   change (Two.map _ (Two.mk (l, r))).get true + (Two.map _ (Two.mk (l, r))).get false + 1 = _
   simp [Tree.size]
 
+/-! ### `simp` through a sum at any value
+
+The map through a sum is `Sum.map` of the maps of its sides (`Occ.map_sum`, `IOcc.map_sum`), and
+through a constant the identity (`Occ.map_const_const`), so the rules of a sum field compute at a
+variable, not only at `Sum.inl` and `Sum.inr`. -/
+
+data U
+  | leaf
+  | node (s : U ⊕ U)
+
+example (g : U.F Nat → Nat) (s : U ⊕ U) :
+    U.fold g (.node s) = g (.node (s.map (U.fold g) (U.fold g))) := by
+  simp
+
+data V
+  | leaf
+  | node (s : Nat ⊕ V)
+
+example {X Y : Type} (f : X → Y) (s : Nat ⊕ X) : V.F.map f (.node s) = .node (s.map id f) := by
+  simp
+
+example (g : V.F Nat → Nat) (s : Nat ⊕ V) :
+    V.fold g (.node s) = g (.node (s.map id (V.fold g))) := by
+  simp
+
+codata CV
+  | leaf
+  | node (s : CV ⊕ Nat)
+
+example {X Y : Type} (f : X → Y) (s : X ⊕ Nat) : CV.F.map f (.node s) = .node (s.map f id) := by
+  simp
+
+-- Indexed: two indices across the sum.
+data W : Nat → Type
+  | leaf {n : Nat} : W n
+  | node {n : Nat} (s : W (n + 1) ⊕ W (n + 2)) : W n
+
+example (g : ∀ n, W.F (fun _ => Nat) n → Nat) {n : Nat} (s : W (n + 1) ⊕ W (n + 2)) :
+    W.fold g (.node s) = g n (.node (s.map (W.fold g) (W.fold g))) := by
+  simp
+
 end
 
 end OccTest

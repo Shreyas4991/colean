@@ -13,13 +13,14 @@ type as the subtype cut out by that predicate.
 
 ## The general type
 
-`Raw I L` is the type of *path-indexed trees* branching over `I` with node labels in `L`: a
-function from paths (lists of child indices) to optional labels. It is a final coalgebra for
-`X ↦ Option L × (I → X)`: a raw tree is exactly a root label and an `I`-indexed family of
-children (`Raw.mk_root_child`, `Raw.ext_root_child`), and every coalgebra `S → Option L × (I → S)`
-corecurses into it by structural recursion on paths (`Raw.corec`, `Raw.corec_eq`). Two trees
-related by a bisimulation are equal (`Raw.eq_of_bisim`), again by induction on paths, so
-bisimulation proofs on the subtypes come for free.
+`Raw I L` (`Codata.Raw`, in the library's namespace as everything else) is the type of
+*path-indexed trees* branching over `I` with node labels in `L`: a function from paths (lists of
+child indices) to optional labels. It is a final coalgebra for `X ↦ Option L × (I → X)`: a raw
+tree is exactly a root label and an `I`-indexed family of children (`Raw.mk_root_child`,
+`Raw.ext_root_child`), and every coalgebra `S → Option L × (I → S)` corecurses into it by
+structural recursion on paths (`Raw.corec`, `Raw.corec_eq`). Two trees related by a bisimulation
+are equal (`Raw.eq_of_bisim`), again by induction on paths, so bisimulation proofs on the
+subtypes come for free.
 
 The index type `I` is the branching type, and nothing requires it to be countable (`ITree.lean`
 branches over `ℝ`). Constructors with finitely many recursive arguments use `I = ℕ` and
@@ -35,6 +36,8 @@ The generic theory lives in `Framework.lean` and `Model/`, the user interface fo
 -/
 
 universe u v w v'
+
+namespace Codata
 
 /-- A path-indexed tree branching over `I`: an optional label at every path `List I`. The label
 of the root is `t.get []`, and `t.get (i :: p)` is the label at path `p` of the `i`-th child. -/
@@ -249,3 +252,5 @@ theorem corecList_eq (f : S → L × List S) (s : S) :
 end Nat
 
 end Raw
+
+end Codata

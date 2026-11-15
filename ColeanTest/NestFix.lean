@@ -26,7 +26,10 @@ One section per fix:
 11. no disjunct for the members in the parameter of a field without it, and generated binders
     unlike the arguments;
 12. `simp` takes the index and the member of a hypothesis or a rule by `IPolyIso.Mem` away at
-    the holes, also through a list of pairs at one index (`List (T n × T n)`). -/
+    the holes, also through a list of pairs at one index (`List (T n × T n)`);
+13. nesting through a type at one universe (`NDet : Type → Type`) fixes the universe of the
+    occurrences: the layer's variable is at it, and so are the states of the fixpoint, so the
+    instances are generated (`stepLevels`). -/
 
 universe u v
 
@@ -539,5 +542,120 @@ example {X : Nat → Type} (P Q : ∀ n, X n → Prop) {i k : Nat} (c : X i) (d 
   simp
 
 end
+
+/-! ### 13. Nesting through a type at one universe
+
+`NDet (Game α)` with `NDet : Type → Type` puts the occurrences of `Game` in `Type`: `Game.F`
+takes its variable there, and so do the layer of the instances and the states of their fixpoint,
+so the instances of `Game` are generated, in `Type`, and types nest through it in turn. The same
+for `data` and through a type of either kind. -/
+
+namespace FixedUniverse
+
+codata NDet (α : Type)
+  | ret (a : α)
+  | choose (next : List (NDet α))
+
+#guard_msgs in
+codata Game (α : Type)
+  | move (label : α) (options : NDet (Game α))
+
+/-- info: Game.Poly.instPolyIsoEta -/
+#guard_msgs in
+#synth PolyIso Game _ _
+
+/--
+info: @Game.Poly.instPolyIso : {H : Type → Type} →
+  {S : Type} →
+    {R : S → Type} →
+      [inst : PolyIso H S R] →
+        PolyIso (fun X => Game (H X)) ((shapeSig (Game.Poly.B S R)).Cotype ())
+          (Path (Game.Poly.P S R) (coTree (Game.Poly.B S R)))
+-/
+#guard_msgs in
+#check @Game.Poly.instPolyIso
+
+example (f : Nat → Int) (a : Nat) (o : NDet (Game Nat)) :
+    (Occ.ofIso Game).map (Occ.ofIso Game) f (.move a o) =
+      .move (f a)
+        ((Occ.ofIso NDet).map (Occ.ofIso NDet) ((Occ.ofIso Game).map (Occ.ofIso Game) f) o) := by
+  simp
+
+example (x a : Nat) (o : NDet (Game Nat)) :
+    PolyIso.Mem Game x (.move a o) ↔ x = a ∨ ∃ t, PolyIso.Mem NDet t o ∧ PolyIso.Mem Game x t := by
+  simp
+
+-- A third type nests through `Game`.
+#guard_msgs in
+codata Arena (α : Type)
+  | node (a : α) (g : Game (Arena α))
+
+/-- info: Arena.Poly.instPolyIsoEta -/
+#guard_msgs in
+#synth PolyIso Arena _ _
+
+example {X Y : Type} (f : X → Y) (a : Nat) (g : Game X) :
+    Arena.F.map f (.node a g) = .node a ((Occ.ofIso Game).map (Occ.ofIso Game) f g) := by
+  simp
+
+-- `data` through `data`.
+data MyList (α : Type)
+  | nil
+  | cons (a : α) (t : MyList α)
+
+#guard_msgs in
+data Rose2 (α : Type)
+  | node (a : α) (kids : MyList (Rose2 α))
+
+/-- info: Rose2.Poly.instPolyIsoEta -/
+#guard_msgs in
+#synth PolyIso Rose2 _ _
+
+example (f : Nat → Int) (a : Nat) (k : MyList (Rose2 Nat)) :
+    (Occ.ofIso Rose2).map (Occ.ofIso Rose2) f (.node a k) =
+      .node (f a)
+        ((Occ.ofIso MyList).map (Occ.ofIso MyList) ((Occ.ofIso Rose2).map (Occ.ofIso Rose2) f) k)
+      := by
+  simp
+
+-- `codata` through `codata`.
+codata CoList (α : Type)
+  | nil
+  | cons (a : α) (t : CoList α)
+
+#guard_msgs in
+codata CoRose (α : Type)
+  | node (a : α) (kids : CoList (CoRose α))
+
+/-- info: CoRose.Poly.instPolyIsoEta -/
+#guard_msgs in
+#synth PolyIso CoRose _ _
+
+example (f : Nat → Int) (a : Nat) (k : CoList (CoRose Nat)) :
+    (Occ.ofIso CoRose).map (Occ.ofIso CoRose) f (.node a k) =
+      .node (f a)
+        ((Occ.ofIso CoList).map (Occ.ofIso CoList) ((Occ.ofIso CoRose).map (Occ.ofIso CoRose) f) k)
+      := by
+  simp
+
+-- Above `Type`, `codata` gets its instances; `data` needs its trees of shapes at that universe,
+-- here in `Type`.
+codata NDetU (α : Type u)
+  | ret (a : α)
+  | choose (next : List (NDetU α))
+
+#guard_msgs in
+codata GameU (α : Type u)
+  | move (label : α) (options : NDetU.{u} (GameU α))
+
+/--
+warning: `DGameU` cannot be nested through: no `Codata.PolyIso` instance was generated. The type itself is not affected.
+a field fixes the universe of the occurrences at `Type u`, and the fixpoint needs `fold` on states in `Type`, its trees of shapes
+-/
+#guard_msgs in
+data DGameU (α : Type u)
+  | move (label : α) (options : NDetU.{u} (DGameU α))
+
+end FixedUniverse
 
 end NestFixTest

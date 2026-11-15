@@ -14,8 +14,8 @@ The generated API through the instances in the cases that `ColeanTest/NestGaps2.
   its rules are those of a single type, at the type of its members;
 * a family with the positions of such a field at several indices (`List (α × T n × T (n + 1))`):
   the rules are stated by the indexed structure, a member in `Y` with its index;
-* `forall_or_eq_imp` as a `simp` lemma: a hypothesis by membership in a pair of a container and an
-  occurrence splits. -/
+* a hypothesis by membership in a pair of a container and an occurrence splits by `simp` with
+  Lean's `forall_or_eq_imp`, which Colean does not make a `simp` lemma. -/
 
 universe u
 
@@ -318,13 +318,13 @@ data LP
   | leaf
   | mk (p : List LP × LP)
 
-/-- `simp` splits `∀ t, t ∈ p.1 ∨ t = p.2 → P t` (`forall_or_eq_imp`). -/
+/-- `simp [forall_or_eq_imp]` splits `∀ t, t ∈ p.1 ∨ t = p.2 → P t`. -/
 theorem LP.ind (P : LP → Prop) (h0 : P .leaf)
     (hm : ∀ l t, (∀ s ∈ l, P s) → P t → P (.mk (l, t))) (t : LP) : P t := by
   induction t with
   | leaf => exact h0
   | mk p ih =>
-    simp at ih
+    simp [forall_or_eq_imp] at ih
     guard_hyp ih :ₛ (∀ (t : LP), t ∈ p.1 → P t) ∧ P p.2
     exact hm p.1 p.2 ih.1 ih.2
 

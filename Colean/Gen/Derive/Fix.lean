@@ -17,6 +17,17 @@ variable (ctx : Ctx)
 
 /-! ### The fixpoint and the instances -/
 
+/-- With the universe of the occurrences fixed by a field (`stepLevels`), `T.corec` and `T.fold`
+take their states in that universe only, and the states of the fixpoint, in `Type w`, must be
+there: a limit otherwise, for `data` when its trees of shapes are in a lower universe. -/
+def checkStateLevel (w : Level) : MetaM Unit := do
+  let some l := ctx.fixedLvl? | return
+  unless ← isLevelDefEq w l do
+    let sort (v : Level) : MetaM String := return (← ppExpr (mkSort v.succ)).pretty
+    throwLimit m!"a field fixes the universe of the occurrences at `{← sort l}`, and the \
+      fixpoint needs `{if ctx.co then "corec" else "fold"}` on states in `{← sort w}`, its trees \
+      of shapes"
+
 /-- With indices, `T.Poly.fix (X) : IPolyFix P tree X (fun i => T (H X) (ι i))`: `icoFix`
 (`iinFix`), whose `corec` (`fold`) on states over the index of the presentation is the type's on
 the states `Along ι St` (`Over ι St`) over its own index, and the bisimulation (induction)
@@ -65,6 +76,7 @@ def genIPolyFix (P : Poly) : TermElabM Unit := do
       let f ← fillArg f fun ty => lamOf ty fun xs => do
         let (St, c, i, s) := (xs[0]!, xs[1]!, xs[2]!, xs[3]!)
         let lSt ← famLevel St
+        ctx.checkStateLevel lSt
         let Al ← mkAppOptM ``Codata.Along #[σE, I', ιf, St]
         let AlC ← curry Al
         let ofL' ← lam `i P.I (bi := .implicit) fun i => do
@@ -99,6 +111,7 @@ def genIPolyFix (P : Poly) : TermElabM Unit := do
       let f ← fillArg f fun ty => lamOf ty fun xs => do
         let (St, a, i, t) := (xs[0]!, xs[1]!, xs[2]!, xs[3]!)
         let lSt ← famLevel St
+        ctx.checkStateLevel lSt
         let Ov ← mkAppOptM ``Codata.Over #[σE, I', ιf, St]
         let OvC ← curry Ov
         let toL' ← lam `i P.I (bi := .implicit) fun i => do
@@ -151,6 +164,7 @@ def genPolyFix (P : Poly) : TermElabM Unit := do
       let f ← fillArg f fun ty => lamOf ty fun xs => do
         let (St, c, s) := (xs[0]!, xs[1]!, xs[2]!)
         let lSt ← typeLevel St
+        ctx.checkStateLevel lSt
         let c' ← lam `st St fun st => ofL St (mkApp c st) lSt
         return mkAppN (← ctx.constWith ctx.corec [lSt]) (pX X ++ #[St, c', s])
       let f ← fillArg f fun ty => do
@@ -173,6 +187,7 @@ def genPolyFix (P : Poly) : TermElabM Unit := do
       let f ← fillArg f fun ty => lamOf ty fun xs => do
         let (St, a, t) := (xs[0]!, xs[1]!, xs[2]!)
         let lSt ← typeLevel St
+        ctx.checkStateLevel lSt
         let a' ← lam `y (← ctx.polyF P X St lSt) fun y => do return mkApp a (← toL St y lSt)
         return mkAppN (← ctx.constWith ctx.fold [lSt]) (pX X ++ #[St, a', t])
       let f ← fillArg f fun ty => do
@@ -211,6 +226,13 @@ def genPolyEta (P : Poly) (T : Name) : TermElabM Unit := do
   unless P.holes.back? == some last do return
   let others := P.holes.pop
   let lastLvl ← typeLevel last
+  -- With the universe of the occurrences fixed, `X` and the premises' shapes may be at fixed
+  -- universes (`stepLevels`): the last parameter must be at that of `X`, the other holes (the
+  -- shapes of their constant premises) in `Type`.
+  if ctx.fixedLvl?.isSome then
+    unless P.lx == .param P.fresh[0]! || (← isLevelDefEq lastLvl P.lx) do return
+    let inType ← others.allM fun a => do isLevelDefEq (← typeLevel a) .zero
+    unless inType do return
   let lastTy ← inferType last
   let idH ← lam `X lastTy fun X => pure X
   let etaHs ← others.mapM fun a => lam `X lastTy fun _ => pure a

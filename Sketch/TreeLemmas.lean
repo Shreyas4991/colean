@@ -8,6 +8,8 @@ bisimulation `eq_of_bisim`, and two examples: `mirror` (with `mirror_mirror` by 
 and the full infinite tree `full`.
 -/
 
+open Codata
+
 universe u v
 
 namespace Tree
